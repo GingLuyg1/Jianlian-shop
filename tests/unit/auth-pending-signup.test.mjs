@@ -28,5 +28,5 @@ test('resumed progress cannot bypass real signup OTP or matching confirmed user'
   assert.match(source, /type: "signup"/);
   assert.match(source, /data\.user\?\.id !== registration\.userId/);
   assert.match(source, /!data\.user\.email_confirmed_at/);
-  assert.match(source, /forgetPendingSignup\(\);\s*router\.replace\("\/account"\)/);
+  assert.match(source, /forgetPendingSignup\(\);\s*router\.replace\(postSignupTarget\)/);
 });

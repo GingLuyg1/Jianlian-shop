@@ -1,8 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import type { LucideIcon } from "lucide-react";
 import {
   AlertCircle,
@@ -16,9 +18,13 @@ import {
 } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
+import { isGuestAuthUser } from "@/lib/auth/guest-user";
 import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
 import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 import { createSafeUuid } from "@/lib/browser/safe-storage";
+import type { PaymentSubmitForm } from "@/lib/payments/channel-types";
+import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 
 const AirMobileProductDetails = dynamic(() => import("@/components/products/details/AirMobileProductDetails"));
 const EncMobileProductDetails = dynamic(() => import("@/components/products/details/EncMobileProductDetails"));
@@ -69,6 +75,9 @@ const REQUIRED_AGREEMENT_TYPES = [
   "purchase_notice",
 ] as const;
 const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20", "alipay", "wechat_pay"]);
+const AVAILABLE_PAYMENT_OPTIONS = PAYMENT_METHOD_OPTIONS.filter((option) =>
+  ORDER_ENABLED_PAYMENT_METHODS.has(option.code)
+);
 
 type LegalDocument = {
   id: string;
@@ -150,6 +159,9 @@ export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { settings } = usePublicSettings();
+  const { user: authUser, authReady: publicAuthReady } = usePublicAuthProfile();
+  const isGuestSession = isGuestAuthUser(authUser);
+  const isGuestUser = !authUser || isGuestSession;
   const routeId = params?.id;
   const productIdentifier = Array.isArray(routeId) ? routeId[0] : routeId;
 
@@ -163,7 +175,16 @@ export default function ProductDetailPage() {
   const [quantity, setQuantity] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(DEFAULT_PAYMENT_METHOD);
   const [contactEmail, setContactEmail] = useState("");
-  const [agreementChecked, setAgreementChecked] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    code: string;
+    name: string;
+    appliedDiscount: number;
+    finalAmount: number;
+  } | null>(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState("");
+  const [agreementChecked, setAgreementChecked] = useState(true);
   const [legalDocuments, setLegalDocuments] = useState<LegalDocument[]>([]);
   const [legalLoading, setLegalLoading] = useState(true);
   const [legalError, setLegalError] = useState("");
@@ -185,6 +206,8 @@ export default function ProductDetailPage() {
     [categories, product?.category_id]
   );
   const unitPrice = selectedSku ? Number(selectedSku.price ?? 0) : Number(product?.price ?? 0);
+  const totalPrice = Math.round(unitPrice * quantity * 100) / 100;
+  const effectiveTotal = appliedCoupon ? appliedCoupon.finalAmount : totalPrice;
   const originalPrice = selectedSku ? selectedSku.original_price : product?.original_price ?? null;
   const availableStock = selectedSku ? Number(selectedSku.stock ?? 0) : Number(product?.stock ?? 0);
   const deliveryType = selectedSku?.delivery_type || product?.delivery_type || "manual";
@@ -278,7 +301,7 @@ export default function ProductDetailPage() {
       setCategories(categoryRows);
       setSelectedSkuId(firstPurchasableSku?.id ?? firstVisibleSku?.id ?? "");
       setQuantity(1);
-      setAgreementChecked(false);
+      setAgreementChecked(true);
       setPaymentMethod(DEFAULT_PAYMENT_METHOD);
       setStatus("ready");
     } catch (error) {
@@ -310,7 +333,12 @@ export default function ProductDetailPage() {
         const {
           data: { session },
         } = await supabase.auth.getSession();
-        const email = session?.user?.email?.trim();
+        const sessionUser = session?.user ?? null;
+        const email = sessionUser && !isGuestAuthUser(sessionUser)
+          ? sessionUser.email?.trim()
+          : typeof sessionUser?.user_metadata?.contact_email === "string"
+            ? sessionUser.user_metadata.contact_email.trim()
+            : "";
         if (!active || !email) return;
         setContactEmail((current) => current.trim() || email);
       } catch {
@@ -357,6 +385,54 @@ export default function ProductDetailPage() {
     });
   }, [availableStock]);
 
+  useEffect(() => {
+    if (publicAuthReady && isGuestUser && paymentMethod === "balance") {
+      setPaymentMethod("alipay");
+    }
+  }, [isGuestUser, paymentMethod, publicAuthReady]);
+
+  useEffect(() => {
+    setAppliedCoupon(null);
+    setCouponError("");
+  }, [product?.id, selectedSkuId, quantity]);
+
+  async function handleApplyCoupon() {
+    const trimmed = couponCode.trim().toUpperCase();
+    if (!trimmed) {
+      setCouponError("请输入优惠券码");
+      return;
+    }
+    if (totalPrice <= 0) return;
+    setCouponLoading(true);
+    setCouponError("");
+    try {
+      const response = await fetchWithTimeout("/api/coupons/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: trimmed, orderAmount: totalPrice }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        valid?: boolean;
+        error?: string;
+        coupon?: { code: string; name: string; appliedDiscount: number; finalAmount: number };
+      } | null;
+      if (!response.ok || !payload?.valid || !payload.coupon) {
+        setAppliedCoupon(null);
+        setCouponError(payload?.error || "优惠券不可用");
+        return;
+      }
+      setCouponCode(payload.coupon.code);
+      setAppliedCoupon(payload.coupon);
+      setCouponError("");
+      toast.success(`已使用优惠券，立减 ¥${payload.coupon.appliedDiscount.toFixed(2)}`);
+    } catch {
+      setAppliedCoupon(null);
+      setCouponError("优惠券校验失败，请稍后重试");
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
   function changeQuantity(next: number) {
     const max = Math.max(1, availableStock || 1);
     setQuantity(Math.max(1, Math.min(max, Math.floor(next))));
@@ -369,8 +445,9 @@ export default function ProductDetailPage() {
     if (hasSkus && !selectedSku) return "请先选择完整商品规格。";
     if (selectedSkuUnavailable) return "当前规格不可购买，请重新选择。";
     if (quantityInvalid) return "购买数量超出当前库存。";
-    if (!isEmailLike(contactEmail)) return "请填写有效的联系邮箱。";
-    if (paymentUnavailable) return "该支付方式暂未开放，请选择余额支付或 USDT-BEP20。";
+    if (!isEmailLike(contactEmail)) return "请先填写有效的联系邮箱，用于接收卡密与通知。";
+    if (isGuestUser && paymentMethod === "balance") return "余额支付需先登录；游客可直接选择支付宝 / 微信支付 / USDT 下单。";
+    if (paymentUnavailable) return "该支付方式暂未开放，请选择支付宝、微信支付、余额或 USDT-BEP20。";
     if (legalLoading) return "协议正在加载，请稍后再试。";
     if (legalError) return legalError;
     if (!agreementsReady) return "协议版本未配置完整，请稍后重试。";
@@ -382,13 +459,14 @@ export default function ProductDetailPage() {
 
   async function handleSubmit() {
     if (submitting || submitLockRef.current) return;
-    if (isLiuhaoyiPaymentMethod(paymentMethod) && isLiuhaoyiAmountOverLimit(unitPrice * quantity)) {
+    if (isLiuhaoyiPaymentMethod(paymentMethod) && isLiuhaoyiAmountOverLimit(effectiveTotal)) {
       setLiuhaoyiLimitDialogOpen(true);
       return;
     }
     const validationError = validateSubmit();
     if (validationError) {
       setSubmitError(validationError);
+      toast.warning(validationError);
       return;
     }
     if (!product) return;
@@ -397,10 +475,23 @@ export default function ProductDetailPage() {
     setSubmitError("");
     setSubmitting(true);
     try {
+      if (!authUser?.id && paymentMethod !== "balance") {
+        const guestRes = await fetchWithTimeout("/api/auth/guest-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: contactEmail.trim() }),
+        });
+        const guestPayload = (await guestRes.json().catch(() => null)) as { error?: string } | null;
+        if (!guestRes.ok) {
+          throw new Error(guestPayload?.error || "游客下单通道初始化失败，请稍后重试或登录购买");
+        }
+      }
+
       if (!clientRequestIdRef.current) {
         clientRequestIdRef.current = createSafeUuid();
       }
 
+      const activeCouponCode = appliedCoupon?.code ?? (couponCode.trim() ? couponCode.trim().toUpperCase() : "");
       const response = await fetchWithTimeout("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -411,13 +502,18 @@ export default function ProductDetailPage() {
           contact_email: contactEmail.trim(),
           customer_email: contactEmail.trim(),
           payment_method: paymentMethod,
+          ...(activeCouponCode ? { coupon_code: activeCouponCode } : {}),
           agreement_version_ids: agreementPayload,
           agreements: agreementPayload,
           client_request_id: clientRequestIdRef.current,
         }),
       });
       const payload = (await response.json().catch(() => null)) as
-        | { order?: { order_no?: string }; error?: string }
+        | {
+            order?: { order_no?: string };
+            error?: string;
+            paymentSession?: { paymentType?: string; paymentUrl?: string; submitForm?: PaymentSubmitForm };
+          }
         | null;
 
       if (response.status === 401) {
@@ -430,9 +526,16 @@ export default function ProductDetailPage() {
 
       const orderNo = payload?.order?.order_no;
       if (!orderNo) throw new Error("订单创建失败，请稍后重试");
+      if (payload?.paymentSession?.submitForm && submitPaymentForm(payload.paymentSession.submitForm)) return;
+      if (payload?.paymentSession?.paymentType === "redirect" && payload.paymentSession.paymentUrl) {
+        window.location.assign(payload.paymentSession.paymentUrl);
+        return;
+      }
       router.push(`/payment?order=${encodeURIComponent(orderNo)}`);
     } catch (error) {
-      setSubmitError(getErrorText(error, "订单创建失败，请稍后重试"));
+      const msg = getErrorText(error, "订单创建失败，请稍后重试");
+      setSubmitError(msg);
+      toast.error(msg);
     } finally {
       submitLockRef.current = false;
       setSubmitting(false);
@@ -728,10 +831,20 @@ export default function ProductDetailPage() {
                   </div>
 
                   <div>
-                    <div className="mb-2 text-sm font-medium">联系邮箱</div>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium">
+                        <span className="text-red-500">*</span>联系邮箱
+                      </span>
+                      {publicAuthReady && isGuestUser ? (
+                        <span className="text-[11px] text-primary">支持免登录游客下单</span>
+                      ) : null}
+                    </div>
                     <Input
                       value={contactEmail}
-                      onChange={(event) => setContactEmail(event.target.value)}
+                      onChange={(event) => {
+                        setContactEmail(event.target.value);
+                        if (submitError) setSubmitError("");
+                      }}
                       placeholder="请输入接收通知或卡密的邮箱"
                       className="h-11 bg-white"
                       disabled={submitting}
@@ -739,28 +852,98 @@ export default function ProductDetailPage() {
                   </div>
 
                   <div>
+                    <div className="mb-2 text-sm font-medium">优惠券（可选）</div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={couponCode}
+                        onChange={(event) => {
+                          setCouponCode(event.target.value);
+                          if (appliedCoupon) setAppliedCoupon(null);
+                          if (couponError) setCouponError("");
+                        }}
+                        maxLength={40}
+                        placeholder="请输入优惠券码"
+                        className="h-10 flex-1 bg-white"
+                        disabled={submitting || couponLoading}
+                      />
+                      {appliedCoupon ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-10 shrink-0 px-3"
+                          onClick={() => {
+                            setAppliedCoupon(null);
+                            setCouponCode("");
+                            setCouponError("");
+                          }}
+                        >
+                          取消
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-10 shrink-0 px-3"
+                          disabled={submitting || couponLoading || !couponCode.trim()}
+                          onClick={() => void handleApplyCoupon()}
+                        >
+                          {couponLoading ? "核验中" : "使用"}
+                        </Button>
+                      )}
+                    </div>
+                    {appliedCoupon ? (
+                      <p className="mt-1.5 text-xs font-medium text-emerald-700">
+                        已使用 {appliedCoupon.name}，立减 {formatPrice(settings.currency_symbol, appliedCoupon.appliedDiscount)}
+                      </p>
+                    ) : couponError ? (
+                      <p className="mt-1.5 text-xs text-red-600">{couponError}</p>
+                    ) : null}
+                  </div>
+
+                  <div>
                     <div className="mb-2 text-sm font-medium">支付方式</div>
                     <select
                       value={paymentMethod}
-                      onChange={(event) => setPaymentMethod(event.target.value as PaymentMethodCode)}
+                      onChange={(event) => {
+                        setPaymentMethod(event.target.value as PaymentMethodCode);
+                        if (submitError) setSubmitError("");
+                      }}
                       className="h-11 w-full rounded-xl border border-orange-100 bg-white px-3 text-base md:text-sm outline-none focus:border-primary"
                       disabled={submitting}
                     >
-                      {PAYMENT_METHOD_OPTIONS.map((option) => (
+                      {AVAILABLE_PAYMENT_OPTIONS.map((option) => (
                         <option key={option.code} value={option.code}>
                           {option.label}
-                          {ORDER_ENABLED_PAYMENT_METHODS.has(option.code) ? "" : "（暂未开放）"}
                         </option>
                       ))}
                     </select>
                     {selectedPaymentOption?.description ? (
                       <p className="mt-2 text-xs text-muted-foreground">{selectedPaymentOption.description}</p>
                     ) : null}
-                    {paymentUnavailable ? (
-                      <p className="mt-2 text-xs text-amber-700">
-                        该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
-                      </p>
+                  </div>
+
+                  <div
+                    data-testid="product-detail-total-summary"
+                    className="space-y-1.5 rounded-xl border border-orange-100 bg-orange-50/60 px-3.5 py-3 text-sm"
+                  >
+                    <div className="flex items-center justify-between text-xs text-slate-600">
+                      <span>商品金额（{formatPrice(settings.currency_symbol, unitPrice)} × {quantity}）</span>
+                      <span className="tabular-nums">{formatPrice(settings.currency_symbol, totalPrice)}</span>
+                    </div>
+                    {appliedCoupon ? (
+                      <div className="flex items-center justify-between text-xs text-emerald-700">
+                        <span>优惠券抵扣</span>
+                        <span className="tabular-nums">-{formatPrice(settings.currency_symbol, appliedCoupon.appliedDiscount)}</span>
+                      </div>
                     ) : null}
+                    <div className="flex items-center justify-between border-t border-orange-200/60 pt-1.5 font-semibold text-slate-900">
+                      <span>应付总价</span>
+                      <span className="text-xl font-black text-primary tabular-nums">
+                        {formatPrice(settings.currency_symbol, effectiveTotal)}
+                      </span>
+                    </div>
                   </div>
 
                   <label className="flex items-start gap-2 rounded-xl border border-orange-100 bg-orange-50/50 p-3 text-sm">
@@ -795,8 +978,25 @@ export default function ProductDetailPage() {
                     </div>
                   ) : null}
 
-                  <Button className="h-11 w-full" disabled={!canSubmit && !canAttemptSubmit} onClick={handleSubmit}>
-                    {submitting ? "正在创建订单..." : "立即购买"}
+                  <Button
+                    className="h-11 w-full font-semibold"
+                    disabled={submitting || productInactive || productSoldOut || selectedSkuUnavailable}
+                    onClick={handleSubmit}
+                  >
+                    {submitting
+                      ? "正在创建订单..."
+                      : productInactive
+                        ? "商品已下架"
+                        : productSoldOut || selectedSkuUnavailable
+                          ? "暂无库存"
+                          : `立即购买 · ${formatPrice(settings.currency_symbol, effectiveTotal)}`}
+                  </Button>
+                  <Button asChild variant="outline" className="h-10 w-full text-xs">
+                    <Link
+                      href={`/checkout?p=${encodeURIComponent(product.slug || product.id)}${selectedSku ? `&sku=${encodeURIComponent(selectedSku.id)}` : ""}&qty=${quantity}${appliedCoupon ? `&coupon=${encodeURIComponent(appliedCoupon.code)}` : ""}`}
+                    >
+                      前往完整结算页（支持更多说明与物流填写）
+                    </Link>
                   </Button>
                 </CardContent>
               </Card>

@@ -15,6 +15,7 @@ import type { User } from "@supabase/supabase-js";
 
 import { accountNavigation } from "@/components/account/account-navigation";
 import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
+import { isGuestAuthUser } from "@/lib/auth/guest-user";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -96,7 +97,9 @@ export default function PublicTopInfoBar({
   const router = useRouter();
   const pathname = usePathname();
   const { isMobile } = useMobileStorefront();
-  const { user, profile, authReady, balance, signOut } = usePublicAuthProfile();
+  const { user: rawUser, profile, authReady, balance, signOut } = usePublicAuthProfile();
+  const user = rawUser && !isGuestAuthUser(rawUser) ? rawUser : null;
+  const displayBalance = user ? balance : 0;
   const [announcementDelay, setAnnouncementDelay] = useState(0);
 
   useEffect(() => {
@@ -169,7 +172,7 @@ export default function PublicTopInfoBar({
             <div className="h-4 w-12 animate-pulse rounded bg-orange-100/70" />
           ) : (
             <span className="min-w-[44px] whitespace-nowrap text-center text-[12px] font-bold text-primary sm:min-w-[52px] sm:text-[13px]">
-              ¥{balance.toFixed(2)}
+              ¥{displayBalance.toFixed(2)}
             </span>
           )}
         </div>

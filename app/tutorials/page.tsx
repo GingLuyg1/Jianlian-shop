@@ -846,16 +846,33 @@ function TutorialsPageContent() {
       </aside>
       <section data-testid="tutorial-content" className={`relative ${glass.surface} ${styles.panel} ${tutorial.content} ${isMobile ? "!overflow-visible" : ""}`}>
         {!isMobile && headerCollapsed && !headerOverlayOpen ? (
-          <button
-            type="button"
-            onClick={() => setHeaderOverlayOpen(true)}
-            aria-label="展开教程标题栏"
-            title="展开教程标题与购买入口"
-            className="absolute right-4 top-2.5 z-30 inline-flex items-center gap-1 rounded-full border border-orange-200/90 bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-primary shadow-md shadow-orange-900/10 backdrop-blur transition hover:bg-orange-50"
-          >
-            <span>展开顶栏</span>
-            <ChevronDown className="h-3.5 w-3.5" />
-          </button>
+          <div className="absolute right-4 top-2.5 z-30 flex items-center gap-2">
+            {(() => {
+              const collapsedPurchaseAction = getTutorialPurchaseAction(topic.id);
+              if (!collapsedPurchaseAction) return null;
+              return (
+                <Link
+                  href={collapsedPurchaseAction.href}
+                  data-testid="tutorial-collapsed-go-buy-button"
+                  className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#df7334] to-[#c85f22] px-3 py-1 text-[11px] font-bold text-white shadow-md shadow-orange-900/15 transition hover:-translate-y-0.5 hover:from-[#d26728] hover:to-[#b85319]"
+                >
+                  <ShoppingBag className="h-3 w-3 shrink-0" aria-hidden="true" />
+                  <span>{collapsedPurchaseAction.label}</span>
+                  <ArrowRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+                </Link>
+              );
+            })()}
+            <button
+              type="button"
+              onClick={() => setHeaderOverlayOpen(true)}
+              aria-label="展开教程标题栏"
+              title="展开教程标题与购买入口"
+              className="inline-flex items-center gap-1 rounded-full border border-orange-200/90 bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-primary shadow-md shadow-orange-900/10 backdrop-blur transition hover:bg-orange-50"
+            >
+              <span>展开顶栏</span>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          </div>
         ) : null}
         <header
           className={cn(
@@ -1075,6 +1092,33 @@ function TutorialsPageContent() {
             </div>
           </div>}
           </TutorialContentErrorBoundary>
+          {matchingTopics.length > 0 && (() => {
+            const bottomPurchaseAction = getTutorialPurchaseAction(topic.id);
+            if (!bottomPurchaseAction) return null;
+            return (
+              <div
+                data-testid="tutorial-bottom-purchase-card"
+                className="mt-6 flex flex-col gap-3 rounded-2xl border border-orange-200/80 bg-gradient-to-r from-[#fff8f0] via-[#fff2e3] to-[#ffebd6] p-4 shadow-sm shadow-orange-900/5 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-slate-900 sm:text-[15px]">
+                    看懂流程了？立即选购对应商品
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-600">
+                    支持游客免登录直接下单 · 绑定邮箱秒收卡密与进度通知
+                  </p>
+                </div>
+                <Link
+                  href={bottomPurchaseAction.href}
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-full bg-gradient-to-r from-[#df7334] to-[#c85f22] px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-orange-900/15 transition-all hover:-translate-y-0.5 hover:from-[#d26728] hover:to-[#b85319] hover:shadow-lg sm:self-center sm:text-sm"
+                >
+                  <ShoppingBag className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>{bottomPurchaseAction.label}</span>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                </Link>
+              </div>
+            );
+          })()}
           </div>
         </div>
       </section>

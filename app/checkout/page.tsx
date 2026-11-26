@@ -18,6 +18,7 @@ import { getPublicDeliveryLabel, getPublicStockDisplay, isPreorderDeliveryMode }
 import { findCheckoutSkuOption, mergeCheckoutSkuOptions } from "@/lib/products/checkout-sku-options.mjs";
 import { resolveProductImageSrc } from "@/components/products/product-ui";
 import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
+import { isGuestAuthUser } from "@/lib/auth/guest-user";
 import { createSafeUuid, safeSessionStorageGet, safeSessionStorageRemove, safeSessionStorageSet } from "@/lib/browser/safe-storage";
 import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
@@ -371,13 +372,16 @@ function CheckoutPageContent() {
   const [shippingRegion, setShippingRegion] = useState("");
   const [shippingAddress, setShippingAddress] = useState("");
   const [customerNote, setCustomerNote] = useState("");
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(() => {
+    const rawQty = Number(searchParams.get("qty") || searchParams.get("quantity") || 1);
+    return Number.isFinite(rawQty) && rawQty >= 1 ? Math.floor(rawQty) : 1;
+  });
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(DEFAULT_PAYMENT_METHOD);
   const [hasSelectedPaymentMethod, setHasSelectedPaymentMethod] = useState(false);
   const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>(() => peekPublicRechargeChannels() ?? []);
   const [paymentDropdownOpen, setPaymentDropdownOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(true);
-  const [couponCode, setCouponCode] = useState("");
+  const [couponCode, setCouponCode] = useState(() => (searchParams.get("coupon") || "").trim().toUpperCase());
   const [appliedCoupon, setAppliedCoupon] = useState<{
     code: string;
     name: string;
@@ -405,7 +409,13 @@ function CheckoutPageContent() {
   const publicAuthBalanceRef = useRef<number>(publicAuthBalance);
   publicAuthBalanceRef.current = publicAuthBalance;
   const authUserId = authUser?.id ?? null;
-  const authUserEmail = authUser?.email ?? null;
+  const isGuestSession = isGuestAuthUser(authUser);
+  const isGuestUser = !authUser || isGuestSession;
+  const authUserEmail = !isGuestSession
+    ? (authUser?.email ?? null)
+    : (typeof authUser?.user_metadata?.contact_email === "string"
+        ? authUser.user_metadata.contact_email
+        : null);
   const [balanceError, setBalanceError] = useState("");
   const [balanceRequiresLogin, setBalanceRequiresLogin] = useState(false);
   const [pendingBalanceOrder, setPendingBalanceOrder] = useState<PendingBalanceOrder | null>(null);
@@ -443,11 +453,11 @@ function CheckoutPageContent() {
   }, []);
 
   const loadAccountBalance = useCallback(async (force = false) => {
-    if (publicAuthReady && !authUserId) {
+    if (publicAuthReady && (!authUserId || isGuestSession)) {
       setAvailableBalance(null);
       setBalanceStatus("error");
       setBalanceRequiresLogin(true);
-      setBalanceError("请先登录后查看账户余额");
+      setBalanceError("余额支付需先登录；游客可直接选支付宝/微信/USDT下单");
       return;
     }
     const now = Date.now();
@@ -498,7 +508,7 @@ function CheckoutPageContent() {
       setBalanceRequiresLogin(false);
       setBalanceError("账户余额读取失败，请重新加载");
     }
-  }, [authUserId, publicAuthReady]);
+  }, [authUserId, isGuestSession, publicAuthReady]);
 
   useEffect(() => {
     if (!paymentDropdownOpen) return;
@@ -571,15 +581,15 @@ function CheckoutPageContent() {
 
   useEffect(() => {
     if (!publicAuthReady) return;
-    if (!authUserId) {
+    if (authUserEmail) {
+      setEmail((current) => (current.trim() ? current : authUserEmail));
+    }
+    if (!authUserId || isGuestSession) {
       setAvailableBalance(null);
       setBalanceStatus("error");
       setBalanceRequiresLogin(true);
-      setBalanceError("请先登录后查看账户余额");
+      setBalanceError("余额支付需先登录；游客可直接选支付宝/微信/USDT下单");
       return;
-    }
-    if (authUserEmail) {
-      setEmail((current) => (current.trim() ? current : authUserEmail));
     }
     if (Number.isFinite(publicAuthBalanceRef.current)) {
       setAvailableBalance((prev) => (prev === null ? publicAuthBalanceRef.current : prev));
@@ -595,7 +605,7 @@ function CheckoutPageContent() {
       window.removeEventListener(ACCOUNT_BALANCE_UPDATED_EVENT, refreshBalanceForce);
       balanceRequestVersionRef.current += 1;
     };
-  }, [authUserEmail, authUserId, loadAccountBalance, publicAuthReady]);
+  }, [authUserEmail, authUserId, isGuestSession, loadAccountBalance, publicAuthReady]);
 
   useEffect(() => {
     let active = true;
@@ -908,14 +918,28 @@ function CheckoutPageContent() {
     if (!product) return "";
     return `¥${effectiveOrderAmount.toFixed(2)}`;
   }, [effectiveOrderAmount, product]);
-  const rechargeReturnTo = useMemo(() => {
+  const currentCheckoutUrl = useMemo(() => {
     const params = new URLSearchParams();
     params.set("product", productId);
     const originalReturnTo = searchParams.get("returnTo");
     if (originalReturnTo) params.set("returnTo", originalReturnTo);
     if (selectedSku?.id) params.set("sku", selectedSku.id);
-    return `/products/account-recharge?returnTo=${encodeURIComponent(`/checkout?${params.toString()}`)}`;
-  }, [productId, searchParams, selectedSku?.id]);
+    if (quantity > 1) params.set("qty", String(quantity));
+    const activeCoupon = appliedCoupon?.code || couponCode.trim().toUpperCase();
+    if (activeCoupon) params.set("coupon", activeCoupon);
+    return `/checkout?${params.toString()}`;
+  }, [appliedCoupon?.code, couponCode, productId, quantity, searchParams, selectedSku?.id]);
+  const rechargeReturnTo = useMemo(() => {
+    const shortfallAmount =
+      balanceSummary.kind === "ready" && balanceSummary.shortfallCents > 0
+        ? formatCnyFromCents(balanceSummary.shortfallCents)
+        : effectiveOrderAmount > 0
+          ? effectiveOrderAmount.toFixed(2)
+          : "";
+    return `/products/account-recharge?returnTo=${encodeURIComponent(currentCheckoutUrl)}${
+      shortfallAmount ? `&amount=${encodeURIComponent(shortfallAmount)}` : ""
+    }`;
+  }, [balanceSummary, currentCheckoutUrl, effectiveOrderAmount]);
 
   if (productLoading && !product) {
     return <CheckoutLoadingShell />;
@@ -1005,6 +1029,16 @@ function CheckoutPageContent() {
       return;
     }
 
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      toast.warning("请填写有效的联系邮箱");
+      return;
+    }
+
+    if (isGuestUser && paymentMethod === "balance") {
+      toast.warning("余额支付需先登录；游客可直接选择支付宝 / 微信支付 / USDT 下单");
+      return;
+    }
+
     if (isShippingProduct && (!customerName.trim() || !customerPhone.trim() || !shippingRegion.trim() || !shippingAddress.trim())) {
       toast.warning("请完整填写收件人、联系电话、省市区和详细地址");
       return;
@@ -1019,6 +1053,17 @@ function CheckoutPageContent() {
     setSubmitLoading(true);
 
     try {
+      if (!authUserId && paymentMethod !== "balance") {
+        const guestRes = await fetchWithTimeout("/api/auth/guest-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim() }),
+        });
+        const guestPayload = (await guestRes.json().catch(() => null)) as { error?: string } | null;
+        if (!guestRes.ok) {
+          throw new Error(guestPayload?.error || "游客下单通道初始化失败，请稍后重试或登录购买");
+        }
+      }
       const activeCouponCode = appliedCoupon?.code ?? (couponCode.trim() ? couponCode.trim().toUpperCase() : "");
       const configFingerprint = `${productRow.id}:${selectedDatabaseSkuId ?? ""}:${quantity}:${paymentMethod}:${activeCouponCode}`;
       if (!pendingBalanceOrder && lastConfigFingerprintRef.current && lastConfigFingerprintRef.current !== configFingerprint) {
@@ -1091,9 +1136,8 @@ function CheckoutPageContent() {
       if (!response.ok) {
         const message = result?.error ?? "订单创建失败，请稍后重试";
         if (response.status === 401) {
-          const fullReturn = typeof window !== "undefined" ? `${window.location.pathname}${window.location.search}` : `/checkout?product=${productId}`;
           navigatingOutRef.current = true;
-          router.push(`/login?redirect=${encodeURIComponent(fullReturn)}`);
+          router.push(`/login?redirect=${encodeURIComponent(currentCheckoutUrl)}`);
           return;
         }
         if (responseClassification.kind === "balance_insufficient_existing_order") {
@@ -1203,6 +1247,23 @@ function CheckoutPageContent() {
               ) : null}
 
               <div className={cn("flex shrink-0 flex-col gap-3", !(hasSku && skuOptions.length > 1) && "min-h-0 lg:overflow-y-auto sidebar-scroll")}>
+                {publicAuthReady && isGuestUser ? (
+                  <div
+                    data-testid="checkout-guest-banner"
+                    className="flex items-center justify-between gap-2 rounded-xl border border-orange-100 bg-orange-50/70 px-3 py-2 text-[11px] leading-4 text-slate-700"
+                  >
+                    <span className="min-w-0">
+                      支持游客免登录下单（支付宝/微信/USDT），卡密发至下方邮箱并可按邮箱查单
+                    </span>
+                    <Link
+                      href={`/login?redirect=${encodeURIComponent(currentCheckoutUrl)}`}
+                      className="shrink-0 font-semibold text-primary underline-offset-2 hover:underline"
+                    >
+                      登录/注册
+                    </Link>
+                  </div>
+                ) : null}
+
                 <div className="shrink-0">
                   <label className="mb-1 block text-xs font-medium">
                     <span className="text-red-500">*</span>联系邮箱
@@ -1371,7 +1432,7 @@ function CheckoutPageContent() {
                 {paymentMethod === "balance" && balanceStatus === "error" ? (
                   <div className="mt-1.5 flex items-center justify-between gap-3 text-xs text-red-700">
                     <span>{balanceError}</span>
-                    <button type="button" className="shrink-0 font-medium underline" onClick={() => balanceRequiresLogin ? router.push(`/login?redirect=${encodeURIComponent(`/checkout?product=${productId}`)}`) : void loadAccountBalance()}>
+                    <button type="button" className="shrink-0 font-medium underline" onClick={() => balanceRequiresLogin ? router.push(`/login?redirect=${encodeURIComponent(currentCheckoutUrl)}`) : void loadAccountBalance()}>
                       {balanceRequiresLogin ? "去登录" : "重新加载"}
                     </button>
                   </div>

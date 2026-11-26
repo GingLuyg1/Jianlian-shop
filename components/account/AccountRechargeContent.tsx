@@ -47,7 +47,7 @@ import { useAccountRecordIdentity } from "@/hooks/use-account-record-identity";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import channelGridStyles from "./RechargeChannelGrid.module.css";
 import { usePaymentCardTilt } from "@/hooks/use-payment-card-tilt";
-import { createSafeUuid } from "@/lib/browser/safe-storage";
+import { createSafeUuid, safeSessionStorageGet, safeSessionStorageSet } from "@/lib/browser/safe-storage";
 import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 
 type RechargeListError = {
@@ -64,11 +64,21 @@ type RechargeRate = {
   effectiveAt: string;
 };
 
+const RECHARGE_RETURN_TO_STORAGE_KEY = "jianlian_recharge_return_to";
+
+function sanitizeRechargeReturnTo(raw: string | null | undefined): string {
+  const value = String(raw ?? "").trim();
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
+    return "";
+  }
+  return value;
+}
+
 const CHANNEL_PRESENTATION = [
-  { code: "alipay", name: "支付宝", description: "手续费 3%", icon: "/assets/alipay-icon.jpg" },
-  { code: "wechat", name: "微信支付", description: "手续费 3%", icon: "/assets/wechat-pay-icon.jpg" },
-  { code: "usdt_bep20", name: "USDT BEP20", description: "BSC · 无手续费", icon: "/assets/usdt-bep20-icon.jpg" },
-  { code: "usdt_trc20", name: "USDT TRC20", description: "TRON · 无手续费", icon: "/assets/usdt-trc20-icon.jpg" },
+  { code: "alipay", name: "支付宝", description: "即时到账·无最低限额", icon: "/assets/alipay-icon.jpg" },
+  { code: "wechat", name: "微信支付", description: "即时到账·无最低限额", icon: "/assets/wechat-pay-icon.jpg" },
+  { code: "usdt_bep20", name: "USDT BEP20", description: "即时到账·无最低限额", icon: "/assets/usdt-bep20-icon.jpg" },
+  { code: "usdt_trc20", name: "USDT TRC20", description: "即时到账·无最低限额", icon: "/assets/usdt-trc20-icon.jpg" },
 ] as const;
 
 export default function AccountRechargeContent() {
@@ -81,6 +91,7 @@ export default function AccountRechargeContent() {
   const [channelsLoading, setChannelsLoading] = useState(() => !peekPublicRechargeChannels());
   const [channelsError, setChannelsError] = useState<string | null>(null);
   const [amountText, setAmountText] = useState("");
+  const [returnTo, setReturnTo] = useState("");
   const [customerNote, setCustomerNote] = useState("");
   const clientRequestIdRef = useRef<string | null>(null);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
@@ -170,6 +181,26 @@ export default function AccountRechargeContent() {
   }, [recordIdentity.epoch, recordIdentity.status]);
 
   useEffect(() => () => { recordRequestId.current++; }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const nextReturnTo = sanitizeRechargeReturnTo(params.get("returnTo"));
+    if (nextReturnTo) {
+      setReturnTo(nextReturnTo);
+      safeSessionStorageSet(RECHARGE_RETURN_TO_STORAGE_KEY, nextReturnTo);
+    } else {
+      const storedReturnTo = sanitizeRechargeReturnTo(safeSessionStorageGet(RECHARGE_RETURN_TO_STORAGE_KEY));
+      if (storedReturnTo) setReturnTo(storedReturnTo);
+    }
+
+    const rawAmount = params.get("amount")?.trim() ?? "";
+    const parsedAmount = Number(rawAmount);
+    if (rawAmount && Number.isFinite(parsedAmount) && parsedAmount > 0 && parsedAmount <= 100000) {
+      const normalized = (Math.ceil(parsedAmount * 100) / 100).toFixed(2).replace(/\.00$/, "");
+      setAmountText((current) => current.trim() || normalized);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -294,12 +325,17 @@ export default function AccountRechargeContent() {
       if (!response.ok) throw new Error(result?.error ?? "充值下单失败，请稍后重试");
 
       if (result?.rechargeNo) {
+        if (returnTo) {
+          safeSessionStorageSet(RECHARGE_RETURN_TO_STORAGE_KEY, returnTo);
+        }
         if (result.submitForm && submitPaymentForm(result.submitForm)) return;
         if (result.paymentType === "redirect" && result.paymentUrl) {
           window.location.assign(result.paymentUrl);
           return;
         }
-        router.push(`/payment?recharge=${encodeURIComponent(result.rechargeNo)}`);
+        const paymentQuery = new URLSearchParams({ recharge: result.rechargeNo });
+        if (returnTo) paymentQuery.set("returnTo", returnTo);
+        router.push(`/payment?${paymentQuery.toString()}`);
         return;
       }
 
@@ -339,7 +375,21 @@ export default function AccountRechargeContent() {
               </div>
               <CardContent className={cn(channelGridStyles.container, "flex min-w-0 flex-1 flex-col p-4 sm:p-6")}>
 
-              <h3 className="text-sm font-semibold">选择支付渠道</h3>
+              {returnTo ? (
+                <div
+                  data-testid="recharge-return-banner"
+                  className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-orange-200/90 bg-gradient-to-r from-orange-50 to-amber-50/70 px-3.5 py-2.5 text-xs text-orange-950"
+                >
+                  <span className="leading-5">
+                    已为您带入待支付订单信息，充值到账后可一键返回继续支付原订单。
+                  </span>
+                  <Button asChild size="sm" className="h-8 shrink-0 rounded-lg px-3 text-xs font-semibold">
+                    <Link href={returnTo}>返回继续支付原订单</Link>
+                  </Button>
+                </div>
+              ) : null}
+
+              <h3 className="text-sm font-semibold">选择支付方式</h3>
 
               <div className={channelGridStyles.grid}>
                 {channelsLoading ? (
@@ -390,7 +440,9 @@ export default function AccountRechargeContent() {
                           <span className="block whitespace-nowrap text-[14px] font-semibold leading-5 sm:text-[16px] sm:leading-[22px]">
                             {item.name}
                           </span>
-                          {isUsdtPresentation || disabled ? <span className="mt-1 block whitespace-nowrap text-[12.5px] leading-[18px] text-muted-foreground">{isUsdtPresentation ? actualFeeDescription : ""}{disabled ? " · 未开放" : ""}</span> : null}
+                          <span className="mt-1 block whitespace-nowrap text-[12px] leading-[18px] text-muted-foreground">
+                            即时到账·无最低限额{disabled ? " · 未开放" : ""}
+                          </span>
                         </span>
                       </div>
                     </button>

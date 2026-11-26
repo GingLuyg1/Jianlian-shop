@@ -19,6 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSafeInternalRedirect } from "@/lib/auth/redirect";
+import { isGuestAuthUser } from "@/lib/auth/guest-user";
 import { getAuthSiteOrigin } from "@/lib/auth/site-origin";
 import {
   PENDING_SIGNUP_KEY,
@@ -94,6 +95,10 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const redirectTo = useMemo(
     () => getSafeInternalRedirect(searchParams?.get("redirect") ?? null),
     [searchParams]
+  );
+  const postSignupTarget = useMemo(
+    () => (redirectTo && redirectTo !== "/" ? redirectTo : "/account"),
+    [redirectTo]
   );
   const inviteFromUrl = useMemo(
     () => searchParams?.get("invite") || searchParams?.get("salt") || "",
@@ -383,7 +388,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         password: bootstrapPassword,
         options: {
           emailRedirectTo: getAuthRedirectUrl(
-            `/auth/callback?next=${encodeURIComponent("/account")}`
+            `/auth/callback?next=${encodeURIComponent(postSignupTarget)}`
           ),
           data: {
             ...(normalizedInviteCode
@@ -535,10 +540,10 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
       setRegistration(null);
       setInlinePendingSignup(null);
       forgetPendingSignup();
-      router.replace("/account");
+      router.replace(postSignupTarget);
       window.setTimeout(() => {
         if (window.location.pathname === "/login" || window.location.pathname === "/register") {
-          window.location.replace("/account");
+          window.location.replace(postSignupTarget);
         }
       }, 450);
     } catch {
@@ -627,7 +632,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
     getSupabaseBrowserClient()
       .auth.getUser()
       .then(async ({ data }) => {
-        if (!active || !data.user) return;
+        if (!active || !data.user || isGuestAuthUser(data.user)) return;
         const restriction = await getLoginRestrictionMessage(
           getSupabaseBrowserClient(),
           data.user.id
@@ -713,7 +718,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
           password,
           options: {
             emailRedirectTo: getAuthRedirectUrl(
-              `/auth/callback?next=${encodeURIComponent("/account")}`
+              `/auth/callback?next=${encodeURIComponent(postSignupTarget)}`
             ),
             data: {
               ...(normalizedInviteCode

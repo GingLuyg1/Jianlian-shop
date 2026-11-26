@@ -160,6 +160,12 @@ function renderRecharge(channel, options = {}) {
     "@/lib/payments/recharge-rate.mjs": rate,
     "@/lib/utils": { cn: (...values) => values.filter(Boolean).join(" ") },
     "@/lib/support/open-public-support": { openPublicSupport: noNetwork },
+    "@/lib/browser/safe-storage": {
+      createSafeUuid: () => "test-uuid",
+      safeSessionStorageGet: () => null,
+      safeSessionStorageSet: () => {},
+    },
+    "@/lib/network/fetch-with-timeout": { fetchWithTimeout: noNetwork },
     "@/components/payments/ExternalCashierFeeSummary": feeSummary,
   });
   return renderToStaticMarkup(ui.default());
@@ -168,7 +174,7 @@ function renderRecharge(channel, options = {}) {
 test("actual recharge handler opens the limit dialog before any create request", async () => {
   const [channel] = await publicChannels([row()]);
   const events = [], buttons = [];
-  renderRecharge(channel, { amount: "2000.01", events, buttons });
+  renderRecharge(channel, { amount: String((channel.maximumAmount ?? 2000) + 0.01), events, buttons });
   const create = buttons.find(button => String(JSON.stringify(button.children)).includes("创建充值单"));
   assert.equal(create.disabled, false);
   await create.onClick(); // Primary action explains the limit, without dispatch.

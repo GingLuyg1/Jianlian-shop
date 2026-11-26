@@ -7,6 +7,7 @@ import type { User } from "@supabase/supabase-js";
 
 import { accountNavigation } from "@/components/account/account-navigation";
 import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
+import { isGuestAuthUser } from "@/lib/auth/guest-user";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,7 +27,8 @@ function getDisplayName(user: User | null) {
 export default function MobileTopBarAuth() {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, authReady, balance, signOut } = usePublicAuthProfile();
+  const { user: rawUser, authReady, balance, signOut } = usePublicAuthProfile();
+  const user = rawUser && !isGuestAuthUser(rawUser) ? rawUser : null;
 
   const handleSignOut = async () => {
     await signOut();

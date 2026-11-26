@@ -119,3 +119,34 @@ export async function lookupGuestOrder(orderNo: string, token: string) {
 
   return { ok: true as const, order: normalizeOrder(row) };
 }
+
+const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export async function lookupGuestOrdersByEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail || normalizedEmail.length > 254 || !SIMPLE_EMAIL_REGEX.test(normalizedEmail)) {
+    return { ok: false as const, reason: "invalid" };
+  }
+
+  const service = getSupabaseServiceRoleClient();
+  if (!service) {
+    return { ok: false as const, reason: "unavailable" };
+  }
+
+  const { data, error } = await service
+    .from("orders")
+    .select(ORDER_LOOKUP_SELECT)
+    .ilike("customer_email", normalizedEmail)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    return { ok: false as const, reason: "unavailable" };
+  }
+
+  const rows = Array.isArray(data) ? (data as Array<Record<string, any>>) : [];
+  return {
+    ok: true as const,
+    orders: rows.map((row) => normalizeOrder(row)),
+  };
+}

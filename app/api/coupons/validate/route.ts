@@ -21,13 +21,11 @@ export async function POST(request: Request) {
   if (!sourceLimit.allowed) return sourceLimit.response!;
 
   const supabase = getSupabaseServerClient();
-  const { data: authData, error: authError } = await supabase.auth.getUser();
-  if (authError || !authData.user) {
-    return NextResponse.json({ error: "请先登录后再验证优惠券" }, { status: 401 });
+  const { data: authData } = await supabase.auth.getUser().catch(() => ({ data: { user: null } }));
+  if (authData?.user) {
+    const userLimit = checkRateLimit("coupon_validate", getUserRateLimitKey(authData.user.id, "coupon_validate"));
+    if (!userLimit.allowed) return userLimit.response!;
   }
-
-  const userLimit = checkRateLimit("coupon_validate", getUserRateLimitKey(authData.user.id, "coupon_validate"));
-  if (!userLimit.allowed) return userLimit.response!;
 
   const parsedBody = await readBoundedJsonBody<{ code?: unknown; orderAmount?: unknown; order_amount?: unknown }>(
     request,

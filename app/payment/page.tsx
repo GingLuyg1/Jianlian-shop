@@ -436,11 +436,22 @@ function PaymentPageContent() {
   const searchParams = useSearchParams();
   const rechargeNo = searchParams.get("recharge")?.trim() ?? "";
   const orderNo = searchParams.get("order") || searchParams.get("order_no") || "";
+  const returnToParam = searchParams.get("returnTo")?.trim() ?? "";
   const paymentMode = rechargeNo ? "recharge" : "order";
 
   return paymentMode === "recharge"
-    ? <RechargePaymentPage rechargeNo={rechargeNo} />
+    ? <RechargePaymentPage rechargeNo={rechargeNo} returnToParam={returnToParam} />
     : <OrderPaymentPage orderNo={orderNo} />;
+}
+
+const RECHARGE_RETURN_TO_STORAGE_KEY = "jianlian_recharge_return_to";
+
+function sanitizePaymentReturnTo(raw: string | null | undefined): string {
+  const value = String(raw ?? "").trim();
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
+    return "";
+  }
+  return value;
 }
 
 const RECHARGE_TERMINAL_STATUSES = new Set([
@@ -450,8 +461,9 @@ const RECHARGE_TERMINAL_STATUSES = new Set([
   "expired",
 ]);
 
-function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
+function RechargePaymentPage({ rechargeNo, returnToParam = "" }: { rechargeNo: string; returnToParam?: string }) {
   const router = useRouter();
+  const [returnTo, setReturnTo] = useState(() => sanitizePaymentReturnTo(returnToParam));
   const [recharge, setRecharge] = useState<RechargeRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -554,6 +566,35 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
     : /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
 
   useEffect(() => {
+    const safeParam = sanitizePaymentReturnTo(returnToParam);
+    if (safeParam) {
+      setReturnTo(safeParam);
+      try {
+        window.sessionStorage.setItem(RECHARGE_RETURN_TO_STORAGE_KEY, safeParam);
+      } catch {
+        // Ignore storage errors
+      }
+      return;
+    }
+    try {
+      const stored = sanitizePaymentReturnTo(window.sessionStorage.getItem(RECHARGE_RETURN_TO_STORAGE_KEY));
+      if (stored) setReturnTo(stored);
+    } catch {
+      // Ignore storage errors
+    }
+  }, [returnToParam]);
+
+  const handleReturnToOrder = useCallback(() => {
+    if (!returnTo) return;
+    try {
+      window.sessionStorage.removeItem(RECHARGE_RETURN_TO_STORAGE_KEY);
+    } catch {
+      // Ignore storage errors
+    }
+    router.push(returnTo);
+  }, [returnTo, router]);
+
+  useEffect(() => {
     if (!succeeded || balanceNotificationRechargeRef.current === rechargeNo) return;
     balanceNotificationRechargeRef.current = rechargeNo;
     notifyAccountBalanceUpdated();
@@ -615,9 +656,20 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                   : "请按充值单的精确金额完成 USDT-BEP20 转账，系统会自动识别到账。"}
             </p>
           </div>
-          <Button variant="outline" asChild>
-            <Link href="/products/account-recharge">返回账户充值</Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {returnTo ? (
+              <Button
+                type="button"
+                onClick={handleReturnToOrder}
+                className="bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm hover:from-orange-600 hover:to-orange-700"
+              >
+                返回继续支付原订单
+              </Button>
+            ) : null}
+            <Button variant="outline" asChild>
+              <Link href="/products/account-recharge">返回账户充值</Link>
+            </Button>
+          </div>
         </div>
 
         {error ? (
@@ -653,6 +705,18 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                     <div className="font-semibold">充值成功</div>
                     <div className="mt-1">人民币余额入账由统一支付完成流程处理。</div>
+                    {returnTo ? (
+                      <div className="mt-3">
+                        <Button
+                          type="button"
+                          data-testid="recharge-success-return-order"
+                          onClick={handleReturnToOrder}
+                          className="bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm hover:from-orange-600 hover:to-orange-700"
+                        >
+                          返回继续支付原订单
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : terminal || expiredByTime ? (
                   <ExpiredRechargeNotice rechargeNo={recharge.rechargeNo} />
@@ -663,6 +727,18 @@ function RechargePaymentPage({ rechargeNo }: { rechargeNo: string }) {
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                     <div className="font-semibold">充值成功</div>
                     <div className="mt-1">已入账 {recharge.creditedCnyAmount ?? recharge.requestedCnyAmount ?? "—"} CNY。</div>
+                    {returnTo ? (
+                      <div className="mt-3">
+                        <Button
+                          type="button"
+                          data-testid="recharge-success-return-order"
+                          onClick={handleReturnToOrder}
+                          className="bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm hover:from-orange-600 hover:to-orange-700"
+                        >
+                          返回继续支付原订单
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 ) : terminal ? (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">

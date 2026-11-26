@@ -19,6 +19,7 @@ function mount() {
     'lucide-react':{},sonner:{toast:{success(){},error(){}}},'@/components/ui/button':{Button:'button'},
     '@/lib/orders/delivery-polling.mjs':{pollForPaymentDelivery(){throw Error('POLLING_NOT_IN_THIS_TEST')}},
     '@/lib/orders/order-status':{normalizeOrderStatus:s=>s,normalizePaymentStatus:s=>s},'@/lib/utils':{cn:(...x)=>x.join(' ')},
+    '@/lib/support/open-public-support':{openPublicSupport(){}},
   },undefined,{fetch:(url,options)=>new Promise(resolve=>requests.push({url,signal:options.signal,resolve})),navigator:{clipboard:{writeText:async()=>{}}}}).SecureOrderDelivery;
   function render(next=props,flush=true){props=next;cursor=0;const tree=component(props);if(flush)while(effects.length)effects.shift()();return tree}
   function stop(){unmounted=true;for(const slot of slots)slot?.cleanup?.()}
