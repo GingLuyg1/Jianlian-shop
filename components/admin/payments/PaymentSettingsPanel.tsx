@@ -429,14 +429,13 @@ export default function PaymentSettingsPanel() {
     === PAYMENT_SETTINGS_DATA_SOURCES.LOADED;
   return (
     <div className="flex min-h-full flex-col">
-      <div className="mb-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-800">
-        人工付款渠道只有在收款地址和付款说明完整后才能启用。
-        USDT-BEP20 还必须填写 Token 合约地址。
-        保存设置不会自动开启任何配置不完整的渠道。
+      <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-xs leading-6 text-slate-600">
+        <span className="font-semibold text-slate-800">配置规则：</span>
+        人工付款渠道只有在收款地址和付款说明完整后才能启用；USDT-BEP20 还必须填写 Token 合约地址。保存设置不会自动开启任何配置不完整的渠道。
       </div>
 
       {message ? (
-        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {message}
         </div>
       ) : null}
@@ -448,7 +447,7 @@ export default function PaymentSettingsPanel() {
       ) : null}
 
       <div
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1 disabled:opacity-70"
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 disabled:opacity-70"
       >
         {channels.map((channel) => {
           const ready = isChannelReady(channel);
@@ -456,11 +455,12 @@ export default function PaymentSettingsPanel() {
             channel.review_mode === "manual";
           const compatibilityReadOnly =
             channel.compatibility_read_only === true;
+          const isDirty = dirtyChannels.has(channel.channel);
 
           return (
             <fieldset
               key={channel.channel}
-              className="rounded-xl border p-4"
+              className="rounded-xl border border-slate-200/90 bg-white p-4 sm:p-5 transition-colors"
               disabled={
                 !editable
                 || savingChannel === channel.channel
@@ -472,34 +472,47 @@ export default function PaymentSettingsPanel() {
                   此渠道仍使用旧版兼容字段，公开渠道和充值创建已暂停；需要单独授权同步兼容字段。同步后仍保持未配置和未启用。
                 </div>
               ) : null}
-              <div className="mb-4 flex items-start justify-between gap-3">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3.5">
                 <div>
-                  <div className="font-semibold text-slate-950">
-                    {channel.display_name
-                      || channel.channel}
-                  </div>
-
-                  <div className="mt-1 text-xs text-slate-500">
-                    渠道代码：{channel.code}
-                    {"  "}
-                    配置状态：
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-base font-semibold text-slate-950">
+                      {channel.display_name || channel.channel}
+                    </span>
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-medium text-slate-600">
+                      {channel.code}
+                    </span>
                     <span
                       className={
                         ready
-                          ? "font-semibold text-emerald-700"
-                          : "font-semibold text-amber-700"
+                          ? "rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700"
+                          : "rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
                       }
                     >
-                      {ready ? "已就绪" : "未就绪"}
+                      {ready ? "配置已就绪" : "待完善配置"}
                     </span>
+                    {isDirty ? (
+                      <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                        有未保存修改
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-1.5 text-xs text-slate-500">
+                    审核模式：{manual ? "人工付款 / 链上核验" : `支付平台（${providerLabel(channel.provider)}）`}
+                    {channel.network ? ` · 网络：${channel.network}` : ""}
+                    {` · 币种：${channel.currency}`}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-500">
-                    {channel.enabled
-                      ? "已启用"
-                      : "未启用"}
+                <div className="flex items-center gap-2.5 rounded-lg border border-slate-200/80 bg-slate-50/70 px-3 py-1.5">
+                  <span
+                    className={
+                      channel.enabled
+                        ? "text-xs font-semibold text-emerald-700"
+                        : "text-xs font-medium text-slate-500"
+                    }
+                  >
+                    {channel.enabled ? "前台已启用" : "已停用"}
                   </span>
 
                   <Switch

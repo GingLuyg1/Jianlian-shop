@@ -26,7 +26,10 @@ test("desktop and mobile admin navigation use one production menu contract", () 
   assert.doesNotMatch(topBar, /const adminMenuItems\s*=/);
 
   assert.doesNotMatch(navigation, /\/admin\/system\/project-status/);
-  assert.match(navigation, /label: "运维排障工具箱", href: "\/admin\/system\/toolbox"/);
+  assert.doesNotMatch(navigation, /\/admin\/system\/toolbox/);
+  assert.match(navigation, /label: "生产看板", href: "\/admin\/system"/);
+  assert.match(navigation, /label: "异常中心", href: "\/admin\/system-errors"/);
+  assert.match(navigation, /label: "风险审核", href: "\/admin\/risk"/);
   assert.match(navigation, /label: "操作日志", href: "\/admin\/audit-logs"/);
   assert.match(navigation, /label: "商品列表", href: "\/admin\/products"/);
   assert.match(navigation, /label: "分类管理", href: "\/admin\/categories"/);

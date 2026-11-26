@@ -544,16 +544,45 @@ export async function GET() {
 
     if (error) throw error;
 
-    const rows = normalizeConfigs(
-      (data ?? []) as Record<string, unknown>[],
+    const managedData = ((data ?? []) as Record<string, unknown>[]).filter(
+      (row) => !(row.channel === "binance_pay" && row.code === "binance_pay"),
     );
 
-    if (rows.length !== (data ?? []).length) {
+    const rows = normalizeConfigs(managedData);
+
+    if (rows.length !== managedData.length) {
+      const invalidChannels = managedData
+        .map((row) => {
+          if (normalizeConfig(row) !== null) return null;
+          const label = textOrNull(row.channel) ?? textOrNull(row.code) ?? "未知渠道";
+          const pairErr = getPaymentChannelPairValidationError({
+            channel: row.channel,
+            code: row.code,
+            provider: getLegacyPaymentChannelCompatibility(row)?.provider ?? row.provider,
+            provider_name: getLegacyPaymentChannelCompatibility(row)?.provider ?? row.provider_name,
+            min_amount: row.min_amount,
+            minimum_amount: row.minimum_amount,
+          });
+          if (pairErr === "Provider and provider name must match.") {
+            return `${label}（provider 与 provider_name 字段未同步）`;
+          }
+          if (pairErr === "Minimum amount fields must match.") {
+            return `${label}（min_amount 与 minimum_amount 金额不一致）`;
+          }
+          if (pairErr === "Payment channel and code must match.") {
+            return `${label}（channel 与 code 不一致）`;
+          }
+          return label;
+        })
+        .filter((item): item is string => Boolean(item));
+
       return NextResponse.json({
         channels: fallbackConfigs(),
         dataSource: "read_error",
         readOnly: true,
-        error: "支付渠道记录存在不一致，当前仅显示只读模板。",
+        error: invalidChannels.length
+          ? `支付渠道记录存在不一致（${invalidChannels.join("；")}），当前仅显示只读模板。`
+          : "支付渠道记录存在不一致，当前仅显示只读模板。",
       });
     }
 

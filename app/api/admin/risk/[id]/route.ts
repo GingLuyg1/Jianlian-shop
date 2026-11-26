@@ -2,12 +2,33 @@ import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { isValidRiskEventId, normalizeRiskError, number, requireRiskAdmin, text } from "@/lib/risk/admin-risk";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
 type RouteContext = { params: Promise<{ id: string }> };
+type ProfileLookup = { email: string | null; displayName: string | null };
 
 const ACTIONS = new Set(["approve", "reject", "monitor", "release"]);
+
+async function loadUserProfile(supabase: any, userId: string | null): Promise<ProfileLookup | null> {
+  if (!userId) return null;
+  try {
+    const reader = getSupabaseServiceRoleClient() ?? supabase;
+    const { data } = await reader
+      .from("profiles")
+      .select("id,email,display_name")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!data) return null;
+    return {
+      email: text((data as Record<string, unknown>).email),
+      displayName: text((data as Record<string, unknown>).display_name),
+    };
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(_request: Request, context: RouteContext) {
   const admin = await requireRiskAdmin();
@@ -24,7 +45,9 @@ export async function GET(_request: Request, context: RouteContext) {
       .maybeSingle();
     if (error) throw error;
     if (!data) return NextResponse.json({ error: "风险事件不存在。" }, { status: 404 });
-    return NextResponse.json({ event: normalizeRiskDetail(data as Record<string, unknown>) });
+    const row = data as Record<string, unknown>;
+    const profile = await loadUserProfile(admin.supabase, text(row.user_id));
+    return NextResponse.json({ event: normalizeRiskDetail(row, profile) });
   } catch (error) {
     return NextResponse.json({ error: normalizeRiskError(error) }, { status: 503 });
   }
@@ -100,7 +123,9 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "风险审核已保存，但审计日志写入失败，请联系技术处理。" }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, event: normalizeRiskDetail(updated as Record<string, unknown>) });
+    const updatedRow = updated as Record<string, unknown>;
+    const profile = await loadUserProfile(admin.supabase, text(updatedRow.user_id));
+    return NextResponse.json({ ok: true, event: normalizeRiskDetail(updatedRow, profile) });
   } catch (error) {
     await writeAdminAuditLog({
       request,
@@ -123,7 +148,7 @@ function actionToStatus(action: string) {
   return "monitoring";
 }
 
-function normalizeRiskDetail(row: Record<string, unknown>) {
+function normalizeRiskDetail(row: Record<string, unknown>, profile: ProfileLookup | null = null) {
   const reviews = Array.isArray(row.risk_reviews) ? row.risk_reviews as Record<string, unknown>[] : [];
   return {
     id: text(row.id) ?? "",
@@ -134,6 +159,8 @@ function normalizeRiskDetail(row: Record<string, unknown>) {
     businessType: text(row.business_type) ?? "",
     businessId: text(row.business_id),
     userId: text(row.user_id),
+    userEmail: profile?.email ?? null,
+    userDisplayName: profile?.displayName ?? null,
     requestId: text(row.request_id),
     sourceHash: text(row.source_hash)?.slice(0, 16) ?? null,
     summary: text(row.summary) ?? "无摘要",

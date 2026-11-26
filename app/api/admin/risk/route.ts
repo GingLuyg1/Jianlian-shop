@@ -1,6 +1,8 @@
 ﻿import { NextResponse } from "next/server";
 
 import { normalizeRiskError, number, requireRiskAdmin, text } from "@/lib/risk/admin-risk";
+import { sanitizePostgrestFilterTerm } from "@/lib/security/postgrest-sanitize";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +10,9 @@ const LEVELS = new Set(["low", "medium", "high", "critical"]);
 const STATUSES = new Set(["open", "pending", "reviewing", "approved", "rejected", "monitoring", "resolved", "expired", "cancelled"]);
 const BUSINESS_TYPES = new Set(["account", "login", "order", "inventory", "payment", "recharge", "refund", "delivery"]);
 const SORTS = new Set(["newest", "oldest", "risk_desc", "risk_asc"]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+type ProfileLookup = { email: string | null; displayName: string | null };
 
 export async function GET(request: Request) {
   const admin = await requireRiskAdmin();
@@ -21,11 +26,28 @@ export async function GET(request: Request) {
     const status = searchParams.get("status")?.trim() ?? "all";
     const businessType = searchParams.get("businessType")?.trim() ?? "all";
     const rule = searchParams.get("rule")?.trim() ?? "";
-    const search = sanitizeSearch(searchParams.get("search"));
+    const rawSearch = (searchParams.get("search") ?? "").trim().slice(0, 120);
+    const search = sanitizeSearch(rawSearch);
     const startAt = validDate(searchParams.get("startAt"));
     const endAt = validDate(searchParams.get("endAt"));
     const requestedSort = searchParams.get("sort")?.trim() ?? "newest";
     const sort = SORTS.has(requestedSort) ? requestedSort : "newest";
+
+    const profileReader = getSupabaseServiceRoleClient() ?? admin.supabase;
+    let matchedUserIds: string[] = [];
+    if (rawSearch) {
+      const safeUserSearch = sanitizePostgrestFilterTerm(rawSearch);
+      if (safeUserSearch && (rawSearch.includes("@") || rawSearch.includes(".") || /[\u4e00-\u9fff]/.test(rawSearch) || !UUID_PATTERN.test(rawSearch))) {
+        const { data: matchedProfiles } = await profileReader
+          .from("profiles")
+          .select("id")
+          .or(`email.ilike.%${safeUserSearch}%,display_name.ilike.%${safeUserSearch}%`)
+          .limit(50);
+        matchedUserIds = (matchedProfiles ?? [])
+          .map((item: { id?: unknown }) => text(item.id))
+          .filter((item): item is string => typeof item === "string" && UUID_PATTERN.test(item));
+      }
+    }
 
     let query = admin.supabase
       .from("risk_events")
@@ -35,12 +57,29 @@ export async function GET(request: Request) {
     if (STATUSES.has(status)) query = query.eq("status", status);
     if (BUSINESS_TYPES.has(businessType)) query = query.eq("business_type", businessType);
     if (rule) query = query.eq("rule_code", rule.slice(0, 80));
-    if (search) {
-      const filters = [`rule_code.ilike.%${search}%`, `business_id.ilike.%${search}%`, `request_id.ilike.%${search}%`];
-      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(search)) {
-        filters.unshift(`id.eq.${search}`);
+    if (rawSearch) {
+      const filters: string[] = [];
+      if (search) {
+        filters.push(`rule_code.ilike.%${search}%`, `business_id.ilike.%${search}%`, `request_id.ilike.%${search}%`);
       }
-      query = query.or(filters.join(","));
+      if (UUID_PATTERN.test(rawSearch)) {
+        filters.unshift(`id.eq.${rawSearch}`, `user_id.eq.${rawSearch}`);
+      }
+      if (matchedUserIds.length > 0) {
+        filters.push(`user_id.in.(${matchedUserIds.join(",")})`);
+      }
+      if (filters.length > 0) {
+        query = query.or(filters.join(","));
+      } else {
+        return NextResponse.json({
+          events: [],
+          total: 0,
+          page,
+          pageSize,
+          sort,
+          stats: await loadStats(admin.supabase),
+        });
+      }
     }
     if (startAt) query = query.gte("created_at", startAt);
     if (endAt) query = query.lte("created_at", endAt);
@@ -55,8 +94,14 @@ export async function GET(request: Request) {
     const [{ data, error, count }, stats] = await Promise.all([query, loadStats(admin.supabase)]);
     if (error) throw error;
 
+    const rows = (data ?? []) as Record<string, unknown>[];
+    const profileMap = await loadProfilesByIds(
+      profileReader,
+      rows.map((row) => text(row.user_id)).filter((id): id is string => Boolean(id)),
+    );
+
     return NextResponse.json({
-      events: (data ?? []).map(normalizeRiskEvent),
+      events: rows.map((row) => normalizeRiskEvent(row, profileMap)),
       total: count ?? 0,
       page,
       pageSize,
@@ -66,6 +111,30 @@ export async function GET(request: Request) {
   } catch (error) {
     return NextResponse.json({ error: normalizeRiskError(error) }, { status: 503 });
   }
+}
+
+async function loadProfilesByIds(supabase: any, userIds: string[]): Promise<Map<string, ProfileLookup>> {
+  const uniqueIds = Array.from(new Set(userIds));
+  const map = new Map<string, ProfileLookup>();
+  if (uniqueIds.length === 0) return map;
+  try {
+    const { data } = await supabase
+      .from("profiles")
+      .select("id,email,display_name")
+      .in("id", uniqueIds);
+    for (const row of (data ?? []) as Record<string, unknown>[]) {
+      const id = text(row.id);
+      if (id) {
+        map.set(id, {
+          email: text(row.email),
+          displayName: text(row.display_name),
+        });
+      }
+    }
+  } catch {
+    // Non-blocking enrichment: still return risk events even if profile lookup fails.
+  }
+  return map;
 }
 
 async function loadStats(supabase: any) {
@@ -107,7 +176,9 @@ function validDate(value: string | null) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-function normalizeRiskEvent(row: Record<string, unknown>) {
+function normalizeRiskEvent(row: Record<string, unknown>, profileMap: Map<string, ProfileLookup>) {
+  const userId = text(row.user_id);
+  const profile = userId ? profileMap.get(userId) : undefined;
   return {
     id: text(row.id) ?? "",
     ruleCode: text(row.rule_code) ?? "",
@@ -116,7 +187,9 @@ function normalizeRiskEvent(row: Record<string, unknown>) {
     recommendedAction: text(row.recommended_action) ?? "allow",
     businessType: text(row.business_type) ?? "",
     businessId: text(row.business_id),
-    userId: text(row.user_id),
+    userId,
+    userEmail: profile?.email ?? null,
+    userDisplayName: profile?.displayName ?? null,
     requestId: text(row.request_id),
     sourceHash: text(row.source_hash)?.slice(0, 16) ?? null,
     summary: text(row.summary) ?? "无摘要",
@@ -129,4 +202,3 @@ function normalizeRiskEvent(row: Record<string, unknown>) {
     updatedAt: text(row.updated_at),
   };
 }
-

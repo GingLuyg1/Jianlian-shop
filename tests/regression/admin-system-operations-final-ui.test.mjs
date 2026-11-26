@@ -45,7 +45,7 @@ test("database status workspace stays read-only and reports real probe sources",
   assert.match(page, /“未登记”不代表 数据库结构升级 未执行/);
   assert.doesNotMatch(page, />\s*(?:执行 Migration|运行 SQL|Vacuum|Reindex)\s*</i);
 
-  assert.match(route, /requireApiAdmin\(\)/);
+  assert.match(route, /requireApi(?:Super)?Admin\(\)/);
   assert.match(route, /\.rpc\("app_check_database_structure"\)/);
   assert.match(route, /FALLBACK_TABLES/);
   assert.match(route, /action: "database_schema_check"/);
@@ -54,14 +54,21 @@ test("database status workspace stays read-only and reports real probe sources",
   assert.doesNotMatch(route, /connection[_ -]?string|database[_ -]?password|service[_ -]?role[_ -]?key/i);
 });
 
-test("completed system workspaces share one streamlined operations group and toolbox", () => {
+test("completed system workspaces expose direct routes under the system operations group", () => {
   const navigation = file("components/admin/admin-navigation.ts");
-  const toolbox = file("app/admin/system/toolbox/page.tsx");
   const systemGroup = navigation.slice(navigation.indexOf('label: "系统运维"'), navigation.indexOf("export function isAdminNavigationGroup"));
 
-  assert.match(systemGroup, /label: "操作日志", href: "\/admin\/audit-logs"/);
-  assert.match(systemGroup, /label: "运维排障工具箱", href: "\/admin\/system\/toolbox"/);
-  for (const label of ["生产看板", "异常中心", "风险监控", "数据一致性", "事务补偿", "定时任务", "数据库状态"]) {
-    assert.match(toolbox, new RegExp(`label: "${label}"`));
+  for (const [label, href] of [
+    ["生产看板", "/admin/system"],
+    ["异常中心", "/admin/system-errors"],
+    ["风险审核", "/admin/risk"],
+    ["数据一致性巡检", "/admin/system/consistency"],
+    ["事务补偿", "/admin/system/compensations"],
+    ["定时任务状态", "/admin/system/workers"],
+    ["数据库状态", "/admin/system/database"],
+    ["请求追踪", "/admin/system/request-traces"],
+    ["操作日志", "/admin/audit-logs"],
+  ]) {
+    assert.match(systemGroup, new RegExp(`label: "${label}", href: "${href.replace(/\//g, "\\/")}"`));
   }
 });

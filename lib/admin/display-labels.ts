@@ -1,6 +1,7 @@
 /** Presentation only: never use these labels as API/filter/database values. */
 const businessLabels: Record<string, string> = {
   account_recharge: '账户充值', recharge: '账户充值', order_payment: '订单支付', order: '商品订单',
+  payment: '支付', account: '账户', login: '登录', inventory: '库存',
   delivery: '订单发货',
   admin_adjustment: '管理员调整余额', refund: '退款', promotion: '活动赠送', system: '系统调整',
 };
@@ -34,6 +35,7 @@ const statusLabels: Record<string, string> = {
   healthy: '健康', degraded: '降级', unhealthy: '异常', unknown: '未知',
   paused: '已暂停', completed_with_warnings: '已完成（含警告）',
   checkout: '结算页确认', missing: '历史缺失', read: '已读', unread: '未读',
+  monitoring: '观察中',
 };
 const supplierLabels: Record<string, string> = {
   pending: '等待采购', processing: '正在采购', retryable_failed: '采购失败，可再次尝试',
@@ -89,6 +91,9 @@ const detailLabels: Record<string, string> = {
   publish_email_template: '发布邮件模板', archive_email_template: '归档邮件模板', retry_email_delivery: '重试邮件投递',
   process_privacy_request: '处理用户隐私请求', approve_privacy_request: '批准隐私请求', reject_privacy_request: '驳回隐私请求',
   update_risk_case: '处理风险事件', resolve_risk_case: '完结风险事件',
+  risk_approve: '批准放行风险事件', risk_reject: '拒绝拦截风险事件',
+  risk_monitor: '风险事件加入观察', risk_release: '解除风险事件',
+  monitor: '加入观察', release: '解除风控',
   execute_compensation: '执行事务补偿', retry_compensation: '重试事务补偿',
   export_business_report: '导出经营报表',
   view_order_relations: '查看订单关联业务',
@@ -126,6 +131,64 @@ const detailLabels: Record<string, string> = {
   update_coupon: '更新优惠券状态',
   delete_coupon: '删除优惠券',
 };
+const riskActionLabels: Record<string, string> = {
+  allow: '正常放行',
+  allow_with_monitoring: '放行并持续观察',
+  require_review: '需人工复核',
+  temporarily_block: '临时限制操作',
+  temporarily_restrict: '临时限制操作',
+  deny: '直接拦截拒绝',
+  block: '拦截阻断',
+};
+const riskRuleLabels: Record<string, string> = {
+  ACCOUNT_RECENTLY_CREATED_HIGH_VALUE: '新注册账户高额交易',
+  ACCOUNT_RESTRICTED_HIGH_RISK_ACTION: '受限账户发起高风险操作',
+  ORDER_UNPAID_BURST: '短时间大量未支付订单',
+  ORDER_LARGE_QUANTITY: '单笔异常大数量下单',
+  ORDER_SKU_REPEATED_RESERVATION: '同一规格频繁重复锁库',
+  PAYMENT_SESSION_BURST: '短时间频繁拉起支付',
+  PAYMENT_CHANNEL_SWITCHING: '短时间频繁切换支付渠道',
+  PAYMENT_DUPLICATE_PROVIDER_TRADE: '第三方支付流水重复重放',
+  RECHARGE_REQUEST_BURST: '短时间高频发起充值',
+  RECHARGE_DUPLICATE_CLIENT_REQUEST: '重复提交充值请求',
+  REFUND_REQUEST_BURST: '短时间高频申请退款',
+  REFUND_RATIO_HIGH: '账号历史退款率过高',
+  REFUND_DELIVERED_DIGITAL: '已发货数字商品申请退款',
+  SOURCE_SHARED_BY_ACCOUNTS: '同来源多账号关联操作',
+};
+const riskMetadataKeyLabels: Record<string, string> = {
+  channel: '支付渠道',
+  channelCode: '支付渠道代码',
+  channel_code: '支付渠道代码',
+  paymentChannel: '支付渠道',
+  payment_channel: '支付渠道',
+  paymentMethod: '支付方式',
+  payment_method: '支付方式',
+  orderNo: '订单号',
+  order_no: '订单号',
+  rechargeNo: '充值单号',
+  recharge_no: '充值单号',
+  paymentNo: '支付单号',
+  payment_no: '支付单号',
+  amount: '交易金额',
+  orderAmount: '订单金额',
+  payableAmount: '应付金额',
+  currency: '币种',
+  quantity: '购买数量',
+  skuId: '商品规格 ID',
+  sku_id: '商品规格 ID',
+  productId: '商品 ID',
+  product_id: '商品 ID',
+  deliveryDelivered: '是否已发货交付',
+  delivery_delivered: '是否已发货交付',
+  reason: '原因说明',
+  provider: '支付平台',
+  providerTradeNo: '第三方交易号',
+  provider_trade_no: '第三方交易号',
+  clientIp: '来源 IP',
+  ip: '来源 IP',
+  source: '来源',
+};
 function label(value: unknown, map: Record<string, string>, suffix = '未识别状态'): string {
   if (value == null || value === '') return '—';
   const raw = String(value);
@@ -135,6 +198,9 @@ export const businessTypeLabel = (value: unknown) => label(value, businessLabels
 export const statusLabel = (value: unknown) => label(value, statusLabels);
 export const workerStatusLabel = (value: unknown) => label(value, workerLabels);
 export const detailLabel = (value: unknown) => label(value, detailLabels, '系统类型');
+export const riskActionLabel = (value: unknown) => label(value, riskActionLabels, '风控策略');
+export const riskRuleLabel = (value: unknown) => label(value, riskRuleLabels, '风控规则');
+export const riskMetadataKeyLabel = (key: string) => riskMetadataKeyLabels[key] ?? key;
 export const directionLabel = (value: unknown) => label(value, {credit: '余额增加', debit: '余额扣减'}, '系统类型');
 export function supplierStatusLabel(value: unknown, retryable?: unknown): string {
   if (value === 'FAILED' || value === 'FAILED_VALIDATION') {
@@ -154,6 +220,8 @@ export function beijingDateTime(value: unknown): string {
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? String(value) : `${new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date)}（北京时间）`;
 }
-export const ledgerBusinessOptions = Object.entries(businessLabels).filter(([value]) => !['recharge', 'order', 'delivery'].includes(value)).map(([value, label]) => ({value, label}));
+export const ledgerBusinessOptions = Object.entries(businessLabels)
+  .filter(([value]) => !['recharge', 'order', 'delivery', 'payment', 'account', 'login', 'inventory'].includes(value))
+  .map(([value, label]) => ({value, label}));
 export const workerHelpText = '这里只显示系统采集到的运行状态。如果定时任务状态显示“暂未获取”，不代表任务已经停止。此页面不能启动、停止或修改服务器任务。';
 export const operationsDateFilterHelp = '筛选范围为北京时间当天 00:00 至 23:59。记录时间显示为北京时间。搜索匹配过多时，请缩小范围。';

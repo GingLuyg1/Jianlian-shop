@@ -117,8 +117,15 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     icon: AlertTriangle,
     routePrefixes: ["/admin/system", "/admin/system-errors", "/admin/risk", "/admin/audit-logs"],
     children: [
+      { label: "生产看板", href: "/admin/system" },
+      { label: "异常中心", href: "/admin/system-errors" },
+      { label: "风险审核", href: "/admin/risk" },
+      { label: "数据一致性巡检", href: "/admin/system/consistency" },
+      { label: "事务补偿", href: "/admin/system/compensations" },
+      { label: "定时任务状态", href: "/admin/system/workers" },
+      { label: "数据库状态", href: "/admin/system/database" },
+      { label: "请求追踪", href: "/admin/system/request-traces" },
       { label: "操作日志", href: "/admin/audit-logs" },
-      { label: "运维排障工具箱", href: "/admin/system/toolbox" },
     ],
   },
 ];
@@ -145,12 +152,8 @@ export function isAdminNavigationLinkActive(
   if (href === "/admin/users") {
     return isPathActive(pathname, "/admin/users") || isPathActive(pathname, "/admin/privacy-requests");
   }
-  if (href === "/admin/system/toolbox") {
-    return (
-      isPathActive(pathname, "/admin/system") ||
-      isPathActive(pathname, "/admin/system-errors") ||
-      isPathActive(pathname, "/admin/risk")
-    );
+  if (href === "/admin/system") {
+    return pathname === "/admin/system";
   }
   if (href === "/admin/agents") {
     void agentTab;
