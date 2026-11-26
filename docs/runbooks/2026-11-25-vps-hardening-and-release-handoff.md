@@ -129,3 +129,57 @@ apt-get update && apt-get install -y fail2ban && systemctl enable --now fail2ban
   - 将公开 `Site Key` 写入 `NEXT_PUBLIC_TURNSTILE_SITE_KEY`；
   - 将 `Secret Key` 仅写入 VPS `/www/jianlian-shop/.env.local` 的 `TURNSTILE_SECRET_KEY`（绝不提交到 Git）；
   - 回家让电脑拉取最新仓库后，即可在登录 / 注册 / 下单 / 优惠券校验中按需接入前端小部件与服务端 `siteverify` 校验。
+
+---
+
+## 三、代码层安全防护待办任务（2026-11-26 前后端全量审计补充）
+
+> 说明：以下为基于当前仓库源码核实后的纵深防护待办项（均不含任何攻击载荷或敏感密钥），后续按 P0 → P1 → P2 分批修复并回归测试。
+
+### P0 — 优先修复（上线拉新前建议先补齐）
+- [ ] **P0-1 修复 Cloudflare 场景下的真实 IP 识别与限流绕过**
+  - 涉及文件：`lib/security/rate-limit.ts`（L63-81、L226-241）、`lib/payments/request-client-ip.ts`（L5-16）、`app/api/analytics/page-view/route.ts`（L89-93）
+  - 加固方案：统一抽离 `getTrustedClientIp(request)` 优先读取经 `isIP()` 校验的 `cf-connecting-ip`（不再优先信任最左侧 `x-forwarded-for`）；限流桶 key 去掉 `User-Agent` 拼接防止换 UA 绕过；高频核心接口避免 5000 桶 FIFO 淘汰（改为最短 TTL/LRU 或持久存储）。
+- [ ] **P0-2 加固或清理遗留 `/api/v1/**` 接口**
+  - 涉及文件：`app/api/v1/orders/[orderNo]/route.ts`（L20-33、L49-53）、`app/api/v1/products/[identifier]/route.ts`（L18-24、L49-53）、`app/api/v1/products/route.ts`、`app/api/v1/user/assets/route.ts`
+  - 加固方案：`/api/v1/orders/[orderNo]` 补齐未登录 `401` + `.eq("user_id", user.id)` + 限流（或确认无外部调用后直接下线，统一走 `/api/orders`）；`/api/v1/products/[identifier]` 禁止原样拼接 `.or(...)` 改为校验 UUID/slug 后分查询并限定 `status in ('active','sold_out')`；全量隐藏原始 `error.message`。
+- [ ] **P0-3 工单接口防刷、防单行 JSONB 挤掉他人记录与图片白名单校验**
+  - 涉及文件：`app/api/tickets/route.ts`（L44-95）、`lib/tickets/server.ts`（L20-44、L140-186）、`app/admin/tickets/page.tsx`（L677-726）
+  - 加固方案：短期补齐 `POST /api/tickets` 按用户限流 + 请求体上限（如 3–4 MB）、`sanitizeImages` 严格限制 `^data:image/(png|jpeg|webp);base64,`（单张 <= 1 MB、最多 3 张）并复用 `toSafeTicketError` 屏蔽内部报错；中期将工单从 `site_settings` 单条 JSONB 迁移至独立关系表（行级 RLS + 对象存储传图）。
+
+### P1 — 高优先级加固
+- [ ] **P1-1 优惠券下单回滚 RPC 修正 + 取消/超时自动释放券码 + 防枚举**
+  - 涉及文件：`app/api/orders/route.ts`（L521-554、L671-697）、`app/api/orders/[orderNo]/route.ts`（L219-245）、`lib/orders/order-expiration.ts`（L62-92）、`lib/coupons/coupon-service.ts`（L138-169）、`supabase/migrations/20261125030000_coupons_system.sql`（L32、L200-247）
+  - 加固方案：将 `app/api/orders/route.ts:685` 不存在的 `cancel_my_unpaid_order` 改为 `cancel_unpaid_order` 并检查 `{ error }`，同时前置校验 `min_order_amount`；在取消订单与超时过期逻辑中调用 `release_order_coupon(order_id)` 防止用户取消未支付订单后券码永久作废，并将 `coupon_redemptions.order_id` 唯一约束改为局部唯一索引（`where status = 'applied'`）；`/api/orders` 传 `coupon_code` 时复用 `coupon_validate` 限流并统一失效错误码/文案。
+- [ ] **P1-2 账号安全验证码接口限流与防邮箱轰炸**
+  - 涉及文件：`app/api/account/security/send-code/route.ts`（L11-70）、`lib/security/email-code-service.ts`（L14、L43-58、L157）、`app/api/account/security/reset-password-by-code/route.ts`（L59-62）、`app/api/account/security/change-email/route.ts`（L72-75）
+  - 加固方案：按 `user.id` + IP 双重限流并限制请求体大小；定时清理 `codeStore` 过期项（或落库并绑定 `user_id`）；验证码改用 `timingSafeEqual` 比对；隐藏 `new_email_verify` 精确枚举与原始 Supabase Auth 报错。
+- [ ] **P1-3 后台 93 个写操作 API 统一补齐 CSRF / `Origin` 同源校验**
+  - 涉及文件：`middleware.ts`、`lib/admin/api-auth.ts`（L72-136）、`lib/security/rate-limit.ts`（L207-219）
+  - 加固方案：在 `middleware.ts` 对 `/api/admin/*` 非 GET 请求及 `enforceAdminWriteGuard` 中统一校验 `Origin` 白名单与 `Content-Type`。
+- [ ] **P1-4 支付状态查询接口校验管理员启用状态**
+  - 涉及文件：`app/api/payments/status/[sessionNo]/route.ts`（L27-36）
+  - 加固方案：改用 `requireApiAdmin()` / `loadAdminAuthorization` 校验 `admin_users.status === 'active'`，避免已禁用管理员凭残留 `profiles.role` 越权查询他人会话状态。
+- [ ] **P1-5 消除商品详情接口 50 倍回环请求放大与 Host 头信任风险**
+  - 涉及文件：`app/api/catalog/products/[identifier]/route.ts`（L55-83、L137-146）、`app/api/auth/resend-verification/route.ts`（L8-11）
+  - 加固方案：移除 `findVisibleProductSlugByCatalogApi`（避免不存在 UUID 触发最多 50 次内部回环 `fetch`）并加读限流；`resend-verification` 改用 `getAuthSiteOrigin()` 替代 `new URL(request.url).origin`。
+- [ ] **P1-6 JSON-LD `<script>` 输出转义防存储型 XSS**
+  - 涉及文件：`app/products/[id]/layout.tsx`（L105-113）、`app/layout.tsx`（L49-54）
+  - 加固方案：抽离 `safeJsonLd()` 转义 `<` `>` `&` `\u2028` `\u2029` 后再写入 `dangerouslySetInnerHTML`。
+- [ ] **P1-7 公开表单接入 Cloudflare Turnstile + 收紧 CSP 与 Middleware Matcher**
+  - 涉及文件：`components/auth/AuthScreen.tsx`、`app/forgot-password/page.tsx`、`app/order-query/page.tsx`、`next.config.js`（L7-8）、`middleware.ts`（L7、L29、L187）
+  - 加固方案：登录/注册/找回密码/查单接入 Turnstile；生产环境 CSP 移除 `cdn.tailwindcss.com` 与 `'unsafe-eval'`、收紧 `form-action` 白名单；修正 `middleware.ts:187` 排除 `map` 导致探测拦截死代码的问题，并限定 `isStaticAssetPath` 绝不匹配 `/api/*` 与 `/admin/*`。
+
+### P2 — 中优先级纵深防御
+- [ ] **P2-1 统一 7 个内部任务接口的密钥常量时间比对（`timingSafeEqual`）**
+  - 涉及文件：`app/api/internal/data-consistency/route.ts`（L11、L21-23，另补限流并移除 `GET` 暴露 header 名）、`reconcile/route.ts`、`liuhaoyi-alipay-recharge-recovery/route.ts`、`liuhaoyi-wechat-recharge-recovery/route.ts`、`lib/orders/order-expiration.ts`（L177）、`lib/payments/bep20-underpayment-service.ts`（L274）、`lib/recharges/bep20-recharge-scanner.ts`（L92）。
+- [ ] **P2-2 未鉴权写/导出接口补请求体上限、限流与文件魔数校验**
+  - 涉及文件：`lib/payments/payment-callback-service.ts`（L55-77，验签前限制 64KB 与 IP 限流）、`app/api/analytics/page-view/route.ts`（补限流）、`app/api/account/privacy/route.ts`（按用户限流）、`app/api/recharges/[rechargeNo]/proof/route.ts`（补 JPEG/PNG/WEBP/PDF 魔数校验）、`lib/media/media-service.ts`（L90 移除 `declaredType` 回退）。
+- [ ] **P2-3 收敛前端浏览器缓存中的用户敏感字段**
+  - 涉及文件：`components/auth/AuthProfileProvider.tsx`（L32、L54-81）
+  - 加固方案：移除 `localStorage` 持久化完整 `User`/`UserProfile`，改为仅在 `sessionStorage` 缓存脱敏邮箱与余额等最小 UI 字段。
+- [ ] **P2-4 前端外跳支付与第三方授权 URL 协议白名单校验**
+  - 涉及文件：`app/checkout/page.tsx`（L1151-1156）、`components/account/AccountRechargeContent.tsx`（L299）、`components/auth/AlternateLoginMethods.tsx`（L53）、`app/payment/page.tsx`（L903、L905、L1662、L1676）
+  - 加固方案：封装 `sanitizeExternalUrl()`，仅允许 `https:`（唤起端内支付链接额外允许 `alipays:` / `weixin:`）。
+- [ ] **P2-5 生产环境关闭 `?mobilePreview=390` 预览条 + 补全 `rel="noopener noreferrer"`**
+  - 涉及文件：`hooks/use-mobile-storefront.ts`（L90-112）、`app/account/api/page.tsx`（L1188-1210）及各教程页外链。
