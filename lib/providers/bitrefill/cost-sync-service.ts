@@ -271,9 +271,11 @@ export async function syncBitrefillCostsAndRates(
 
   const { data: skus, error: skuError } = await service
     .from("product_skus")
-    .select("id,product_id,title,price,cost_price,status,metadata")
-    .eq("status", "active");
-  if (skuError) throw skuError;
+    .select("id,product_id,sku_title,sku_code,price,status,metadata")
+    .eq("status", "active")
+    .contains("metadata", { supplier: "bitrefill" })
+    .limit(1000);
+  if (skuError) throw new Error(skuError.message || JSON.stringify(skuError));
 
   const bitrefillSkus = (skus ?? []).filter((row) => {
     const meta = row.metadata as Record<string, unknown> | null;
@@ -297,7 +299,7 @@ export async function syncBitrefillCostsAndRates(
     const meta = (row.metadata && typeof row.metadata === "object" ? row.metadata : {}) as Record<string, unknown>;
     const supplierProductId = String(meta.supplier_product_id ?? "").trim();
     const supplierSku = String(meta.supplier_sku ?? "").trim();
-    const skuTitle = String(row.title ?? row.id);
+    const skuTitle = String(row.sku_title ?? row.sku_code ?? row.id);
     const currentRetailCny = Number(row.price ?? 0);
     const currentMaxUnitCostUsd =
       meta.supplier_max_unit_cost != null && Number.isFinite(Number(meta.supplier_max_unit_cost))
@@ -442,12 +444,12 @@ export async function syncBitrefillCostsAndRates(
         ...meta,
         supplier_max_unit_cost: recommendedMaxUnitCostUsd,
         supplier_last_synced_usd_cost: liveUsdCost,
+        supplier_last_synced_cost_cny: liveCostCny,
         supplier_last_synced_rate: usdCnyRate,
         supplier_last_synced_at: new Date().toISOString(),
       };
       const patch: Record<string, unknown> = {
         metadata: nextMetadata,
-        cost_price: liveCostCny,
         updated_at: new Date().toISOString(),
       };
       if (retailNeedsUpdate) {

@@ -15,6 +15,8 @@ test("Bitrefill dynamic pricing supports two-way repricing, ±15% circuit breake
   assert.match(service, /affectedProductIds/);
   assert.match(service, /\.from\("products"\)/);
   assert.match(service, /Math\.min\(\.\.\.prices\)/);
+  assert.match(service, /select\("id,product_id,sku_title,sku_code,price,status,metadata"\)/);
+  assert.doesNotMatch(service, /cost_price:/);
 
   const route = read("app/api/admin/suppliers/bitrefill/cost-sync/route.ts");
   assert.match(route, /INTERNAL_JOB_SECRET/);

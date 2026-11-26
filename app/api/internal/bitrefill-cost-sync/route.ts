@@ -69,7 +69,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("[InternalBitrefillCostSync] failed", {
       requestId,
-      message: error instanceof Error ? error.message : String(error),
+      message: error instanceof Error ? error.message : JSON.stringify(error),
     });
     return json({ error: "Bitrefill 定时成本同步失败", code: "BITREFILL_COST_SYNC_FAILED", requestId }, 503);
   }
