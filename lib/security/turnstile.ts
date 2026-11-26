@@ -4,19 +4,29 @@ export type TurnstileVerifyResult =
   | { ok: true; skipped?: boolean }
   | { ok: false; message: string; code: string };
 
+export function getTurnstileSiteKey(): string {
+  // Read dynamically via index access so Next.js does not statically inline
+  // an empty build-time value when keys are provisioned later on the server.
+  const env = process.env;
+  const direct = env["TURNSTILE_SITE_KEY"]?.trim();
+  if (direct) return direct;
+  return env["NEXT_PUBLIC_TURNSTILE_SITE_KEY"]?.trim() || "";
+}
+
+export function getTurnstileSecretKey(): string {
+  return process.env["TURNSTILE_SECRET_KEY"]?.trim() || "";
+}
+
 export function isTurnstileConfigured(): boolean {
-  return Boolean(
-    process.env.TURNSTILE_SECRET_KEY?.trim() &&
-      process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim()
-  );
+  return Boolean(getTurnstileSecretKey() && getTurnstileSiteKey());
 }
 
 export async function verifyTurnstileToken(
   token: string | null | undefined,
   remoteIp?: string | null
 ): Promise<TurnstileVerifyResult> {
-  const secret = process.env.TURNSTILE_SECRET_KEY?.trim();
-  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
+  const secret = getTurnstileSecretKey();
+  const siteKey = getTurnstileSiteKey();
 
   // If Cloudflare Turnstile keys are not configured yet, fall back cleanly so
   // callers rely on server-side rate limiting until keys are provisioned.

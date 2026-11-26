@@ -2,7 +2,7 @@
 
 import { lookupGuestOrder, lookupGuestOrdersByEmail } from "@/lib/orders/order-query-service";
 import { checkRateLimit, checkRequestSize, getBusinessRateLimitKey, getRequestSourceKey } from "@/lib/security/rate-limit";
-import { isTurnstileConfigured, verifyTurnstileToken } from "@/lib/security/turnstile";
+import { getTurnstileSiteKey, isTurnstileConfigured, verifyTurnstileToken } from "@/lib/security/turnstile";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ function getErrorMessage(error: unknown, fallback = "订单查询失败，请稍
 export async function GET() {
   return NextResponse.json({
     turnstileEnabled: isTurnstileConfigured(),
-    turnstileSiteKey: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim() || "",
+    turnstileSiteKey: getTurnstileSiteKey(),
   });
 }
 
