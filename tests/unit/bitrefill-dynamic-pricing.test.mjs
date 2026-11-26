@@ -21,6 +21,11 @@ test("Bitrefill dynamic pricing supports two-way repricing, ±15% circuit breake
   assert.match(route, /updateRetailPrice/);
   assert.match(route, /maxPriceDriftPercent/);
 
+  const internalRoute = read("app/api/internal/bitrefill-cost-sync/route.ts");
+  assert.match(internalRoute, /timingSafeEqual/);
+  assert.match(internalRoute, /INTERNAL_JOB_SECRET/);
+  assert.match(internalRoute, /syncBitrefillCostsAndRates/);
+
   const ui = read("components/admin/suppliers/AdminSuppliersWorkspace.tsx");
   assert.match(ui, /一键联动调价/);
   assert.match(ui, /AdminConfirmDialog/);
