@@ -11,6 +11,7 @@ export default function GiftCardsMallContent() {
       primaryNames={["礼品卡", "充值卡"]}
       primarySlugs={["gift-cards", "gift-card", "recharge-card"]}
       productCategory="gift-cards"
+      hideSales
     />
   );
 }

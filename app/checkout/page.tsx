@@ -1886,29 +1886,45 @@ function ProductDetailCard({
               {product.description}
             </p>
 
-            <div className="mt-4 grid w-full grid-cols-2 gap-3 rounded-xl border border-border bg-white p-3.5 sm:mt-8 sm:gap-4 sm:p-5">
-              <DetailMetric
-                label="商品销量"
-                value={`已售 ${computeProductSalesCount({
-                  id: product.id,
-                  name: product.name,
-                  price: product.price,
-                  explicitSales: Number(product.metadata?.salesCount ?? 0),
-                })} 件`}
-              />
-              <DetailMetric label="商品单价" value={priceLabel} highlight />
-              <DetailMetric
-                label="商品库存"
-                value={product.stockLabel}
-                success={product.stockStatus === "in-stock"}
-                danger={product.stockStatus === "out-of-stock"}
-              />
-              <DetailMetric
-                label="商品发货方式"
-                value={product.deliveryLabel}
-                badge={product.deliveryLabel === "物流发货" ? "下单24小时内发货" : undefined}
-              />
-            </div>
+            {(() => {
+              const isGiftCardProduct =
+                product.category === "gift-cards" ||
+                /礼品卡|充值卡|话费充值|gift-?card|recharge-?card/i.test(
+                  `${product.categoryLabel ?? ""} ${String(product.metadata?.categorySlug ?? "")}`
+                );
+              return (
+                <div
+                  className={cn(
+                    "mt-4 grid w-full gap-3 rounded-xl border border-border bg-white p-3.5 sm:mt-8 sm:gap-4 sm:p-5",
+                    isGiftCardProduct ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2"
+                  )}
+                >
+                  {!isGiftCardProduct ? (
+                    <DetailMetric
+                      label="商品销量"
+                      value={`已售 ${computeProductSalesCount({
+                        id: product.id,
+                        name: product.name,
+                        price: product.price,
+                        explicitSales: Number(product.metadata?.salesCount ?? 0),
+                      })} 件`}
+                    />
+                  ) : null}
+                  <DetailMetric label="商品单价" value={priceLabel} highlight />
+                  <DetailMetric
+                    label="商品库存"
+                    value={product.stockLabel}
+                    success={product.stockStatus === "in-stock"}
+                    danger={product.stockStatus === "out-of-stock"}
+                  />
+                  <DetailMetric
+                    label="商品发货方式"
+                    value={product.deliveryLabel}
+                    badge={product.deliveryLabel === "物流发货" ? "下单24小时内发货" : undefined}
+                  />
+                </div>
+              );
+            })()}
 
             <div className={cn("mt-3.5 lg:hidden", isMobile && "!block")}>
               <button

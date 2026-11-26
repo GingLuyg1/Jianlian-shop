@@ -8,6 +8,7 @@ import {
 import { zeroSupplierSummary } from "../core/supplier-router-core.mjs";
 import type { SupplierFulfillmentSummary } from "../core/types";
 import { notifySupplierInsufficientBalance } from "../core/supplier-balance-alert";
+import { notifyBitrefillCostAnomaly } from "./cost-sync-service";
 
 const AUTO_DELIVERY_TYPES = new Set(["automatic", "auto", "card", "account", "auto_delivery"]);
 const DEFAULT_POLL_DELAYS_MS = [1500, 2000, 2500, 3000];
@@ -336,6 +337,25 @@ export async function fulfillBitrefillLiveOrderWithSupabase(
       const totalUsdCost = Number((unitUsdCost * candidate.quantity).toFixed(2));
 
       if (candidate.maxUnitCostUsd != null && unitUsdCost > candidate.maxUnitCostUsd) {
+        void notifyBitrefillCostAnomaly({
+          reason: "自动采购触发单件成本上限拦截 (supplier_max_unit_cost)",
+          usdCnyRate: getUsdCnyRate(env),
+          orderId: candidate.orderId,
+          anomalies: [
+            {
+              kind: "COST_CAP_EXCEEDED",
+              skuId: candidate.skuId ?? candidate.productId,
+              skuTitle: `${candidate.supplierProductId} / ${candidate.supplierSku}`,
+              supplierProductId: candidate.supplierProductId,
+              supplierSku: candidate.supplierSku,
+              currentMaxUnitCostUsd: candidate.maxUnitCostUsd,
+              liveUsdCost: unitUsdCost,
+              currentRetailCny: candidate.lineTotalCny,
+              liveCostCny: Number((unitUsdCost * getUsdCnyRate(env)).toFixed(2)),
+              detail: `实时单价 $${unitUsdCost} 超过上限 $${candidate.maxUnitCostUsd}`,
+            },
+          ],
+        });
         throw new Error(`BITREFILL_UNIT_COST_EXCEEDED:${unitUsdCost}>${candidate.maxUnitCostUsd}`);
       }
       if (totalUsdCost > maxOrderCostUsd) {

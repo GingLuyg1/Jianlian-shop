@@ -77,6 +77,9 @@ export default function AccountShell({ children }: { children: ReactNode }) {
 
         const supabase = getSupabaseBrowserClient();
         const { data: sessionData } = await supabase.auth.getSession();
+        const hadRegisteredSession = Boolean(
+          sessionData.session?.user && !isGuestAuthUser(sessionData.session.user)
+        );
         if (sessionData.session?.user && active) {
           const isGuest = isGuestAuthUser(sessionData.session.user);
           setEmail(isGuest ? "" : (sessionData.session.user.email ?? ""));
@@ -94,7 +97,11 @@ export default function AccountShell({ children }: { children: ReactNode }) {
 
         if (error || !user || isGuestAuthUser(user)) {
           if (isOrdersPage) { setOrdersLoginRequired(true); setEmail(""); setEmailVerified(true); setChecking(false); return; }
-          toast.error("登录状态已失效，请重新登录。");
+          if (hadRegisteredSession) {
+            toast.error("登录状态已失效，请重新登录。");
+          } else {
+            toast.info("请先登录后访问个人中心");
+          }
           router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
           return;
         }

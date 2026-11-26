@@ -71,7 +71,7 @@ const nextConfig = {
         source: "/tutorials",
         headers: [
           ...securityHeaders,
-          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+          { key: "Cache-Control", value: "private, no-cache, no-store, max-age=0, must-revalidate" },
         ],
       },
       // Tutorial screenshots and brand assets rarely change: let browsers

@@ -294,11 +294,8 @@ test("BEP20 pricing snapshots freeze CNY to USDT amount server-side", () => {
   assert.match(paymentPage, /orderAmount/);
   assert.match(paymentPage, /exchangeRate/);
   assert.match(paymentPage, /LocalAddressQr/);
-  assert.match(paymentPage, /createErrorCorrection/);
-  assert.match(paymentPage, /createFormatBits/);
-  assert.match(paymentPage, /applyFormatBits/);
-  assert.match(paymentPage, /scoreQrMatrix/);
-  assert.match(paymentPage, /new TextEncoder\(\)\.encode/);
+  assert.match(paymentPage, /from "qrcode\.react"/);
+  assert.match(paymentPage, /<QRCodeSVG/);
   assert.doesNotMatch(paymentPage, /api\.qrserver\.com|create-qr-code/);
 });
 

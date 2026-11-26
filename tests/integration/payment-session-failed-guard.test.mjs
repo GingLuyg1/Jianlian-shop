@@ -90,8 +90,10 @@ async function mountPaymentPanel(h){
   const effects=[],done=deferred(),errors=[];let i=0;
   const hooks={useState:value=>{const n=i++;return [value,v=>{if(n===2)errors.push(v);if(n===3&&v===false)done.resolve();}];},
     useRef:value=>({current:value}),useEffect:fn=>effects.push(fn)};
+  const mockFetch = async(url)=>{assert.equal(url,"/api/payments/create");return h.paymentPost();};
   const globals={...hooks,isRechargePastDue:()=>false,secondsLeft:()=>900,Loader2:()=>null,
-    fetch:async(url)=>{assert.equal(url,"/api/payments/create");return h.paymentPost();}};
+    getOrderErrorMessage:(e,fallback)=>e instanceof Error&&e.message?e.message:fallback,
+    fetch:mockFetch,fetchWithTimeout:mockFetch};
   const ui=loadTs("app/payment/page.tsx",{"react/jsx-runtime":{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})}},
     full.slice(start,end)+"\nexport { LiuhaoyiRechargePaymentPanel };",globals);
   ui.LiuhaoyiRechargePaymentPanel({recharge:{rechargeNo:h.input.businessNo,channelCode:"alipay",status:"pending",expiresAt:h.data.account_recharges[0].expires_at},onRechargeChanged:async()=>null});

@@ -179,6 +179,22 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  if (
+    request.method === "GET" &&
+    !request.cookies.get("jl_cache_purge_20261126") &&
+    (request.headers.get("accept") || "").includes("text/html")
+  ) {
+    // One-time browser HTTP cache purge to evict legacy 7-day /tutorials HTML cache
+    // without touching cookies, login sessions, or localStorage.
+    response.headers.set("Clear-Site-Data", '"cache"');
+    response.cookies.set("jl_cache_purge_20261126", "1", {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+      sameSite: "lax",
+      secure: request.nextUrl.protocol === "https:",
+    });
+  }
+
   return response;
 }
 

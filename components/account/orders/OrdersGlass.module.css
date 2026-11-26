@@ -30,7 +30,6 @@
   margin: auto;
   z-index: 81;
   width: calc(100% - 48px);
-  height: min(820px, calc(100dvh - 64px));
   max-width: 760px;
   max-height: calc(100dvh - 64px);
   transform: none;
@@ -40,10 +39,17 @@
   border-radius: 26px;
   box-shadow: inset 0 1px 0 #fff, 0 28px 90px -30px rgb(56 36 17 / 36%), 0 0 0 1px rgb(218 187 158 / 40%);
 }
+.detailDialog {
+  height: fit-content;
+  max-height: min(820px, calc(100dvh - 64px));
+}
 .detailDialogTop {
   z-index: 91;
 }
-.queryDialog { max-width: 1080px; }
+.queryDialog {
+  height: min(820px, calc(100dvh - 64px));
+  max-width: 1080px;
+}
 .dialogHeader {
   background: linear-gradient(115deg, #fff0df, #fffbf5 65%, #fffdfa);
   border-color: #eee1d4;
@@ -97,9 +103,14 @@
   .list td:last-child button { float: right; }
   .detailDialog, .queryDialog {
     width: calc(100% - 24px);
-    height: calc(100dvh - 32px);
     max-height: calc(100dvh - 32px);
     border-radius: 24px;
+  }
+  .queryDialog {
+    height: calc(100dvh - 32px);
+  }
+  .detailDialog {
+    height: fit-content;
   }
 }
 :global(html[data-mobile-preview="true"]) .list { border: 0; background: transparent; box-shadow: none; }

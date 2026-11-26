@@ -11,10 +11,21 @@ function isChunkLoadFailure(error: Error & { digest?: string }) {
   const message = String(error?.message || "");
   return (
     name === "ChunkLoadError" ||
-    /Loading chunk [\w-]+ failed|Failed to fetch dynamically imported module|Importing a module script failed|CSS_CHUNK_LOAD_FAILED/i.test(
+    /Loading chunk [\w-]+ failed|Failed to fetch dynamically imported module|Importing a module script failed|CSS_CHUNK_LOAD_FAILED|Cannot read properties of undefined \(reading '(?:call|default)'\)|Cannot read properties of null \(reading 'call'\)|undefined is not an object \(evaluating '[^']*\.call'\)/i.test(
       message
     )
   );
+}
+
+function hardCacheBustReload() {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set("_r", String(Date.now()));
+    window.location.replace(url.toString());
+  } catch {
+    window.location.reload();
+  }
 }
 
 export default function ErrorBoundary({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
@@ -33,7 +44,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
         const lastReload = Number(window.sessionStorage.getItem(CHUNK_RELOAD_GUARD_KEY) || "0");
         if (!Number.isFinite(lastReload) || Date.now() - lastReload > 10_000) {
           window.sessionStorage.setItem(CHUNK_RELOAD_GUARD_KEY, String(Date.now()));
-          window.location.reload();
+          hardCacheBustReload();
         }
       } catch {
         // Storage unavailable: avoid unconditional infinite reload loop; let user click reload.
@@ -44,7 +55,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
   const handleReload = () => {
     if (isChunkLoadFailure(error) || retriedInPlace) {
       if (typeof window !== "undefined") {
-        window.location.reload();
+        hardCacheBustReload();
         return;
       }
     }

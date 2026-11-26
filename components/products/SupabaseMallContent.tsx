@@ -79,6 +79,7 @@ export type SupabaseMallContentProps = PublicCatalogConfig & {
   queryParam?: string;
   fallbackTitle: string;
   fallbackCategories: StorefrontFallbackCategory[];
+  hideSales?: boolean;
 };
 
 type DisplayCategory = PublicCategory & {
@@ -193,6 +194,7 @@ function SupabaseMallContentInner({
   primarySlugs,
   productCategory,
   queryParam = "category",
+  hideSales = false,
 }: SupabaseMallContentProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -867,6 +869,7 @@ function SupabaseMallContentInner({
           routePendingTarget={routePending?.target ?? ""}
           productListTopRef={productListTopRef}
           showStock={settings.show_stock}
+          hideSales={hideSales}
           total={effectiveSubcategory ? total || filteredProducts.length : total}
           onDraftSearchChange={setDraftSearch}
           onResetFilters={resetFilters}
@@ -1381,6 +1384,7 @@ function ProductPanel({
   routePendingTarget,
   productListTopRef,
   showStock,
+  hideSales = false,
   total,
   onDraftSearchChange,
   onResetFilters,
@@ -1408,6 +1412,7 @@ function ProductPanel({
   routePendingTarget: string;
   productListTopRef: RefObject<HTMLDivElement>;
   showStock: boolean;
+  hideSales?: boolean;
   total: number;
   onDraftSearchChange: (query: string) => void;
   onResetFilters: () => void;
@@ -1537,6 +1542,7 @@ function ProductPanel({
                       category={activeCategory}
                       currencySymbol={currencySymbol}
                       showStock={showStock}
+                      hideSales={hideSales}
                       disabled={false}
                       selected={selectedProductId === product.id}
                       isMobile={isMobile}
@@ -1662,18 +1668,20 @@ function CatalogProductIcon({ product, category, isMobile, priority = false }: {
     : <span data-selection-icon className={cn("flex items-center justify-center bg-primary/10", sizeClass)}><Icon className={iconSizeClass} aria-label={category?.name || "商品"} /></span>;
 }
 
-function ProductRowCompact({ currencySymbol, product, category, showStock, disabled, selected, isMobile = false, priority = false, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; priority?: boolean; onSelect: () => void }) {
+function ProductRowCompact({ currencySymbol, product, category, showStock, hideSales = false, disabled, selected, isMobile = false, priority = false, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; hideSales?: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; priority?: boolean; onSelect: () => void }) {
   const router = useRouter();
   const stock = Number(product.stock ?? 0);
   const rawSales = Number(product.metadata?.salesCount ?? 0);
-  const salesCount = computeProductSalesCount({
-    id: product.id,
-    slug: typeof product.metadata?.slug === "string" ? product.metadata.slug : product.id,
-    name: product.name,
-    category: `${category?.name ?? ""} ${product.categoryLabel ?? ""}`,
-    price: product.price,
-    explicitSales: rawSales > 0 ? rawSales : null,
-  });
+  const salesCount = hideSales
+    ? 0
+    : computeProductSalesCount({
+        id: product.id,
+        slug: typeof product.metadata?.slug === "string" ? product.metadata.slug : product.id,
+        name: product.name,
+        category: `${category?.name ?? ""} ${product.categoryLabel ?? ""}`,
+        price: product.price,
+        explicitSales: rawSales > 0 ? rawSales : null,
+      });
   const minPrice = Number(product.metadata?.minPrice ?? product.price);
   const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
   const hasSkus = Boolean(product.metadata?.hasSkus);
@@ -1735,9 +1743,11 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
                 <span>{stockDisplay.label}</span>
               </span>
             ) : null}
-            <span className="inline-flex items-center rounded-full bg-orange-50/90 px-1.5 py-0.5 text-[10.5px] font-semibold text-[#9a552b] ring-1 ring-inset ring-orange-200/60">
-              {`销量 ${salesCount}`}
-            </span>
+            {!hideSales ? (
+              <span className="inline-flex items-center rounded-full bg-orange-50/90 px-1.5 py-0.5 text-[10.5px] font-semibold text-[#9a552b] ring-1 ring-inset ring-orange-200/60">
+                {`销量 ${salesCount}`}
+              </span>
+            ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <span className={cn("text-[14px] sm:text-base font-extrabold tracking-tight", hasStock ? "text-slate-950" : "text-slate-400")}>
@@ -1784,10 +1794,12 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, disab
             </span>
           </div>
         ) : null}
-        <div className="hidden min-w-[80px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold text-[#9a552b] md:flex">
-          <span>销量</span>
-          <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs text-[#9a552b]">{salesCount}</span>
-        </div>
+        {!hideSales ? (
+          <div className="hidden min-w-[80px] shrink-0 items-center justify-center gap-1 text-center text-sm font-semibold text-[#9a552b] md:flex">
+            <span>销量</span>
+            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs text-[#9a552b]">{salesCount}</span>
+          </div>
+        ) : null}
         <div className={cn("shrink-0 text-right text-base font-bold min-w-[120px] sm:min-w-[140px] sm:text-right pr-2", hasStock ? "text-slate-950" : "text-slate-400")}>
           {hasStock ? priceText : "暂无库存"}
         </div>

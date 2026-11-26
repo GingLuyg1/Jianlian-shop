@@ -38,6 +38,7 @@ import { createSafeUuid, safeLocalStorageGet, safeLocalStorageSet } from "@/lib/
 import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
 import AnimatedCharacters from "@/components/auth/AnimatedCharacters";
+import TurnstileWidget from "@/components/security/TurnstileWidget";
 import {
   getOrCreateProfile,
   getSupabaseBrowserClient,
@@ -112,6 +113,14 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const [otpSending, setOtpSending] = useState(false);
   const [inviteCode, setInviteCode] = useState(inviteFromUrl);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const [turnstileEnabled, setTurnstileEnabled] = useState(false);
+  const [turnstileVerified, setTurnstileVerified] = useState(false);
+  const [turnstileVerifying, setTurnstileVerifying] = useState(false);
+  const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
+  const [turnstileConfigLoaded, setTurnstileConfigLoaded] = useState(false);
+  const cfRequiredForRegister = isRegister && turnstileEnabled && Boolean(turnstileSiteKey);
+  const showInviteSlot = !cfRequiredForRegister || turnstileVerified;
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -332,8 +341,65 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
     return () => clearInterval(timer);
   }, [otpCountdown]);
 
+  useEffect(() => {
+    if (!isRegister || turnstileConfigLoaded) return;
+    let active = true;
+    fetch("/api/auth/turnstile", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload: { turnstileEnabled?: boolean; turnstileSiteKey?: string } | null) => {
+        if (!active) return;
+        setTurnstileConfigLoaded(true);
+        if (payload?.turnstileEnabled && payload.turnstileSiteKey) {
+          setTurnstileEnabled(true);
+          setTurnstileSiteKey(String(payload.turnstileSiteKey));
+        }
+      })
+      .catch(() => {
+        if (active) setTurnstileConfigLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isRegister, turnstileConfigLoaded]);
+
+  const handleTurnstileVerify = async (token: string) => {
+    if (!token || turnstileVerifying) return;
+    setTurnstileVerifying(true);
+    setError("");
+    try {
+      const response = await fetch("/api/auth/turnstile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !payload?.ok) {
+        setTurnstileVerified(false);
+        setTurnstileResetSignal((value) => value + 1);
+        setError(payload?.error || "人机验证未通过，请重试。");
+        return;
+      }
+      setTurnstileVerified(true);
+    } catch {
+      setTurnstileVerified(false);
+      setTurnstileResetSignal((value) => value + 1);
+      setError("人机验证网络异常，请重试。");
+    } finally {
+      setTurnstileVerifying(false);
+    }
+  };
+
+  const resetRegisterTurnstile = () => {
+    setTurnstileVerified(false);
+    setTurnstileResetSignal((value) => value + 1);
+  };
+
   const handleSendRegisterOtp = async () => {
     if (otpLockRef.current || otpSending || otpCountdown > 0) return;
+    if (cfRequiredForRegister && !turnstileVerified) {
+      setError("请先完成下方安全验证后再获取邮箱验证码。");
+      return;
+    }
     const normalizedEmail = email.trim().toLowerCase();
     if (!isEmailFormatValid(normalizedEmail)) {
       setError("请输入正确的邮箱地址后再获取验证码。");
@@ -681,6 +747,10 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
     }
 
     if (isRegister) {
+      if (cfRequiredForRegister && !turnstileVerified) {
+        setError("请先完成安全验证后再注册。");
+        return;
+      }
       if (!acceptedTerms) {
         setError("请先阅读并同意用户协议。");
         return;
@@ -1045,7 +1115,23 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       >
                         <div className="min-h-0 overflow-hidden">
                           <div className="space-y-1.5 pt-0.5 pb-0.5 px-1 -mx-1">
-                            <Label htmlFor="emailOtp">邮箱验证码</Label>
+                            <div className="flex items-center justify-between gap-2">
+                              <Label htmlFor="emailOtp">邮箱验证码</Label>
+                              {cfRequiredForRegister ? (
+                                <span
+                                  className={cn(
+                                    "text-[11px] font-medium transition-colors",
+                                    turnstileVerified ? "text-emerald-600" : "text-amber-600"
+                                  )}
+                                >
+                                  {turnstileVerified
+                                    ? "安全验证已通过，可获取验证码"
+                                    : turnstileVerifying
+                                    ? "正在校验安全验证..."
+                                    : "先完成下方安全验证后解锁"}
+                                </span>
+                              ) : null}
+                            </div>
                             <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
                               <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary mr-3" />
                               <input
@@ -1063,7 +1149,12 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                               <button
                                 type="button"
                                 onClick={handleSendRegisterOtp}
-                                disabled={otpSending || otpCountdown > 0 || !email.trim()}
+                                disabled={
+                                  otpSending ||
+                                  otpCountdown > 0 ||
+                                  !email.trim() ||
+                                  (cfRequiredForRegister && !turnstileVerified)
+                                }
                                 tabIndex={isRegister ? 0 : -1}
                                 className="shrink-0 ml-2 rounded-lg bg-orange-100/90 px-3 py-1.5 text-xs font-semibold text-primary shadow-2xs transition-colors hover:bg-orange-200/90 disabled:cursor-not-allowed disabled:opacity-50"
                               >
@@ -1150,19 +1241,70 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                       >
                         <div className="min-h-0 overflow-hidden">
                           <div className="space-y-4 pt-1 pb-1 px-1 -mx-1">
-                          <div className="space-y-1.5">
-                            <Label htmlFor="inviteCode">邀请码（选填）</Label>
-                            <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
-                              <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary mr-3" />
-                              <input
-                                id="inviteCode"
-                                value={inviteCode}
-                                onChange={(event) =>
-                                  setInviteCode(event.target.value)
-                                }
-                                placeholder="请输入邀请码"
-                                className="flex-1 min-w-0 bg-transparent text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
-                              />
+                          {/* 共享槽位：注册时若开启 Cloudflare Turnstile，先借用邀请码区域完成人机验证；验证通过后无缝过渡覆盖为「邀请码（选填）」输入框，零高度跳动 */}
+                          <div className="relative min-h-[68px]">
+                            {cfRequiredForRegister ? (
+                              <div
+                                aria-hidden={showInviteSlot}
+                                className={cn(
+                                  "transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                  showInviteSlot
+                                    ? "pointer-events-none absolute inset-0 -translate-y-1.5 scale-[0.985] opacity-0 blur-[1px]"
+                                    : "relative translate-y-0 scale-100 opacity-100"
+                                )}
+                              >
+                                <div className="rounded-xl border border-orange-200/80 bg-orange-50/40 px-3 py-2">
+                                  <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-slate-600">
+                                    <span>安全验证</span>
+                                    <span className="text-slate-400">通过后自动切回「邀请码（选填）」</span>
+                                  </div>
+                                  <TurnstileWidget
+                                    siteKey={turnstileSiteKey}
+                                    resetSignal={turnstileResetSignal}
+                                    onVerify={(token) => void handleTurnstileVerify(token)}
+                                    onExpire={() => setTurnstileVerified(false)}
+                                  />
+                                </div>
+                              </div>
+                            ) : null}
+
+                            <div
+                              aria-hidden={!showInviteSlot}
+                              className={cn(
+                                "space-y-1.5 transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                showInviteSlot
+                                  ? "relative translate-y-0 scale-100 opacity-100"
+                                  : "pointer-events-none absolute inset-0 translate-y-1.5 scale-[0.985] opacity-0 blur-[1px]"
+                              )}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <Label htmlFor="inviteCode">邀请码（选填）</Label>
+                                {cfRequiredForRegister && turnstileVerified ? (
+                                  <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                    <span>✓ 安全验证已通过</span>
+                                    <button
+                                      type="button"
+                                      onClick={resetRegisterTurnstile}
+                                      className="ml-0.5 text-emerald-600 underline hover:text-emerald-800"
+                                    >
+                                      重验
+                                    </button>
+                                  </span>
+                                ) : null}
+                              </div>
+                              <div className="group flex h-11 w-full items-center rounded-xl border border-slate-200/90 bg-white/95 px-3.5 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/25">
+                                <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground transition-colors group-focus-within:text-primary mr-3" />
+                                <input
+                                  id="inviteCode"
+                                  value={inviteCode}
+                                  tabIndex={isRegister && showInviteSlot ? 0 : -1}
+                                  onChange={(event) =>
+                                    setInviteCode(event.target.value)
+                                  }
+                                  placeholder="请输入邀请码"
+                                  className="flex-1 min-w-0 bg-transparent text-base md:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none border-none p-0"
+                                />
+                              </div>
                             </div>
                           </div>
                           <div className="flex items-start gap-3 rounded-xl border border-orange-100 bg-orange-50/60 px-3 py-2.5">

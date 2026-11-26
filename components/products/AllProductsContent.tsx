@@ -58,6 +58,20 @@ function extractCategoryBadge(categoryPath: string) {
   return parts[parts.length - 1] || "商品";
 }
 
+function isGiftCardPrimaryCategory(category: PublicCategory | null | undefined) {
+  if (!category) return false;
+  return /礼品卡|充值卡|gift-?cards?|recharge-?cards?/i.test(`${category.slug ?? ""} ${category.name ?? ""}`);
+}
+
+function isGiftCardProductRow(product: Product) {
+  return (
+    product.category === "gift-cards" ||
+    /礼品卡|充值卡|话费充值|gift-?cards?|recharge-?cards?/i.test(
+      `${product.categoryLabel ?? ""} ${String(product.metadata?.categorySlug ?? "")}`
+    )
+  );
+}
+
 export default function AllProductsContent() {
   const router = useRouter();
   const { settings } = usePublicSettings();
@@ -244,7 +258,23 @@ export default function AllProductsContent() {
     scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const currentSortOption = SORT_OPTIONS.find((item) => item.value === sortMode) ?? SORT_OPTIONS[0];
+  const selectedPrimaryCategory = useMemo(
+    () => primaryCategories.find((cat) => cat.id === primaryCategoryId) ?? null,
+    [primaryCategories, primaryCategoryId]
+  );
+  const isGiftCardTabActive = isGiftCardPrimaryCategory(selectedPrimaryCategory);
+  const visibleSortOptions = useMemo(
+    () => (isGiftCardTabActive ? SORT_OPTIONS.filter((opt) => opt.value !== "sales") : SORT_OPTIONS),
+    [isGiftCardTabActive]
+  );
+
+  useEffect(() => {
+    if (isGiftCardTabActive && sortMode === "sales") {
+      setSortMode("recommended");
+    }
+  }, [isGiftCardTabActive, sortMode]);
+
+  const currentSortOption = visibleSortOptions.find((item) => item.value === sortMode) ?? visibleSortOptions[0];
 
   return (
     <PublicLayout contentClassName={cn(mallContentClassName, isMobile && "!px-3 !py-2.5 !overflow-visible")}>
@@ -332,7 +362,7 @@ export default function AllProductsContent() {
                         : "pointer-events-none -translate-y-1.5 scale-95 opacity-0"
                     )}
                   >
-                    {SORT_OPTIONS.map((option) => {
+                    {visibleSortOptions.map((option) => {
                       const active = sortMode === option.value;
                       return (
                         <button
@@ -515,15 +545,18 @@ export default function AllProductsContent() {
                   hasSkus && maxPrice > minPrice
                     ? `${settings.currency_symbol}${minPrice.toFixed(2)} ~ ${settings.currency_symbol}${maxPrice.toFixed(2)}`
                     : `${settings.currency_symbol}${product.price.toFixed(2)}`;
+                const hideSalesBadge = isGiftCardTabActive || isGiftCardProductRow(product);
                 const rawSales = Number(product.metadata?.salesCount ?? 0);
-                const salesCount = computeProductSalesCount({
-                  id: product.id,
-                  slug: typeof product.metadata?.slug === "string" ? product.metadata.slug : product.id,
-                  name: product.name,
-                  category: product.categoryLabel,
-                  price: product.price,
-                  explicitSales: rawSales > 0 ? rawSales : null,
-                });
+                const salesCount = hideSalesBadge
+                  ? 0
+                  : computeProductSalesCount({
+                      id: product.id,
+                      slug: typeof product.metadata?.slug === "string" ? product.metadata.slug : product.id,
+                      name: product.name,
+                      category: product.categoryLabel,
+                      price: product.price,
+                      explicitSales: rawSales > 0 ? rawSales : null,
+                    });
                 const badge = extractCategoryBadge(product.categoryLabel);
                 const cleanDesc = stripProductSubcategoryPrefix(product.description);
                 const imageSrc = resolveProductImageSrc(product.imageUrl);
@@ -574,9 +607,11 @@ export default function AllProductsContent() {
                             {stockDisplay.label}
                           </span>
                         ) : null}
-                        <span className="hidden rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-[#9a552b] md:inline-flex">
-                          销量 {salesCount}
-                        </span>
+                        {!hideSalesBadge ? (
+                          <span className="hidden rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-[#9a552b] md:inline-flex">
+                            销量 {salesCount}
+                          </span>
+                        ) : null}
                         <span
                           className={cn(
                             "min-w-[80px] text-right text-sm font-extrabold",

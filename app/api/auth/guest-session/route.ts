@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { checkRateLimit, checkRequestSize, getRequestSourceKey } from "@/lib/security/rate-limit";
@@ -13,6 +13,10 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function hashEmailBucket(email: string) {
+  return createHash("sha256").update(email).digest("hex").slice(0, 24);
+}
+
 export async function POST(request: Request) {
   try {
     if (!hasSupabaseServerConfig()) {
@@ -22,13 +26,24 @@ export async function POST(request: Request) {
     const sizeError = checkRequestSize(request, 4 * 1024);
     if (sizeError) return sizeError;
 
-    const rateLimit = checkRateLimit("order_create", `guest_session:${getRequestSourceKey(request)}`);
-    if (!rateLimit.allowed) return rateLimit.response!;
+    const ipRateLimit = checkRateLimit("order_create", `guest_session:ip:${getRequestSourceKey(request)}`);
+    if (!ipRateLimit.allowed) return ipRateLimit.response!;
 
     const body = (await request.json().catch(() => null)) as { email?: string } | null;
     const contactEmail = String(body?.email ?? "").trim().toLowerCase();
     if (!contactEmail || !isValidEmail(contactEmail) || contactEmail.length > 160) {
       return NextResponse.json({ error: "请输入有效的接收邮箱后再下单" }, { status: 400 });
+    }
+
+    const emailRateLimit = checkRateLimit(
+      "auth_resend",
+      `guest_session:email:${hashEmailBucket(contactEmail)}`
+    );
+    if (!emailRateLimit.allowed) {
+      return NextResponse.json(
+        { error: "该邮箱游客下单初始化过于频繁，请 5 分钟后再试或直接登录购买" },
+        { status: 429 }
+      );
     }
 
     const supabase = getSupabaseServerClient();

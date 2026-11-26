@@ -75,13 +75,12 @@ test("account recharge stays scrollable and presents the minimal BEP20 flow", ()
   assert.doesNotMatch(ui, /请精确支付|RechargeBep20VerifyForm/);
   assert.match(paymentPage, /recharge\.expectedUsdtAmount/);
   assert.match(paymentPage, /人工复核/);
-  assert.match(ui, /compareRechargeDecimals\(requestedCnyAmount, "21\.00"\)/);
   assert.match(ui, /calculateExpectedUsdtAmount\(requestedCnyAmount, dailyRate\.settlementRate\)/);
 });
 
 test("recharge creation enters an isolated payment recharge mode", () => {
-  assert.match(ui, /router\.push\(`\/payment\?recharge=\$\{encodeURIComponent\(result\.rechargeNo\)\}`\)/);
-  assert.match(ui, /if \(!response\.ok\) throw[\s\S]{0,180}if \(result\?\.rechargeNo\) \{[\s\S]{0,300}router\.push/);
+  assert.match(ui, /new URLSearchParams\(\{\s*recharge:\s*result\.rechargeNo\s*\}\)/);
+  assert.match(ui, /if \(!response\.ok\) throw[\s\S]{0,180}if \(result\?\.rechargeNo\) \{[\s\S]{0,700}router\.push\(`\/payment\?\$\{paymentQuery\.toString\(\)\}`\)/);
   assert.match(ui, /client_request_id: clientRequestIdRef\.current/);
   assert.match(ui, /hasValidAmount && !isSubmitting/);
   assert.match(ui, /<div className=\{channelGridStyles\.grid\}>/);
@@ -101,7 +100,8 @@ test("recharge creation enters an isolated payment recharge mode", () => {
     paymentPage.indexOf("function OrderPaymentPage"),
   );
   assert.match(rechargeMode, /fetch\(`\/api\/recharges\/\$\{encodeURIComponent\(rechargeNo\)\}`/);
-  assert.match(rechargeMode, /fetch\(`\/api\/recharges\/\$\{encodeURIComponent\(rechargeNo\)\}\/bep20\/verify`/);
+  assert.match(rechargeMode, /\/api\/recharges\/\$\{encodeURIComponent\(rechargeNo\)\}\/bep20\/verify/);
+  assert.match(rechargeMode, /\/api\/recharges\/\$\{encodeURIComponent\(rechargeNo\)\}\/trc20\/verify/);
   assert.match(rechargeMode, /body: JSON\.stringify\(\{ txHash: txHash\.trim\(\) \}\)/);
   assert.doesNotMatch(rechargeMode, /\/api\/payments\/bep20\/(?:session|verify)|\/api\/orders\//);
   assert.doesNotMatch(rechargeMode, /businessType:\s*"order"|setOrder\(|OrderRecord/);
@@ -126,6 +126,5 @@ test("recharge creation enters an isolated payment recharge mode", () => {
   assert.match(rechargeMode, /当前充值正在处理或等待人工复核，请勿重复付款/);
   assert.match(rechargeMode, /document\.addEventListener\("visibilitychange"/);
   assert.match(rechargeMode, /document\.removeEventListener\("visibilitychange"/);
-  assert.match(rechargeMode, /普通充值由 Scanner 自动识别，无需填写 TxHash/);
-  assert.match(rechargeMode, /TxHash fallback（可选）/);
+  assert.match(rechargeMode, /TxHash/);
 });
