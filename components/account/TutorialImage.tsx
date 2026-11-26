@@ -70,6 +70,7 @@ export default function TutorialImage({
               draggable={false}
               loading="lazy"
               decoding="async"
+              fetchPriority="low"
               onLoad={() => setLoaded(true)}
               onError={() => setLoaded(true)}
               onContextMenu={(e) => e.preventDefault()}

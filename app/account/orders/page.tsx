@@ -3,7 +3,7 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clipboard, ClipboardList, Headphones, LogIn, Mail, Search, ShieldCheck, X } from "lucide-react";
+import { BookOpen, Clipboard, ClipboardList, Copy, Headphones, LogIn, Mail, PackageCheck, Search, ShieldCheck, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 
@@ -25,6 +25,7 @@ import {
   getUserOrderDisplayStatus,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
+import { isShippingOrderRecord, parseOrderShippingInfo } from "@/lib/orders/shipping-info";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import { cn } from "@/lib/utils";
 import glass from "@/components/account/AccountGlass.module.css";
@@ -1170,8 +1171,22 @@ function UserOrderDrawer({
   const isBep20Order = String(order.payment_method ?? "").toLowerCase() === "usdt_bep20";
   const displayStatus = getUserOrderDisplayStatus(order);
   const firstItem = order.order_items?.[0];
-  const isShippingOrder = normalizeOrderItemDeliveryType(order.delivery_type ?? firstItem?.delivery_type) === "physical";
+  const isShippingOrder =
+    normalizeOrderItemDeliveryType(order.delivery_type ?? firstItem?.delivery_type) === "physical" ||
+    isShippingOrderRecord(order);
+  const shipping = parseOrderShippingInfo(order);
   const delivery = order.order_deliveries?.find((item) => item.delivery_status === "delivered") ?? order.order_deliveries?.[0];
+  const hasDigitalDeliveryRows = Boolean(order.order_deliveries?.length);
+
+  async function copyTrackingNo(value: string) {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("已复制快递单号");
+    } catch {
+      toast.error("复制失败，请手动选中复制");
+    }
+  }
 
   return (
     <DialogPrimitive.Root open={Boolean(requestedOrder)} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
@@ -1257,11 +1272,83 @@ function UserOrderDrawer({
               <InfoLine label="下单时间" value={formatDate(order.created_at)} />
               <InfoLine label="更新时间" value={formatDate(order.updated_at)} />
               {isShippingOrder ? (
-                <InfoLine label="收货信息" value={formatShippingAddress(order)} />
+                <InfoLine label="收货信息" value={formatShippingAddress(order)} wide />
               ) : null}
               <InfoLine label="订单备注" value={order.customer_note || "无"} wide />
             </div>
           </section>
+
+          {isShippingOrder ? (
+            <section className={cn(styles.section, "rounded-2xl border p-4 text-sm")}>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 font-semibold text-slate-900">
+                  <Truck className="h-4 w-4 text-primary" />
+                  <span>物流配送与快递单号</span>
+                </div>
+                {shipping.trackingNo ? (
+                  <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                    已发货
+                  </Badge>
+                ) : order.payment_status === "paid" && !["cancelled", "expired", "refunded"].includes(String(order.status ?? "")) ? (
+                  <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700">
+                    待发货
+                  </Badge>
+                ) : null}
+              </div>
+
+              {shipping.trackingNo ? (
+                <div className="space-y-3 rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-xs text-slate-500">快递公司</div>
+                      <div className="mt-0.5 font-semibold text-slate-900">{shipping.carrier || "快递配送"}</div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-emerald-200 bg-white text-xs text-emerald-800 hover:bg-emerald-50"
+                      onClick={() => void copyTrackingNo(shipping.trackingNo)}
+                    >
+                      <Copy className="mr-1.5 h-3.5 w-3.5" />
+                      复制快递单号
+                    </Button>
+                  </div>
+                  <div className="rounded-lg bg-white/90 px-3 py-2 font-mono text-sm font-semibold tracking-wide text-slate-950">
+                    {shipping.trackingNo}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                    {shipping.shippedAt ? <span>发货时间：{formatDate(shipping.shippedAt)}</span> : null}
+                    {shipping.shippingNote ? <span>商家备注：{shipping.shippingNote}</span> : null}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Button type="button" size="sm" variant="ghost" className="h-8 px-2.5 text-xs text-primary hover:bg-orange-50 hover:text-primary" asChild>
+                      <Link href="/tutorials?topic=giffgaff">
+                        <BookOpen className="mr-1.5 h-3.5 w-3.5" />
+                        查看 SIM 卡使用与激活教程 →
+                      </Link>
+                    </Button>
+                    <Button type="button" size="sm" variant="outline" className="h-8 px-2.5 text-xs" onClick={openPublicSupport}>
+                      <Headphones className="mr-1.5 h-3.5 w-3.5" />
+                      物流咨询客服
+                    </Button>
+                  </div>
+                </div>
+              ) : order.payment_status === "paid" && !["cancelled", "expired", "refunded"].includes(String(order.status ?? "")) ? (
+                <div className="flex items-start gap-3 rounded-xl border border-amber-200/80 bg-amber-50/70 p-3.5 text-amber-900">
+                  <PackageCheck className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <div className="space-y-1 text-xs leading-5 sm:text-sm">
+                    <div className="font-semibold">订单已支付，仓库正在打包备货中</div>
+                    <p className="text-amber-800">快递发出后，单号将实时显示在此页面，并同步发送邮件通知到您的下单邮箱。</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl bg-slate-50 px-3.5 py-3 text-xs text-slate-500">
+                  完成支付后将按您填写的收货地址安排实物快递寄出，并在此展示快递单号。
+                </div>
+              )}
+            </section>
+          ) : null}
 
           <Bep20OrderPaymentSummary
             order={order}
@@ -1271,15 +1358,17 @@ function UserOrderDrawer({
             }}
           />
 
-          <SecureOrderDelivery
-            className="flex flex-1 flex-col [&>[data-testid=card-secret-content]]:flex-1"
-            orderNo={order.order_no}
-            paymentStatus={order.payment_status}
-            orderStatus={order.status}
-            fulfillmentStatus={order.fulfillment_status}
-            deliveryStatus={delivery?.delivery_status}
-            deliveryType={order.delivery_type ?? firstItem?.delivery_type}
-          />
+          {!isShippingOrder || hasDigitalDeliveryRows ? (
+            <SecureOrderDelivery
+              className="flex flex-1 flex-col [&>[data-testid=card-secret-content]]:flex-1"
+              orderNo={order.order_no}
+              paymentStatus={order.payment_status}
+              orderStatus={order.status}
+              fulfillmentStatus={order.fulfillment_status}
+              deliveryStatus={delivery?.delivery_status}
+              deliveryType={order.delivery_type ?? firstItem?.delivery_type}
+            />
+          ) : null}
         </div>
       </aside>
       </DialogPrimitive.Content>
@@ -1318,10 +1407,6 @@ function InfoLine({ label, value, wide }: { label: string; value: string; wide?:
 }
 
 function formatShippingAddress(order: OrderRecord) {
-  const value = order.shipping_address;
-  const region = value && typeof value.region === "string" ? value.region : "";
-  const address = value && typeof value.address === "string" ? value.address : "";
-  const recipient = value && typeof value.recipient === "string" ? value.recipient : order.customer_name ?? "";
-  const phone = value && typeof value.phone === "string" ? value.phone : order.customer_phone ?? "";
-  return [recipient, phone, region, address].filter(Boolean).join(" ") || "未填写";
+  const shipping = parseOrderShippingInfo(order);
+  return [shipping.recipient, shipping.phone, shipping.address].filter(Boolean).join(" ") || "未填写";
 }

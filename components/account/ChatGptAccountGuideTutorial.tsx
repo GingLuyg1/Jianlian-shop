@@ -252,6 +252,8 @@ function LoginSection() {
                 alt={step.title}
                 className="mx-auto max-h-[380px] w-auto max-w-full rounded-lg object-contain shadow-sm"
                 loading="lazy"
+                decoding="async"
+                fetchPriority="low"
               />
             </div>
 
@@ -334,6 +336,8 @@ function SecuritySection() {
                 alt={step.title}
                 className="mx-auto max-h-[380px] w-auto max-w-full rounded-lg object-contain shadow-sm"
                 loading="lazy"
+                decoding="async"
+                fetchPriority="low"
               />
             </div>
           </section>
@@ -411,6 +415,8 @@ function RebindSection() {
                     alt={`${step.title} 配图 ${i + 1}`}
                     className="mx-auto max-h-[300px] w-auto max-w-full rounded-lg object-contain shadow-sm"
                     loading="lazy"
+                    decoding="async"
+                    fetchPriority="low"
                   />
                 </div>
               ))}

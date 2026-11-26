@@ -1100,8 +1100,10 @@ function CheckoutPageContent() {
           ...(isShippingProduct ? { customer_phone: customerPhone.trim() } : {}),
           shipping_address: isShippingProduct
             ? {
-                region: shippingRegion,
-                address: shippingAddress,
+                recipient: customerName.trim(),
+                phone: customerPhone.trim(),
+                region: shippingRegion.trim(),
+                address: shippingAddress.trim(),
               }
             : null,
           agreement_version_ids: agreementPayload,

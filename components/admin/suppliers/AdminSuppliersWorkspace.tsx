@@ -161,6 +161,65 @@ export default function AdminSuppliersWorkspace() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<SupplierError | null>(null);
 
+  const [costSyncMode, setCostSyncMode] = useState<"dry_run" | "apply" | null>(null);
+  const [costSyncError, setCostSyncError] = useState<string | null>(null);
+  const [costSyncReport, setCostSyncReport] = useState<{
+    mode: "dry_run" | "apply";
+    usdCnyRate: number;
+    rateSource: string;
+    scannedSkus: number;
+    updatedSkus: number;
+    anomalyCount: number;
+    emailAlertSent: boolean;
+    checkedAt: string;
+    anomalies: Array<{
+      kind: string;
+      skuTitle: string;
+      liveUsdCost: number | null;
+      currentMaxUnitCostUsd: number | null;
+      currentRetailCny: number;
+      detail: string;
+    }>;
+  } | null>(null);
+
+  const runBitrefillCostSync = useCallback(async (mode: "dry_run" | "apply") => {
+    if (costSyncMode) return;
+    if (
+      mode === "apply" &&
+      !window.confirm(
+        "确认按 Bitrefill 最新实时成本与汇率一键更新所有已绑定 SKU 的风控上限（supplier_max_unit_cost，含 5% 波动缓冲）与成本价？此操作不会修改前台零售价。"
+      )
+    ) {
+      return;
+    }
+    setCostSyncMode(mode);
+    setCostSyncError(null);
+    try {
+      const response = await fetch("/api/admin/suppliers/bitrefill/cost-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          updateRetailPrice: false,
+          capBufferPercent: 5,
+          notifyOnAnomaly: true,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        throw new Error(String(payload.error || "Bitrefill 成本同步失败"));
+      }
+      setCostSyncReport(payload);
+      if (typeof payload.usdCnyRate === "number" && payload.usdCnyRate > 0) {
+        setUsdtCnyRate(payload.usdCnyRate);
+      }
+    } catch (err) {
+      setCostSyncError(err instanceof Error ? err.message : "Bitrefill 成本同步失败");
+    } finally {
+      setCostSyncMode(null);
+    }
+  }, [costSyncMode]);
+
   const checkConnection = useCallback(async () => {
     setDetection((current) => ({ ...current, status: "checking", error: null }));
     try {
@@ -578,9 +637,38 @@ export default function AdminSuppliersWorkspace() {
                 </Button>
 
                 {activeSupplier.code === "bitrefill" ? (
-                  <span className="inline-flex items-center rounded-lg border border-orange-200/80 bg-orange-50/70 px-2.5 py-1 text-[11px] font-medium text-orange-800">
-                    统一美金(USD)计价 · 按后台 USDT 汇率 (1 USD ≈ ¥{usdtCnyRate.toFixed(2)}，每日同步) 换算人民币
-                  </span>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-8 border-orange-200 bg-orange-50/60 text-xs text-orange-800 hover:bg-orange-100/80"
+                      onClick={() => void runBitrefillCostSync("dry_run")}
+                      disabled={costSyncMode !== null}
+                    >
+                      {costSyncMode === "dry_run" ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <AlertTriangle className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      巡检实时成本
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 bg-orange-600 text-xs text-white hover:bg-orange-700"
+                      onClick={() => void runBitrefillCostSync("apply")}
+                      disabled={costSyncMode !== null}
+                    >
+                      {costSyncMode === "apply" ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Zap className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      一键同步风控上限
+                    </Button>
+                    <span className="inline-flex items-center rounded-lg border border-orange-200/80 bg-orange-50/70 px-2.5 py-1 text-[11px] font-medium text-orange-800">
+                      统一美金(USD)计价 · 参考汇率 1 USD ≈ ¥{usdtCnyRate.toFixed(2)}（每周自动巡检 / 异常发邮件告警）
+                    </span>
+                  </>
                 ) : null}
 
                 <div className="flex items-center gap-2 ml-2">
@@ -632,6 +720,48 @@ export default function AdminSuppliersWorkspace() {
                 </select>
               </div>
             </div>
+
+            {activeSupplier.code === "bitrefill" && (costSyncError || costSyncReport) ? (
+              <div
+                className={cn(
+                  "rounded-xl border px-4 py-3 text-xs",
+                  costSyncError || (costSyncReport && costSyncReport.anomalyCount > 0)
+                    ? "border-amber-200 bg-amber-50/80 text-amber-950"
+                    : "border-emerald-200 bg-emerald-50/80 text-emerald-950"
+                )}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="font-semibold">
+                    {costSyncError
+                      ? `Bitrefill 成本巡检失败：${costSyncError}`
+                      : costSyncReport?.mode === "apply"
+                        ? `Bitrefill 风控上限同步完成：扫描 ${costSyncReport.scannedSkus} 个 SKU，更新 ${costSyncReport.updatedSkus} 个，异常 ${costSyncReport.anomalyCount} 项（汇率 1 USD = ¥${costSyncReport.usdCnyRate.toFixed(2)}）`
+                        : `Bitrefill 成本巡检完成：扫描 ${costSyncReport?.scannedSkus ?? 0} 个 SKU，发现异常 ${costSyncReport?.anomalyCount ?? 0} 项（汇率 1 USD = ¥${(costSyncReport?.usdCnyRate ?? usdtCnyRate).toFixed(2)}）`}
+                    {costSyncReport?.emailAlertSent ? " · 已自动发送异常告警邮件" : ""}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCostSyncError(null);
+                      setCostSyncReport(null);
+                    }}
+                    className="text-xs font-medium underline underline-offset-2 opacity-75 hover:opacity-100"
+                  >
+                    收起
+                  </button>
+                </div>
+                {costSyncReport && costSyncReport.anomalies.length > 0 ? (
+                  <div className="mt-2 max-h-40 space-y-1 overflow-y-auto border-t border-amber-200/70 pt-2">
+                    {costSyncReport.anomalies.slice(0, 15).map((item, idx) => (
+                      <div key={`${item.skuTitle}-${idx}`} className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                        <span className="font-medium">{item.skuTitle}</span>
+                        <span className="text-amber-800">{item.detail}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
 
             {productsError ? (
               <AdminErrorState

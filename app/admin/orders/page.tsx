@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, Eye, Loader2, RefreshCcw, Search } from "lucide-react";
+import { AlertCircle, CheckCircle2, Copy, Eye, Loader2, MapPin, Phone, RefreshCcw, Search, Send, Truck, User } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -40,6 +40,11 @@ import {
   type OrderStatus,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
+import {
+  COMMON_LOGISTICS_CARRIERS,
+  isShippingOrderRecord,
+  parseOrderShippingInfo,
+} from "@/lib/orders/shipping-info";
 import { getPaymentMethodLabel } from "@/lib/payments/payment-methods";
 import { cn } from "@/lib/utils";
 
@@ -472,6 +477,97 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
   const [relationsError, setRelationsError] = useState("");
   const orderStatus = normalizeOrderStatus(order.status);
   const paymentStatus = normalizePaymentStatus(order.payment_status);
+  const isShippingOrder = useMemo(() => isShippingOrderRecord(order), [order]);
+  const shipping = useMemo(() => parseOrderShippingInfo(order), [order]);
+  const presetCarriers = useMemo(() => COMMON_LOGISTICS_CARRIERS.filter((item) => item !== "其他快递") as string[], []);
+
+  const [carrierSelect, setCarrierSelect] = useState<string>("顺丰速运");
+  const [customCarrier, setCustomCarrier] = useState<string>("");
+  const [trackingNo, setTrackingNo] = useState<string>("");
+  const [shippingNote, setShippingNote] = useState<string>("");
+  const [sendShipEmail, setSendShipEmail] = useState<boolean>(true);
+  const [shippingSubmitting, setShippingSubmitting] = useState<boolean>(false);
+
+  useEffect(() => {
+    const existingCarrier = shipping.carrier;
+    if (!existingCarrier) {
+      setCarrierSelect("顺丰速运");
+      setCustomCarrier("");
+    } else if (presetCarriers.includes(existingCarrier)) {
+      setCarrierSelect(existingCarrier);
+      setCustomCarrier("");
+    } else {
+      setCarrierSelect("其他快递");
+      setCustomCarrier(existingCarrier);
+    }
+    setTrackingNo(shipping.trackingNo);
+    setShippingNote(shipping.shippingNote);
+    setSendShipEmail(!shipping.trackingNo);
+  }, [order.id, order.updated_at, presetCarriers, shipping.carrier, shipping.shippingNote, shipping.trackingNo]);
+
+  async function copyToClipboard(text: string, label: string) {
+    if (!text.trim()) {
+      toast.error(`暂无可复制的${label}`);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`已复制${label}`);
+    } catch {
+      toast.error(`复制${label}失败，请手动选中复制`);
+    }
+  }
+
+  async function submitLogisticsShipment() {
+    const effectiveCarrier = carrierSelect === "其他快递" ? customCarrier.trim() : carrierSelect.trim();
+    const cleanTrackingNo = trackingNo.trim();
+    if (!effectiveCarrier) {
+      toast.error("请选择或填写快递公司");
+      return;
+    }
+    if (!cleanTrackingNo) {
+      toast.error("请填写快递单号");
+      return;
+    }
+    setShippingSubmitting(true);
+    try {
+      const response = await fetch(`/api/admin/orders/${order.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "ship_logistics",
+          carrier: effectiveCarrier,
+          tracking_no: cleanTrackingNo,
+          shipping_note: shippingNote.trim() || null,
+          send_email: sendShipEmail,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.ok === false) {
+        throw new Error(payload?.error || "物流发货提交失败");
+      }
+      const mergedOrder = payload?.order
+        ? {
+            ...order,
+            ...payload.order,
+            order_items: payload.order.order_items ?? order.order_items,
+            items: payload.order.items ?? (order as unknown as { items?: unknown }).items,
+          }
+        : order;
+      onUpdated(mergedOrder);
+      onRefresh();
+      void loadRelations();
+      if (sendShipEmail && payload?.emailSent) {
+        toast.success(shipping.trackingNo ? "物流单号已更新并邮件通知买家" : "物流已确认发货并邮件通知买家");
+      } else {
+        toast.success(shipping.trackingNo ? "物流单号已更新" : "物流已确认发货");
+      }
+    } catch (err) {
+      toast.error(getOrderErrorMessage(err));
+    } finally {
+      setShippingSubmitting(false);
+    }
+  }
 
   const loadRelations = useCallback(async () => {
     setRelationsLoading(true);
@@ -593,6 +689,11 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
     return 0;
   }, [order.total_amount, orderStatus, paymentStatus, relations]);
 
+  const canShipLogistics =
+    isShippingOrder &&
+    paymentStatus === "paid" &&
+    !["cancelled", "expired", "refunded"].includes(orderStatus);
+
   return (
     <AdminDetailDrawer
       title={getOrderNo(order)}
@@ -601,11 +702,225 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
       onClose={onClose}
       className="max-w-[860px]"
     >
+          {isShippingOrder ? (
+            <Card className="mb-4 border-orange-200/80 bg-gradient-to-br from-orange-50/50 via-white to-amber-50/30 shadow-sm">
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-orange-100 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-orange-100 text-orange-700">
+                    <Truck className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <CardTitle className="text-base text-slate-950">物流收货与发货中心</CardTitle>
+                    <p className="text-xs text-slate-500">核对收件人信息、一键复制打单、录入快递单号并邮件通知买家</p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="border-orange-200 bg-white text-orange-700 hover:bg-orange-50"
+                  onClick={() => void copyToClipboard(shipping.copyText, "快递打单信息")}
+                  disabled={!shipping.copyText}
+                >
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  一键复制打单信息
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4 px-4 py-4">
+                <div className="grid gap-3 rounded-xl border border-slate-200/90 bg-white p-3.5 sm:grid-cols-2">
+                  <div className="flex items-start gap-2.5">
+                    <User className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs text-slate-500">收件人姓名</div>
+                      <div className="mt-0.5 font-semibold text-slate-950">
+                        {shipping.recipient || <span className="font-normal text-amber-600">未填写收件人</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <Phone className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                      <div className="min-w-0">
+                        <div className="text-xs text-slate-500">联系电话</div>
+                        <div className="mt-0.5 font-mono font-semibold text-slate-950">
+                          {shipping.phone || <span className="font-sans font-normal text-amber-600">未填写联系电话</span>}
+                        </div>
+                      </div>
+                    </div>
+                    {shipping.phone ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 px-2 text-xs text-slate-500 hover:text-slate-900"
+                        onClick={() => void copyToClipboard(shipping.phone, "联系电话")}
+                      >
+                        <Copy className="mr-1 h-3 w-3" />
+                        复制
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="flex items-start justify-between gap-2 border-t border-slate-100 pt-3 sm:col-span-2">
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                      <div className="min-w-0">
+                        <div className="text-xs text-slate-500">详细收货地址</div>
+                        <div className="mt-0.5 break-words font-medium text-slate-900">
+                          {shipping.address || <span className="font-normal text-amber-600">未填写收货地址</span>}
+                        </div>
+                      </div>
+                    </div>
+                    {shipping.address ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 shrink-0 px-2 text-xs text-slate-500 hover:text-slate-900"
+                        onClick={() => void copyToClipboard(shipping.address, "收货地址")}
+                      >
+                        <Copy className="mr-1 h-3 w-3" />
+                        复制
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {shipping.trackingNo ? (
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/75 p-3.5 text-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 font-semibold text-emerald-900">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        <span>已录入物流单号</span>
+                        <Badge variant="outline" className="border-emerald-300 bg-white text-emerald-800">
+                          {shipping.carrier || "快递"}
+                        </Badge>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 border-emerald-200 bg-white px-2.5 text-xs text-emerald-800 hover:bg-emerald-50"
+                        onClick={() => void copyToClipboard(shipping.trackingNo, "快递单号")}
+                      >
+                        <Copy className="mr-1 h-3 w-3" />
+                        复制单号
+                      </Button>
+                    </div>
+                    <div className="mt-2 font-mono text-base font-bold tracking-wide text-slate-950">
+                      {shipping.trackingNo}
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-emerald-800/90">
+                      {shipping.shippedAt ? <span>发货时间：{formatDate(shipping.shippedAt)}</span> : null}
+                      {shipping.shippingNote ? <span>物流备注：{shipping.shippingNote}</span> : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {canShipLogistics ? (
+                  <div className="rounded-xl border border-slate-200/90 bg-white p-3.5">
+                    <div className="mb-3 text-xs font-semibold text-slate-700">
+                      {shipping.trackingNo ? "修改或补充物流单号" : "录入快递单号并确认发货"}
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-medium text-slate-600">快递公司</label>
+                        <select
+                          value={carrierSelect}
+                          onChange={(e) => setCarrierSelect(e.target.value)}
+                          disabled={shippingSubmitting}
+                          className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:border-primary focus:outline-none"
+                        >
+                          {COMMON_LOGISTICS_CARRIERS.map((carrier) => (
+                            <option key={carrier} value={carrier}>
+                              {carrier}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-medium text-slate-600">快递单号 *</label>
+                        <Input
+                          value={trackingNo}
+                          onChange={(e) => setTrackingNo(e.target.value)}
+                          placeholder="例如：SF1234567890123"
+                          disabled={shippingSubmitting}
+                          className="h-9 font-mono text-sm"
+                        />
+                      </div>
+                      {carrierSelect === "其他快递" ? (
+                        <div className="space-y-1.5 sm:col-span-2">
+                          <label className="block text-xs font-medium text-slate-600">自定义快递公司名称 *</label>
+                          <Input
+                            value={customCarrier}
+                            onChange={(e) => setCustomCarrier(e.target.value)}
+                            placeholder="例如：德邦快递 / DHL / 邮政小包"
+                            disabled={shippingSubmitting}
+                            className="h-9 text-sm"
+                          />
+                        </div>
+                      ) : null}
+                      <div className="space-y-1.5 sm:col-span-2">
+                        <label className="block text-xs font-medium text-slate-600">物流 / 打包备注（选填，将同步展示给买家）</label>
+                        <Input
+                          value={shippingNote}
+                          onChange={(e) => setShippingNote(e.target.value)}
+                          placeholder="例如：顺丰空运发出，内附取卡针与激活指南"
+                          disabled={shippingSubmitting}
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                      <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                        <input
+                          type="checkbox"
+                          checked={sendShipEmail}
+                          onChange={(e) => setSendShipEmail(e.target.checked)}
+                          disabled={shippingSubmitting || !order.customer_email}
+                          className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+                        />
+                        <span>
+                          发货后自动发邮件通知买家单号
+                          {order.customer_email ? `（${order.customer_email}）` : "（无买家邮箱）"}
+                        </span>
+                      </label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={shippingSubmitting || !trackingNo.trim()}
+                        onClick={() => void submitLogisticsShipment()}
+                      >
+                        {shippingSubmitting ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        {shipping.trackingNo ? "保存并更新物流单号" : "确认发货并通知买家"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs text-slate-600">
+                    当前订单支付状态为「{getPaymentStatusLabel(paymentStatus)}」、订单状态为「{getOrderStatusLabel(orderStatus)}」，需已支付且未取消/关闭后才可录入快递单号发货。
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
           <div className="grid gap-4 lg:grid-cols-2">
             <InfoCard title="用户信息">
               <InfoRow label="用户邮箱" value={order.customer_email || "—"} />
               <InfoRow label="用户 ID" value={order.user_id || "—"} mono />
-              <InfoRow label="收货信息" value={order.customer_email || "—"} />
+              {isShippingOrder ? (
+                <>
+                  <InfoRow label="收件人" value={shipping.recipient || "—"} />
+                  <InfoRow label="联系电话" value={shipping.phone || "—"} mono />
+                  <InfoRow label="收货地址" value={shipping.address || "—"} />
+                </>
+              ) : (
+                <InfoRow label="接收邮箱" value={order.customer_email || "—"} />
+              )}
               <InfoRow label="用户备注" value={order.customer_note || "—"} />
               <InfoRow label="管理员备注" value={order.admin_note || "—"} />
             </InfoCard>
@@ -655,6 +970,11 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
           <Card className="mt-4">
             <CardHeader className="px-4 py-3"><CardTitle className="text-base">状态操作</CardTitle></CardHeader>
             <CardContent className="px-4 pb-4">
+              {isShippingOrder ? (
+                <p className="mb-3 text-xs text-slate-500">
+                  物流订单建议优先在上方「物流收货与发货中心」填写快递公司与单号并一键发货；以下按钮仅用于异常状态调整或手工完结。
+                </p>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 {availableActions.map((nextStatus) => (
                   <Button key={nextStatus} size="sm" variant={nextStatus === "cancelled" || nextStatus === "failed" ? "destructive" : "outline"} disabled={working} onClick={() => void updateStatus(nextStatus)}>

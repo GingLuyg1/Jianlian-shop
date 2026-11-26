@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/AccountCenter.module.css";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
+import TurnstileWidget from "@/components/security/TurnstileWidget";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -143,6 +144,63 @@ export default function AccountSecurityPage() {
   const [savingOldPwd, setSavingOldPwd] = useState(false);
   const [showOldPwd, setShowOldPwd] = useState({ old: false, new: false, confirm: false });
 
+  // Cloudflare Turnstile gate for OTP email sending (morphs into OTP input once verified)
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const [turnstileEnabled, setTurnstileEnabled] = useState(false);
+  const [cfVerified, setCfVerified] = useState(false);
+  const [cfVerifying, setCfVerifying] = useState(false);
+  const [cfResetSignal, setCfResetSignal] = useState(0);
+  const cfRequired = turnstileEnabled && Boolean(turnstileSiteKey);
+  const showOtpInputs = !cfRequired || cfVerified;
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/auth/turnstile", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload: { turnstileEnabled?: boolean; turnstileSiteKey?: string } | null) => {
+        if (!active) return;
+        if (payload?.turnstileEnabled && payload.turnstileSiteKey) {
+          setTurnstileEnabled(true);
+          setTurnstileSiteKey(String(payload.turnstileSiteKey));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleSecurityTurnstileVerify = useCallback(async (token: string) => {
+    if (!token || cfVerifying) return;
+    setCfVerifying(true);
+    try {
+      const response = await fetch("/api/auth/turnstile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!response.ok || !payload?.ok) {
+        setCfVerified(false);
+        setCfResetSignal((value) => value + 1);
+        toast.error(payload?.error || "安全验证未通过，请重试");
+        return;
+      }
+      setCfVerified(true);
+    } catch {
+      setCfVerified(false);
+      setCfResetSignal((value) => value + 1);
+      toast.error("安全验证网络异常，请重试");
+    } finally {
+      setCfVerifying(false);
+    }
+  }, [cfVerifying]);
+
+  const resetSecurityTurnstile = useCallback(() => {
+    setCfVerified(false);
+    setCfResetSignal((value) => value + 1);
+  }, []);
+
   // Countdown timers
   useEffect(() => {
     if (currentCodeCountdown <= 0) return;
@@ -210,6 +268,10 @@ export default function AccountSecurityPage() {
   // --- Handlers for Tab 1: 更换绑定邮箱 ---
   async function handleSendCurrentEmailCode() {
     if (currentCodeCountdown > 0 || sendingCurrentCode || !userEmail) return;
+    if (cfRequired && !cfVerified) {
+      setEmailErrors((prev) => ({ ...prev, currentCode: "请先完成安全验证后再获取验证码" }));
+      return;
+    }
     setSendingCurrentCode(true);
     setEmailErrors((prev) => ({ ...prev, currentCode: "" }));
     try {
@@ -232,6 +294,10 @@ export default function AccountSecurityPage() {
 
   async function handleSendNewEmailCode() {
     if (newCodeCountdown > 0 || sendingNewCode) return;
+    if (cfRequired && !cfVerified) {
+      setEmailErrors((prev) => ({ ...prev, newCode: "请先完成安全验证后再发送验证码" }));
+      return;
+    }
     const newMail = emailForm.newEmail.trim().toLowerCase();
     if (!newMail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newMail)) {
       setEmailErrors((prev) => ({ ...prev, newEmail: "请输入有效的邮箱地址" }));
@@ -305,6 +371,10 @@ export default function AccountSecurityPage() {
   // --- Handlers for Tab 2: 邮箱改密码 ---
   async function handleSendEmailPwdCode() {
     if (emailPwdCountdown > 0 || sendingEmailPwdCode || !userEmail) return;
+    if (cfRequired && !cfVerified) {
+      setEmailPwdErrors((prev) => ({ ...prev, code: "请先完成安全验证后再获取验证码" }));
+      return;
+    }
     setSendingEmailPwdCode(true);
     setEmailPwdErrors((prev) => ({ ...prev, code: "" }));
     try {
@@ -332,9 +402,6 @@ export default function AccountSecurityPage() {
     const errors: Record<string, string> = {};
     if (!emailPwdForm.code.trim()) errors.code = "请输入邮箱收到的验证码";
     if (emailPwdForm.newPassword.length < 8) errors.newPassword = "新密码长度至少 8 位";
-    if (emailPwdForm.newPassword !== emailPwdForm.confirmPassword) {
-      errors.confirmPassword = "两次输入的新密码不一致";
-    }
 
     if (Object.keys(errors).length > 0) {
       setEmailPwdErrors(errors);
@@ -349,7 +416,7 @@ export default function AccountSecurityPage() {
         body: JSON.stringify({
           code: emailPwdForm.code.trim(),
           newPassword: emailPwdForm.newPassword,
-          confirmPassword: emailPwdForm.confirmPassword,
+          confirmPassword: emailPwdForm.newPassword,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -599,12 +666,12 @@ export default function AccountSecurityPage() {
       </Card>
 
       {/* Main Two-Column Workspace: Left Form Panel + Right Security Guide & Checklist */}
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
+      <div className="grid min-w-0 items-stretch gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
         {/* LEFT COLUMN: Active Security Operation Form */}
-        <section className={`${glass.surface} ${styles.panel} p-5 sm:p-7`}>
+        <section className={`${glass.surface} ${styles.panel} flex flex-col p-5 sm:p-7 xl:min-h-[600px]`}>
           {/* TAB 1: 更换绑定邮箱 (Ref 图2) */}
           {activeTab === "change-email" && (
-            <div>
+            <div className="flex flex-1 flex-col">
               <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#efe3d5] pb-4">
                 <div>
                   <div className="flex items-center gap-2">
@@ -617,7 +684,7 @@ export default function AccountSecurityPage() {
                 </span>
               </div>
 
-              <form onSubmit={handleSubmitChangeEmail} autoComplete="off" className="space-y-5">
+              <form onSubmit={handleSubmitChangeEmail} autoComplete="off" className="flex flex-1 flex-col space-y-5">
                 {/* 1. 当前绑定邮箱 (点击可复制到剪贴板，匹配参考图2) */}
                 <div className={styles.field}>
                   <div className="flex items-center justify-between">
@@ -653,48 +720,103 @@ export default function AccountSecurityPage() {
                   </div>
                 </div>
 
-                {/* 2. 当前邮箱验证码 */}
+                {/* 2. 当前邮箱验证码（开启 CF 时先借用为安全验证槽位，通过后 350ms 细腻动画覆盖切入验证码框） */}
                 <div className={styles.field}>
-                  <Label htmlFor="sec-current-email-code" className="text-xs font-semibold text-slate-700">
-                    当前邮箱验证码
-                  </Label>
-                  <div className="mt-1.5 flex gap-2.5">
-                    <Input
-                      id="sec-current-email-code"
-                      name="current_email_otp_code"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      placeholder="请输入 6 位邮箱验证码"
-                      value={emailForm.currentCode}
-                      onChange={(e) => {
-                        setEmailForm((prev) => ({ ...prev, currentCode: e.target.value }));
-                        setEmailErrors((prev) => ({ ...prev, currentCode: "" }));
-                      }}
+                  <div className="relative min-h-[70px]">
+                    {cfRequired ? (
+                      <div
+                        aria-hidden={showOtpInputs}
+                        className={cn(
+                          "transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                          showOtpInputs
+                            ? "pointer-events-none absolute inset-0 -translate-y-1.5 scale-[0.985] opacity-0 blur-[1px]"
+                            : "relative translate-y-0 scale-100 opacity-100"
+                        )}
+                      >
+                        <div className="rounded-xl border border-orange-200/80 bg-orange-50/40 px-3 py-2">
+                          <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-slate-600">
+                            <span>安全验证（Cloudflare）</span>
+                            <span className="text-slate-400">
+                              {cfVerifying ? "正在核验..." : "通过后自动覆盖展开「当前 / 新邮箱验证码」"}
+                            </span>
+                          </div>
+                          <TurnstileWidget
+                            siteKey={turnstileSiteKey}
+                            resetSignal={cfResetSignal}
+                            onVerify={(token) => void handleSecurityTurnstileVerify(token)}
+                            onExpire={() => setCfVerified(false)}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div
+                      aria-hidden={!showOtpInputs}
                       className={cn(
-                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
-                        emailErrors.currentCode && "border-red-500 focus-visible:ring-red-500/20"
+                        "transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                        showOtpInputs
+                          ? "relative translate-y-0 scale-100 opacity-100"
+                          : "pointer-events-none absolute inset-0 translate-y-1.5 scale-[0.985] opacity-0 blur-[1px]"
                       )}
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleSendCurrentEmailCode}
-                      disabled={currentCodeCountdown > 0 || sendingCurrentCode || !userEmail}
-                      className={codeSendBtnClass}
                     >
-                      {sendingCurrentCode ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : currentCodeCountdown > 0 ? (
-                        `${currentCodeCountdown}s 后重发`
-                      ) : (
-                        "获取验证码"
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="sec-current-email-code" className="text-xs font-semibold text-slate-700">
+                          当前邮箱验证码
+                        </Label>
+                        {cfRequired && cfVerified ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                            <span>✓ 安全验证已通过</span>
+                            <button
+                              type="button"
+                              onClick={resetSecurityTurnstile}
+                              className="ml-0.5 text-emerald-600 underline hover:text-emerald-800"
+                            >
+                              重验
+                            </button>
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1.5 flex gap-2.5">
+                        <Input
+                          id="sec-current-email-code"
+                          name="current_email_otp_code"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          tabIndex={showOtpInputs ? 0 : -1}
+                          placeholder="请输入 6 位邮箱验证码"
+                          value={emailForm.currentCode}
+                          onChange={(e) => {
+                            setEmailForm((prev) => ({ ...prev, currentCode: e.target.value }));
+                            setEmailErrors((prev) => ({ ...prev, currentCode: "" }));
+                          }}
+                          className={cn(
+                            "h-11 rounded-xl border-[#eadfd3] bg-white/90 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                            emailErrors.currentCode && "border-red-500 focus-visible:ring-red-500/20"
+                          )}
+                        />
+                        <Button
+                          type="button"
+                          onClick={handleSendCurrentEmailCode}
+                          disabled={currentCodeCountdown > 0 || sendingCurrentCode || !userEmail || (cfRequired && !cfVerified)}
+                          tabIndex={showOtpInputs ? 0 : -1}
+                          className={codeSendBtnClass}
+                        >
+                          {sendingCurrentCode ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : currentCodeCountdown > 0 ? (
+                            `${currentCodeCountdown}s 后重发`
+                          ) : (
+                            "获取验证码"
+                          )}
+                        </Button>
+                      </div>
+                      {emailErrors.currentCode && (
+                        <p className="mt-1.5 text-xs text-red-600">{emailErrors.currentCode}</p>
                       )}
-                    </Button>
+                    </div>
                   </div>
-                  {emailErrors.currentCode && (
-                    <p className="mt-1.5 text-xs text-red-600">{emailErrors.currentCode}</p>
-                  )}
                 </div>
 
                 {/* 3. 新绑定邮箱 */}
@@ -723,48 +845,77 @@ export default function AccountSecurityPage() {
                   )}
                 </div>
 
-                {/* 4. 新邮箱验证码 */}
+                {/* 4. 新邮箱验证码（CF 通过后同步 350ms 细腻动画覆盖解锁） */}
                 <div className={styles.field}>
-                  <Label htmlFor="sec-new-email-code" className="text-xs font-semibold text-slate-700">
-                    新邮箱验证码
-                  </Label>
-                  <div className="mt-1.5 flex gap-2.5">
-                    <Input
-                      id="sec-new-email-code"
-                      name="new_email_otp_code"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      placeholder="请输入新邮箱 6 位验证码"
-                      value={emailForm.newCode}
-                      onChange={(e) => {
-                        setEmailForm((prev) => ({ ...prev, newCode: e.target.value }));
-                        setEmailErrors((prev) => ({ ...prev, newCode: "" }));
-                      }}
+                  <div className="relative min-h-[70px]">
+                    {cfRequired ? (
+                      <div
+                        aria-hidden={showOtpInputs}
+                        className={cn(
+                          "flex h-[70px] items-center justify-between rounded-xl border border-dashed border-orange-200/90 bg-orange-50/35 px-4 text-xs text-slate-500 transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                          showOtpInputs
+                            ? "pointer-events-none absolute inset-0 -translate-y-1.5 scale-[0.985] opacity-0 blur-[1px]"
+                            : "relative translate-y-0 scale-100 opacity-100"
+                        )}
+                      >
+                        <span className="font-medium text-slate-600">新邮箱验证码</span>
+                        <span className="text-amber-700">完成上方安全验证后自动展开</span>
+                      </div>
+                    ) : null}
+
+                    <div
+                      aria-hidden={!showOtpInputs}
                       className={cn(
-                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
-                        emailErrors.newCode && "border-red-500 focus-visible:ring-red-500/20"
+                        "transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                        showOtpInputs
+                          ? "relative translate-y-0 scale-100 opacity-100"
+                          : "pointer-events-none absolute inset-0 translate-y-1.5 scale-[0.985] opacity-0 blur-[1px]"
                       )}
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleSendNewEmailCode}
-                      disabled={newCodeCountdown > 0 || sendingNewCode || !emailForm.newEmail.trim()}
-                      className={codeSendBtnClass}
                     >
-                      {sendingNewCode ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : newCodeCountdown > 0 ? (
-                        `${newCodeCountdown}s 后重发`
-                      ) : (
-                        "发送验证码"
+                      <Label htmlFor="sec-new-email-code" className="text-xs font-semibold text-slate-700">
+                        新邮箱验证码
+                      </Label>
+                      <div className="mt-1.5 flex gap-2.5">
+                        <Input
+                          id="sec-new-email-code"
+                          name="new_email_otp_code"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          tabIndex={showOtpInputs ? 0 : -1}
+                          placeholder="请输入新邮箱 6 位验证码"
+                          value={emailForm.newCode}
+                          onChange={(e) => {
+                            setEmailForm((prev) => ({ ...prev, newCode: e.target.value }));
+                            setEmailErrors((prev) => ({ ...prev, newCode: "" }));
+                          }}
+                          className={cn(
+                            "h-11 rounded-xl border-[#eadfd3] bg-white/90 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                            emailErrors.newCode && "border-red-500 focus-visible:ring-red-500/20"
+                          )}
+                        />
+                        <Button
+                          type="button"
+                          onClick={handleSendNewEmailCode}
+                          disabled={newCodeCountdown > 0 || sendingNewCode || !emailForm.newEmail.trim() || (cfRequired && !cfVerified)}
+                          tabIndex={showOtpInputs ? 0 : -1}
+                          className={codeSendBtnClass}
+                        >
+                          {sendingNewCode ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : newCodeCountdown > 0 ? (
+                            `${newCodeCountdown}s 后重发`
+                          ) : (
+                            "发送验证码"
+                          )}
+                        </Button>
+                      </div>
+                      {emailErrors.newCode && (
+                        <p className="mt-1.5 text-xs text-red-600">{emailErrors.newCode}</p>
                       )}
-                    </Button>
+                    </div>
                   </div>
-                  {emailErrors.newCode && (
-                    <p className="mt-1.5 text-xs text-red-600">{emailErrors.newCode}</p>
-                  )}
                 </div>
 
                 {emailErrors.form && (
@@ -773,7 +924,7 @@ export default function AccountSecurityPage() {
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-3">
                   <Button
                     type="submit"
                     disabled={savingEmail}
@@ -796,7 +947,7 @@ export default function AccountSecurityPage() {
 
           {/* TAB 2: 邮箱改密码 (Ref 图3) */}
           {activeTab === "email-password" && (
-            <div>
+            <div className="flex flex-1 flex-col">
               <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#efe3d5] pb-4">
                 <div>
                   <div className="flex items-center gap-2">
@@ -809,7 +960,7 @@ export default function AccountSecurityPage() {
                 </span>
               </div>
 
-              <form onSubmit={handleSubmitEmailPwd} autoComplete="off" className="space-y-5">
+              <form onSubmit={handleSubmitEmailPwd} autoComplete="off" className="flex flex-1 flex-col space-y-5">
                 {/* Hidden username anchor to prevent browser password manager from autofilling the OTP input */}
                 <input
                   type="text"
@@ -855,51 +1006,106 @@ export default function AccountSecurityPage() {
                   </div>
                 </div>
 
-                {/* 2. 邮箱验证码 */}
+                {/* 2. 邮箱验证码（开启 CF 时先借用为安全验证槽位，通过后 350ms 细腻动画覆盖切入） */}
                 <div className={styles.field}>
-                  <Label htmlFor="sec-reset-otp-code" className="text-xs font-semibold text-slate-700">
-                    邮箱验证码
-                  </Label>
-                  <div className="mt-1.5 flex gap-2.5">
-                    <Input
-                      id="sec-reset-otp-code"
-                      name="password_reset_otp_code"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={6}
-                      placeholder="请输入 6 位邮箱验证码"
-                      value={emailPwdForm.code}
-                      onChange={(e) => {
-                        setEmailPwdForm((prev) => ({ ...prev, code: e.target.value }));
-                        setEmailPwdErrors((prev) => ({ ...prev, code: "" }));
-                      }}
+                  <div className="relative min-h-[70px]">
+                    {cfRequired ? (
+                      <div
+                        aria-hidden={showOtpInputs}
+                        className={cn(
+                          "transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                          showOtpInputs
+                            ? "pointer-events-none absolute inset-0 -translate-y-1.5 scale-[0.985] opacity-0 blur-[1px]"
+                            : "relative translate-y-0 scale-100 opacity-100"
+                        )}
+                      >
+                        <div className="rounded-xl border border-orange-200/80 bg-orange-50/40 px-3 py-2">
+                          <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-slate-600">
+                            <span>安全验证（Cloudflare）</span>
+                            <span className="text-slate-400">
+                              {cfVerifying ? "正在核验..." : "通过后自动覆盖展开「邮箱验证码」"}
+                            </span>
+                          </div>
+                          <TurnstileWidget
+                            siteKey={turnstileSiteKey}
+                            resetSignal={cfResetSignal}
+                            onVerify={(token) => void handleSecurityTurnstileVerify(token)}
+                            onExpire={() => setCfVerified(false)}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div
+                      aria-hidden={!showOtpInputs}
                       className={cn(
-                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
-                        emailPwdErrors.code && "border-red-500 focus-visible:ring-red-500/20"
+                        "transition-all duration-350 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                        showOtpInputs
+                          ? "relative translate-y-0 scale-100 opacity-100"
+                          : "pointer-events-none absolute inset-0 translate-y-1.5 scale-[0.985] opacity-0 blur-[1px]"
                       )}
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleSendEmailPwdCode}
-                      disabled={emailPwdCountdown > 0 || sendingEmailPwdCode || !userEmail}
-                      className={codeSendBtnClass}
                     >
-                      {sendingEmailPwdCode ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : emailPwdCountdown > 0 ? (
-                        `${emailPwdCountdown}s 后重发`
-                      ) : (
-                        "获取验证码"
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="sec-reset-otp-code" className="text-xs font-semibold text-slate-700">
+                          邮箱验证码
+                        </Label>
+                        {cfRequired && cfVerified ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                            <span>✓ 安全验证已通过</span>
+                            <button
+                              type="button"
+                              onClick={resetSecurityTurnstile}
+                              className="ml-0.5 text-emerald-600 underline hover:text-emerald-800"
+                            >
+                              重验
+                            </button>
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1.5 flex gap-2.5">
+                        <Input
+                          id="sec-reset-otp-code"
+                          name="password_reset_otp_code"
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          maxLength={6}
+                          tabIndex={showOtpInputs ? 0 : -1}
+                          placeholder="请输入 6 位邮箱验证码"
+                          value={emailPwdForm.code}
+                          onChange={(e) => {
+                            setEmailPwdForm((prev) => ({ ...prev, code: e.target.value }));
+                            setEmailPwdErrors((prev) => ({ ...prev, code: "" }));
+                          }}
+                          className={cn(
+                            "h-11 rounded-xl border-[#eadfd3] bg-white/90 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
+                            emailPwdErrors.code && "border-red-500 focus-visible:ring-red-500/20"
+                          )}
+                        />
+                        <Button
+                          type="button"
+                          onClick={handleSendEmailPwdCode}
+                          disabled={emailPwdCountdown > 0 || sendingEmailPwdCode || !userEmail || (cfRequired && !cfVerified)}
+                          tabIndex={showOtpInputs ? 0 : -1}
+                          className={codeSendBtnClass}
+                        >
+                          {sendingEmailPwdCode ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : emailPwdCountdown > 0 ? (
+                            `${emailPwdCountdown}s 后重发`
+                          ) : (
+                            "获取验证码"
+                          )}
+                        </Button>
+                      </div>
+                      {emailPwdErrors.code && (
+                        <p className="mt-1.5 text-xs text-red-600">{emailPwdErrors.code}</p>
                       )}
-                    </Button>
+                    </div>
                   </div>
-                  {emailPwdErrors.code && (
-                    <p className="mt-1.5 text-xs text-red-600">{emailPwdErrors.code}</p>
-                  )}
                 </div>
 
-                {/* 3. 新密码 */}
+                {/* 3. 新密码（单框输入，可点击小眼睛核对明文） */}
                 <div className={styles.field}>
                   <Label htmlFor="sec-email-new-pwd" className="text-xs font-semibold text-slate-700">
                     新密码
@@ -935,42 +1141,6 @@ export default function AccountSecurityPage() {
                   )}
                 </div>
 
-                {/* 4. 确认新密码 */}
-                <div className={styles.field}>
-                  <Label htmlFor="sec-email-confirm-pwd" className="text-xs font-semibold text-slate-700">
-                    确认新密码
-                  </Label>
-                  <div className="relative mt-1.5">
-                    <Input
-                      id="sec-email-confirm-pwd"
-                      name="confirm_reset_password"
-                      type={showEmailPwd.confirm ? "text" : "password"}
-                      autoComplete="new-password"
-                      placeholder="请再次输入新密码"
-                      value={emailPwdForm.confirmPassword}
-                      onChange={(e) => {
-                        setEmailPwdForm((prev) => ({ ...prev, confirmPassword: e.target.value }));
-                        setEmailPwdErrors((prev) => ({ ...prev, confirmPassword: "" }));
-                      }}
-                      className={cn(
-                        "h-11 rounded-xl border-[#eadfd3] bg-white/90 pr-10 focus-visible:border-[#d87a34] focus-visible:ring-[#d87a34]/20",
-                        emailPwdErrors.confirmPassword && "border-red-500 focus-visible:ring-red-500/20"
-                      )}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowEmailPwd((p) => ({ ...p, confirm: !p.confirm }))}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                      aria-label={showEmailPwd.confirm ? "隐藏密码" : "显示密码"}
-                    >
-                      {showEmailPwd.confirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {emailPwdErrors.confirmPassword && (
-                    <p className="mt-1.5 text-xs text-red-600">{emailPwdErrors.confirmPassword}</p>
-                  )}
-                </div>
-
                 {/* Real-time Password Strength Indicator */}
                 <PasswordStrengthMeter checks={activePasswordChecks} />
 
@@ -980,7 +1150,7 @@ export default function AccountSecurityPage() {
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-3">
                   <Button
                     type="submit"
                     disabled={savingEmailPwd}
@@ -1009,7 +1179,7 @@ export default function AccountSecurityPage() {
 
           {/* TAB 3: 原密码改密码 (Ref 图4) */}
           {activeTab === "old-password" && (
-            <div>
+            <div className="flex flex-1 flex-col">
               <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#efe3d5] pb-4">
                 <div>
                   <div className="flex items-center gap-2">
@@ -1022,7 +1192,7 @@ export default function AccountSecurityPage() {
                 </span>
               </div>
 
-              <form onSubmit={handleSubmitOldPwd} autoComplete="off" className="space-y-5">
+              <form onSubmit={handleSubmitOldPwd} autoComplete="off" className="flex flex-1 flex-col space-y-5">
                 <input
                   type="text"
                   name="username"
@@ -1182,7 +1352,7 @@ export default function AccountSecurityPage() {
         {/* RIGHT COLUMN: Contextual Step-by-Step Guide & Security Protection Checklist */}
         <div className="flex min-w-0 flex-col gap-4">
           {/* Card B: Security Best Practices & Quick Navigation */}
-          <section className={`${glass.surface} ${styles.panel} flex-1 p-5 sm:p-6`}>
+          <section className={`${glass.surface} ${styles.panel} flex flex-1 flex-col p-5 sm:p-6 xl:min-h-[600px]`}>
             <div className="mb-4 flex items-center justify-between border-b border-[#efe3d5]/70 pb-3.5">
               <div className="flex items-center gap-3">
                 <span className={`${glass.icon} flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100/70 text-[#d86e31] shadow-sm`}>
@@ -1237,7 +1407,7 @@ export default function AccountSecurityPage() {
               </div>
             </div>
 
-            <div className="mt-5 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#efe3d5] pt-4">
+            <div className="mt-auto flex flex-wrap items-center justify-between gap-2.5 border-t border-[#efe3d5] pt-4">
               <Link
                 href="/account/privacy"
                 className="inline-flex items-center gap-1.5 rounded-lg bg-orange-50/80 px-3 py-1.5 text-xs font-semibold text-[#b85d23] ring-1 ring-inset ring-orange-200/60 transition hover:bg-orange-100"

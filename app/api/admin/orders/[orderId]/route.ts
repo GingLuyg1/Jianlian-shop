@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
 import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
+import { sendEmail } from "@/lib/email/provider";
 import { expireUnpaidOrder } from "@/lib/orders/order-expiration";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import {
@@ -285,7 +286,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     const body = (await request.json().catch(() => null)) as
       | {
-          action?: "retry_auto_delivery" | "reconcile_daju_order" | "manual_inventory" | "manual_content" | "mark_failed" | "expire_unpaid_order";
+          action?: "retry_auto_delivery" | "reconcile_daju_order" | "manual_inventory" | "manual_content" | "mark_failed" | "expire_unpaid_order" | "ship_logistics";
           provider_order_code?: string;
           delivery_type?: string;
           delivery_content?: string;
@@ -293,8 +294,209 @@ export async function POST(request: Request, context: RouteContext) {
           order_item_id?: string | null;
           inventory_id?: string | null;
           note?: string | null;
+          carrier?: string;
+          tracking_no?: string;
+          shipping_note?: string | null;
+          send_email?: boolean;
         }
       | null;
+
+    if (body?.action === "ship_logistics") {
+      const orderId = (await context.params).orderId;
+      const carrier = String(body.carrier ?? "").trim().slice(0, 60);
+      const trackingNo = String(body.tracking_no ?? "").trim().slice(0, 80);
+      const shippingNote = String(body.shipping_note ?? "").trim().slice(0, 300);
+      const shouldSendEmail = body.send_email !== false;
+
+      if (!carrier) {
+        return NextResponse.json({ error: "请选择或填写快递公司" }, { status: 400 });
+      }
+      if (!trackingNo) {
+        return NextResponse.json({ error: "请填写快递单号" }, { status: 400 });
+      }
+
+      const serviceClient = getSupabaseServiceRoleClient();
+      if (!serviceClient) {
+        return NextResponse.json({ error: "服务端权限未配置" }, { status: 503 });
+      }
+
+      const { data: orderRow, error: orderLoadError } = await serviceClient
+        .from("orders")
+        .select("id,order_no,status,payment_status,delivery_type,customer_email,customer_name,customer_phone,shipping_address,admin_note,order_items(id,product_name,sku_title,quantity,delivery_type,delivery_status)")
+        .eq("id", orderId)
+        .maybeSingle();
+
+      if (orderLoadError || !orderRow) {
+        return NextResponse.json({ error: "订单不存在或读取失败" }, { status: 404 });
+      }
+      if (orderRow.payment_status !== "paid") {
+        return NextResponse.json({ error: "未支付订单不可录入物流发货" }, { status: 409 });
+      }
+      if (["cancelled", "expired", "refunded"].includes(String(orderRow.status ?? ""))) {
+        return NextResponse.json({ error: "已取消、已过期或已退款订单不可发货" }, { status: 409 });
+      }
+
+      const nowIso = new Date().toISOString();
+      const prevAddr =
+        orderRow.shipping_address && typeof orderRow.shipping_address === "object" && !Array.isArray(orderRow.shipping_address)
+          ? (orderRow.shipping_address as Record<string, unknown>)
+          : {};
+      const nextShippingAddress = {
+        ...prevAddr,
+        recipient: String(prevAddr.recipient ?? orderRow.customer_name ?? "").trim() || undefined,
+        phone: String(prevAddr.phone ?? orderRow.customer_phone ?? "").trim() || undefined,
+        carrier,
+        tracking_no: trackingNo,
+        shipping_note: shippingNote || null,
+        shipped_at: typeof prevAddr.shipped_at === "string" && prevAddr.shipped_at ? prevAddr.shipped_at : nowIso,
+        updated_at: nowIso,
+        updated_by: admin.user.email ?? admin.user.id,
+      };
+
+      const structuredAdminNote = `物流发货：${carrier} ${trackingNo}${shippingNote ? `（${shippingNote}）` : ""}`;
+      const currentStatus = String(orderRow.status ?? "");
+
+      if (["paid", "processing"].includes(currentStatus)) {
+        const { error: statusErr } = await admin.supabase.rpc("admin_update_order_status", {
+          p_order_id: orderId,
+          p_to_status: "delivered",
+          p_payment_status: null,
+          p_admin_note: structuredAdminNote,
+        });
+        if (statusErr) {
+          return NextResponse.json(
+            { error: getOrderErrorMessage(statusErr, "更新发货状态失败") },
+            { status: 400 }
+          );
+        }
+      }
+
+      const { error: orderPatchError } = await serviceClient
+        .from("orders")
+        .update({
+          shipping_address: nextShippingAddress,
+          admin_note: structuredAdminNote,
+          fulfillment_status: "delivered",
+          updated_at: nowIso,
+        })
+        .eq("id", orderId);
+
+      if (orderPatchError) {
+        return NextResponse.json(
+          { error: getOrderErrorMessage(orderPatchError, "保存物流单号失败") },
+          { status: 500 }
+        );
+      }
+
+      const orderItems = Array.isArray(orderRow.order_items)
+        ? (orderRow.order_items as Array<{ id: string; product_name?: string; sku_title?: string; quantity?: number; delivery_type?: string }>)
+        : [];
+      for (const item of orderItems) {
+        if (String(item.delivery_type ?? orderRow.delivery_type ?? "").toLowerCase() === "shipping") {
+          await serviceClient
+            .from("order_items")
+            .update({
+              delivery_status: "delivered",
+              delivered_quantity: Number(item.quantity ?? 1),
+              delivery_completed_at: nowIso,
+            })
+            .eq("id", item.id);
+        }
+      }
+
+      let emailSent = false;
+      const recipientEmail = String(orderRow.customer_email ?? "").trim();
+      if (shouldSendEmail && recipientEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) {
+        const itemSummary = orderItems
+          .map((item) => `${item.product_name || "实物商品"}${item.sku_title ? ` (${item.sku_title})` : ""} × ${item.quantity ?? 1}`)
+          .join("、") || "实物商品";
+        const recipientName = String(nextShippingAddress.recipient ?? "").trim();
+        const recipientPhone = String(nextShippingAddress.phone ?? "").trim();
+        const addressText = String(prevAddr.address ?? prevAddr.region ?? "").trim();
+
+        const escapeHtml = (v: string) =>
+          v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+        try {
+          await sendEmail({
+            to: recipientEmail,
+            subject: `【Jianlian Shop 发货通知】您的订单 ${orderRow.order_no} 已发出（${carrier}）`,
+            html: `
+              <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;border:1px solid #f0e4d7;border-radius:14px;background:#fffcf8;color:#1f2329;">
+                <h2 style="margin:0 0 12px;font-size:18px;color:#c2571a;">📦 您的实物订单已安排物流发出</h2>
+                <p style="margin:0 0 14px;font-size:14px;line-height:1.6;color:#4e5969;">
+                  您好！您在 <strong>Jianlian Shop</strong> 购买的商品已由仓库揽收寄出，您可通过以下快递单号随时追踪物流进度：
+                </p>
+                <div style="background:#ffffff;border:1px solid #f2e8dc;border-radius:10px;padding:14px 16px;font-size:13px;line-height:1.85;">
+                  <div><strong>订单编号：</strong><code>${escapeHtml(String(orderRow.order_no))}</code></div>
+                  <div><strong>购买商品：</strong>${escapeHtml(itemSummary)}</div>
+                  <div><strong>快递公司：</strong>${escapeHtml(carrier)}</div>
+                  <div><strong>快递单号：</strong><code style="font-size:15px;font-weight:700;color:#c2571a;">${escapeHtml(trackingNo)}</code></div>
+                  ${recipientName ? `<div><strong>收件人：</strong>${escapeHtml(recipientName)}${recipientPhone ? `（${escapeHtml(recipientPhone)}）` : ""}</div>` : ""}
+                  ${addressText ? `<div><strong>收货地址：</strong>${escapeHtml(addressText)}</div>` : ""}
+                  ${shippingNote ? `<div><strong>发货备注：</strong>${escapeHtml(shippingNote)}</div>` : ""}
+                </div>
+                <p style="margin:14px 0 0;font-size:12px;color:#86909c;line-height:1.6;">
+                  您也可以随时访问 <a href="https://www.jianlian.shop/account/orders" style="color:#c2571a;">Jianlian Shop 订单查询</a> 查看最新物流状态。如有疑问请联系网站在线客服。
+                </p>
+              </div>
+            `,
+            text: [
+              `【Jianlian Shop 发货通知】您的订单 ${orderRow.order_no} 已发出`,
+              `购买商品：${itemSummary}`,
+              `快递公司：${carrier}`,
+              `快递单号：${trackingNo}`,
+              recipientName ? `收件人：${recipientName} ${recipientPhone}` : null,
+              addressText ? `收货地址：${addressText}` : null,
+              shippingNote ? `发货备注：${shippingNote}` : null,
+            ].filter(Boolean).join("\n"),
+            templateCode: "order_logistics_shipped",
+            businessType: "order",
+            businessId: orderId,
+            idempotencyKey: `logistics-shipped:${orderId}:${trackingNo}`,
+          });
+          emailSent = true;
+        } catch (mailErr) {
+          console.warn("[Admin Orders] logistics shipping email failed", mailErr);
+        }
+      }
+
+      const { data: refreshedOrder } = await serviceClient
+        .from("orders")
+        .select("*,order_items(*),order_status_logs(*),order_deliveries(id,order_id,order_item_id,delivery_type,delivery_status,delivered_at,created_at,updated_at)")
+        .eq("id", orderId)
+        .maybeSingle();
+
+      await writeAdminAuditLog({
+        request,
+        admin: auditAdmin,
+        action: "ship_logistics_order",
+        module: "delivery",
+        targetType: "order",
+        targetId: orderId,
+        targetLabel: String(orderRow.order_no ?? orderId),
+        result: "success",
+        afterSummary: {
+          carrier,
+          tracking_no: trackingNo,
+          has_shipping_note: Boolean(shippingNote),
+          email_sent: emailSent,
+        },
+      });
+
+      return NextResponse.json({
+        ok: true,
+        order: refreshedOrder ?? {
+          ...orderRow,
+          status: ["paid", "processing"].includes(currentStatus) ? "delivered" : currentStatus,
+          fulfillment_status: "delivered",
+          shipping_address: nextShippingAddress,
+          admin_note: structuredAdminNote,
+          updated_at: nowIso,
+        },
+        emailSent,
+      });
+    }
 
     if (body?.action === "expire_unpaid_order") {
       const reason = String(body.note ?? "").trim();
