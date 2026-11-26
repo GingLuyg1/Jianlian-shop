@@ -37,11 +37,6 @@ function getUsdCnyRate(env: NodeJS.ProcessEnv): number {
   return Number.isFinite(raw) && raw > 0 ? raw : 7.2;
 }
 
-function getMaxOrderCostUsd(env: NodeJS.ProcessEnv): number {
-  const raw = Number(env.BITREFILL_MAX_ORDER_COST_USD ?? 50);
-  return Number.isFinite(raw) && raw > 0 ? raw : 50;
-}
-
 function isLiveEnabled(env: NodeJS.ProcessEnv): boolean {
   return (
     env.SUPPLIER_AUTO_PURCHASE_ENABLED === "true"
@@ -301,7 +296,6 @@ export async function fulfillBitrefillLiveOrderWithSupabase(
 
   const client = createBitrefillLiveClient({ apiKey: env.BITREFILL_API_KEY! });
   const usdCnyRate = getUsdCnyRate(env);
-  const maxOrderCostUsd = getMaxOrderCostUsd(env);
 
   for (const candidate of candidates) {
     summary.handled++;
@@ -356,10 +350,25 @@ export async function fulfillBitrefillLiveOrderWithSupabase(
             },
           ],
         });
+        try {
+          await service.rpc("write_delivery_log", {
+            p_order_id: candidate.orderId,
+            p_order_item_id: candidate.orderItemId,
+            p_inventory_id: null,
+            p_trigger_source: triggerSource,
+            p_event_type: "delivery_failed",
+            p_message: `Bitrefill 实时单价 $${unitUsdCost.toFixed(2)} 高于风控上限 $${candidate.maxUnitCostUsd.toFixed(2)}，已暂挂待人工处理`,
+            p_detail: {
+              supplier: "bitrefill",
+              reason: "BITREFILL_UNIT_COST_EXCEEDED",
+              unit_usd_cost: unitUsdCost,
+              max_unit_cost_usd: candidate.maxUnitCostUsd,
+            },
+          });
+        } catch {
+          // Best-effort delivery log
+        }
         throw new Error(`BITREFILL_UNIT_COST_EXCEEDED:${unitUsdCost}>${candidate.maxUnitCostUsd}`);
-      }
-      if (totalUsdCost > maxOrderCostUsd) {
-        throw new Error(`BITREFILL_ORDER_COST_EXCEEDED:${totalUsdCost}>${maxOrderCostUsd}`);
       }
 
       const balance = await client.readUsdBalance();
@@ -372,6 +381,25 @@ export async function fulfillBitrefillLiveOrderWithSupabase(
           productId: candidate.supplierProductId,
           reason: `USD_BALANCE_${balance.amountText}_LT_${totalUsdCost.toFixed(2)}`,
         });
+        try {
+          await service.rpc("write_delivery_log", {
+            p_order_id: candidate.orderId,
+            p_order_item_id: candidate.orderItemId,
+            p_inventory_id: null,
+            p_trigger_source: triggerSource,
+            p_event_type: "delivery_failed",
+            p_message: `Bitrefill 钱包余额不足（可用 $${balance.amountText}，本单需 $${totalUsdCost.toFixed(2)}），已暂挂待人工交付`,
+            p_detail: {
+              supplier: "bitrefill",
+              reason: "BITREFILL_BALANCE_INSUFFICIENT",
+              available_usd: balance.availableUsd,
+              required_usd: totalUsdCost,
+              manual_fallback: true,
+            },
+          });
+        } catch {
+          // Best-effort delivery log
+        }
         throw new Error(`BITREFILL_BALANCE_INSUFFICIENT:${balance.amountText}<${totalUsdCost.toFixed(2)}`);
       }
 

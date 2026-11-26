@@ -253,7 +253,6 @@ export async function syncBitrefillCostsAndRates(
   const markupPercent = clampNumber(options.markupPercent, 13, 0, 100);
   const maxPriceDriftPercent = clampNumber(options.maxPriceDriftPercent, 15, 1, 50);
   const notifyOnAnomaly = options.notifyOnAnomaly !== false;
-  const globalMaxOrderCostUsd = Number(env.BITREFILL_MAX_ORDER_COST_USD ?? 50) || 50;
 
   let usdCnyRate = Number(env.BITREFILL_USD_CNY_RATE ?? env.CNY_USDT_FIXED_RATE ?? 7.2);
   let rateSource = "env_fallback";
@@ -401,10 +400,7 @@ export async function syncBitrefillCostsAndRates(
 
     let anomaly: BitrefillCostAnomalyKind | null = null;
     let detailText = "ok";
-    if (liveUsdCost > globalMaxOrderCostUsd) {
-      anomaly = "GLOBAL_LIMIT_EXCEEDED";
-      detailText = `实时成本 $${liveUsdCost.toFixed(2)} 超过全局单笔限额 $${globalMaxOrderCostUsd}`;
-    } else if (circuitBreakerTriggered) {
+    if (circuitBreakerTriggered) {
       anomaly = "PRICE_DRIFT_CIRCUIT_BREAKER";
       detailText = `建议售价 ¥${recommendedRetailCny.toFixed(2)} 相对现价 ¥${currentRetailCny.toFixed(2)} 变动 ${rawDriftPercent >= 0 ? "+" : ""}${rawDriftPercent.toFixed(1)}%，超过 ±${maxPriceDriftPercent}% 熔断阈值，已跳过自动改价`;
     } else if (currentMaxUnitCostUsd !== null && liveUsdCost > currentMaxUnitCostUsd) {
@@ -439,7 +435,7 @@ export async function syncBitrefillCostsAndRates(
       recommendedRetailCny > 0 &&
       Math.abs(recommendedRetailCny - currentRetailCny) >= 0.01;
 
-    if (mode === "apply" && anomaly !== "GLOBAL_LIMIT_EXCEEDED" && (capNeedsUpdate || retailNeedsUpdate)) {
+    if (mode === "apply" && (capNeedsUpdate || retailNeedsUpdate)) {
       const nextMetadata: Record<string, unknown> = {
         ...meta,
         supplier_max_unit_cost: recommendedMaxUnitCostUsd,

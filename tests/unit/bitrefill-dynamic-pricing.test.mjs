@@ -32,4 +32,12 @@ test("Bitrefill dynamic pricing supports two-way repricing, ±15% circuit breake
   assert.match(ui, /一键联动调价/);
   assert.match(ui, /AdminConfirmDialog/);
   assert.doesNotMatch(ui, /window\.confirm/);
+
+  // High-denomination SKUs must NOT be blocked by a hard $50 global order limit;
+  // fulfillment should proceed whenever Bitrefill wallet balance is sufficient and hold for manual delivery otherwise.
+  assert.doesNotMatch(service, /anomaly\s*=\s*"GLOBAL_LIMIT_EXCEEDED"/);
+  const liveFulfillment = read("lib/providers/bitrefill/live-fulfillment.ts");
+  assert.doesNotMatch(liveFulfillment, /BITREFILL_ORDER_COST_EXCEEDED/);
+  assert.match(liveFulfillment, /BITREFILL_BALANCE_INSUFFICIENT/);
+  assert.match(liveFulfillment, /manual_fallback:\s*true/);
 });
