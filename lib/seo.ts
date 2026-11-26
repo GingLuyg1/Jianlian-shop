@@ -4,6 +4,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { isPreorderDeliveryMode } from "@/lib/products/delivery-and-stock";
 
 export const SITE_URL = "https://www.jianlian.shop";
@@ -104,7 +105,7 @@ export const getSeoProduct = cache(async function getSeoProductImpl(identifier: 
   } catch {
     cleanId = identifier;
   }
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseServiceRoleClient() ?? getSupabaseServerClient();
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       cleanId
@@ -183,7 +184,7 @@ export type SeoProductSitemapEntry = {
  */
 export async function listSeoProductSitemapEntries(): Promise<SeoProductSitemapEntry[]> {
   if (!hasSupabaseServerConfig()) return [];
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseServiceRoleClient() ?? getSupabaseServerClient();
   const pageSize = 1000;
   const maxRows = 20000;
   const all: SeoProductSitemapEntry[] = [];
@@ -207,7 +208,7 @@ export async function listSeoProductSitemapEntries(): Promise<SeoProductSitemapE
 
 export async function listSeoProducts() {
   if (!hasSupabaseServerConfig()) return [];
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseServiceRoleClient() ?? getSupabaseServerClient();
   const pageSize = 1000;
   const maxRows = 20000;
   const all: SeoProduct[] = [];
@@ -231,7 +232,7 @@ export async function listSeoProducts() {
 
 export async function listSeoCategories() {
   if (!hasSupabaseServerConfig()) return [];
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseServiceRoleClient() ?? getSupabaseServerClient();
   const { data, error } = await supabase
     .from("categories")
     .select("id,parent_id,level,name,slug,description,is_active,updated_at")

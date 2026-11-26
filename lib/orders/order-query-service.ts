@@ -30,6 +30,12 @@ const ORDER_LOOKUP_SELECT = `
   order_deliveries(delivery_status)
 `;
 
+const ORDER_EMAIL_LOOKUP_SELECT = `
+  id,order_no,status,payment_status,total_amount,currency,created_at,updated_at,
+  order_items(product_name,sku_title,sku_code,quantity,unit_price,line_total,delivery_status),
+  order_deliveries(delivery_status)
+`;
+
 export function generateOrderQueryToken() {
   return randomBytes(24).toString("base64url");
 }
@@ -135,7 +141,7 @@ export async function lookupGuestOrdersByEmail(email: string) {
 
   const { data, error } = await service
     .from("orders")
-    .select(ORDER_LOOKUP_SELECT)
+    .select(ORDER_EMAIL_LOOKUP_SELECT)
     .ilike("customer_email", normalizedEmail)
     .order("created_at", { ascending: false })
     .limit(20);
