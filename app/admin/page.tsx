@@ -1706,31 +1706,35 @@ export default function AdminDashboardPage() {
                   {[
                     {
                       label: "支付异常会话",
-                      desc: "超时或未完成支付会话",
+                      desc: "近30天超时/关闭会话（只读追踪）",
                       value: data?.statusMetrics.find((m) => m.label === "支付异常")?.value ?? fastSummary?.todos.paymentExceptionSessions ?? 0,
                       href: "/admin/payments?view=exceptions",
-                      tone: "red" as const,
+                      tone: "slate" as const,
+                      actionText: "查看记录",
                     },
                     {
                       label: "支付回调失败",
-                      desc: "第三方异步通知异常",
+                      desc: "近30天异步通知失败日志（只读追踪）",
                       value: data?.todos.find((t) => t.label === "支付回调失败")?.value ?? fastSummary?.todos.callbackFailed ?? 0,
                       href: "/admin/payments?view=callbacks&attention=failed",
-                      tone: "red" as const,
+                      tone: "slate" as const,
+                      actionText: "查看日志",
                     },
                     {
                       label: "支付对账异常",
-                      desc: "金额不一致或掉单排查",
+                      desc: "金额不一致或掉单，支持一键重查",
                       value: data?.todos.find((t) => t.label === "对账异常")?.value ?? fastSummary?.todos.reconciliationFailed ?? 0,
                       href: "/admin/payments?view=reconciliations&attention=failed",
                       tone: "orange" as const,
+                      actionText: "去重查",
                     },
                     {
                       label: "待处理充值",
-                      desc: "需管理员人工确认充值",
+                      desc: "需管理员人工审核入账",
                       value: data?.todos.find((t) => t.label === "待处理充值")?.value ?? fastSummary?.todos.pendingRecharges ?? 0,
                       href: "/admin/recharges?view=review",
                       tone: "orange" as const,
+                      actionText: "去审核",
                     },
                   ].map((item) => (
                     <Link
@@ -1747,17 +1751,24 @@ export default function AdminDashboardPage() {
                           className={cn(
                             "rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums",
                             typeof item.value === "number" && item.value > 0
-                              ? item.tone === "red"
-                                ? "bg-red-50 text-red-700"
-                                : "bg-amber-50 text-amber-700"
+                              ? item.tone === "orange"
+                                ? "bg-amber-50 text-amber-700"
+                                : "bg-slate-100 text-slate-600"
                               : "bg-slate-100 text-slate-600"
                           )}
                         >
                           {item.value ?? 0}
                         </span>
                         {typeof item.value === "number" && item.value > 0 ? (
-                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-800 transition-colors group-hover:bg-emerald-600 group-hover:text-white">
-                            去处理
+                          <span
+                            className={cn(
+                              "rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors",
+                              item.tone === "orange"
+                                ? "bg-emerald-100 text-emerald-800 group-hover:bg-emerald-600 group-hover:text-white"
+                                : "bg-slate-100 text-slate-600 group-hover:bg-slate-200 group-hover:text-slate-900"
+                            )}
+                          >
+                            {item.actionText}
                           </span>
                         ) : (
                           <ChevronRight className="h-3 w-3 text-slate-400 transition-transform group-hover:translate-x-0.5" />

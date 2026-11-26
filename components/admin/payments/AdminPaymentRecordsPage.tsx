@@ -341,7 +341,27 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   return (
     <AdminPageShell variant="v2" title={isRechargePage ? "充值管理" : "支付管理"} description={isRechargePage ? "统一查看账户充值记录，并通过受控审核流程处理需要人工介入的充值。" : "统一查看商品订单和账户充值支付记录，异常支付仅做只读追踪。"} actions={<Button className="h-11 sm:h-9" variant="outline" size="sm" onClick={loadPayments} disabled={loading}><RefreshCcw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />刷新</Button>}>
       <AdminListSurface>
-        {isRechargePage ? <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-[var(--admin-v2-border)] px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "ghost"} onClick={() => updateView("all")}>全部充值</Button><Button size="sm" variant={view === "review" ? "default" : "ghost"} onClick={() => updateView("review")}>人工审核</Button></div> : <div className="flex shrink-0 items-center gap-2 overflow-x-auto border-b border-[var(--admin-v2-border)] px-4 py-2"><Button size="sm" variant={view === "all" ? "default" : "ghost"} onClick={() => updateView("all")}>全部支付</Button><Button size="sm" variant={view === "exceptions" ? "default" : "ghost"} onClick={() => updateView("exceptions")}>异常支付</Button><Button size="sm" variant={view === "callbacks" ? "default" : "ghost"} onClick={() => updateView("callbacks")}>回调记录</Button><Button size="sm" variant={view === "underpayments" ? "default" : "ghost"} onClick={() => updateView("underpayments")}>欠额转余额</Button><Button size="sm" variant={view === "reconciliations" ? "default" : "ghost"} onClick={() => updateView("reconciliations")}>对账记录</Button>{view === "exceptions" ? <select aria-label="异常类型" value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className={cn(adminListControlClass, "px-3")}><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}</div>}
+        {isRechargePage ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--admin-v2-border)] px-4 py-2">
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant={view === "all" ? "default" : "ghost"} onClick={() => updateView("all")}>全部充值</Button>
+              <Button size="sm" variant={view === "review" ? "default" : "ghost"} onClick={() => updateView("review")}>人工审核</Button>
+            </div>
+            {view === "review" ? <span className="text-xs text-slate-500">仅显示待核验或异常充值；普通超时过期单请在「全部充值」查看</span> : null}
+          </div>
+        ) : (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--admin-v2-border)] px-4 py-2">
+            <div className="flex items-center gap-2 overflow-x-auto">
+              <Button size="sm" variant={view === "all" ? "default" : "ghost"} onClick={() => updateView("all")}>全部支付</Button>
+              <Button size="sm" variant={view === "exceptions" ? "default" : "ghost"} onClick={() => updateView("exceptions")}>异常支付</Button>
+              <Button size="sm" variant={view === "callbacks" ? "default" : "ghost"} onClick={() => updateView("callbacks")}>回调记录</Button>
+              <Button size="sm" variant={view === "underpayments" ? "default" : "ghost"} onClick={() => updateView("underpayments")}>欠额转余额</Button>
+              <Button size="sm" variant={view === "reconciliations" ? "default" : "ghost"} onClick={() => updateView("reconciliations")}>对账记录</Button>
+              {view === "exceptions" ? <select aria-label="异常类型" value={exceptionType} onChange={(event) => { setExceptionType(event.target.value); setPage(1); }} className={cn(adminListControlClass, "px-3")}><option value="all">全部异常类型</option>{PAYMENT_EXCEPTION_TYPES.map((item) => <option key={item} value={item}>{getExceptionTypeLabel(item)}</option>)}</select> : null}
+            </div>
+            {view === "exceptions" ? <span className="text-xs text-slate-500">超时/关闭会话为历史只读追踪；需补单重查请切换「对账记录」</span> : null}
+          </div>
+        )}
         {!isRechargePage && view === "callbacks" ? <AdminPaymentCallbackPanel attention={attention} onAttentionChange={updateAttention} /> : !isRechargePage && view === "reconciliations" ? <AdminReconciliationPanel attention={attention} onAttentionChange={updateAttention} /> : !isRechargePage && view === "underpayments" ? <AdminBep20UnderpaymentPanel /> : <>
         <AdminFilterBar
           className="sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8"
@@ -404,7 +424,17 @@ function PaymentTable({ isRechargePage, payments, copyText, loadDetail, hasFilte
             <Td><button type="button" onClick={() => copyText(payment.provider_trade_no)} className="flex min-h-11 max-w-full items-center gap-1 text-left text-slate-700 hover:text-primary sm:min-h-0" title={payment.provider_trade_no ?? ""}><span className="truncate font-mono text-xs">{payment.provider_trade_no ?? "—"}</span>{payment.provider_trade_no ? <Copy className="h-3.5 w-3.5 shrink-0" /> : null}</button></Td>
             <Td>{formatDate(payment.created_at)}</Td>
             <Td>{formatDate(payment.paid_at)}</Td>
-            <Td className="text-right"><Button variant="ghost" className="min-h-11 sm:min-h-9" size="sm" onClick={() => loadDetail(payment)}><Eye className="mr-1 h-3.5 w-3.5" />查看</Button></Td>
+            <Td className="text-right">
+              {isRechargePage && ["submitted", "reviewing", "approved", "failed"].includes(payment.status) ? (
+                <Button variant="outline" className="min-h-11 border-orange-200 bg-orange-50/70 text-orange-700 hover:bg-orange-100 hover:text-orange-800 sm:min-h-9" size="sm" onClick={() => loadDetail(payment)}>
+                  去审核
+                </Button>
+              ) : (
+                <Button variant="ghost" className="min-h-11 sm:min-h-9" size="sm" onClick={() => loadDetail(payment)}>
+                  <Eye className="mr-1 h-3.5 w-3.5" />查看
+                </Button>
+              )}
+            </Td>
           </tr>
         )) : (
           <tr><td colSpan={colSpan} className="h-[360px] px-4"><AdminEmptyState title={hasFilters ? (isRechargePage ? "没有符合条件的充值记录" : "没有符合条件的支付记录") : (isRechargePage ? "暂无充值记录" : "暂无支付记录")} description={hasFilters ? "请调整筛选条件后再试。" : "有新记录后会显示在这里。"} className="min-h-full" /></td></tr>

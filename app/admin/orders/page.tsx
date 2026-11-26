@@ -230,6 +230,27 @@ export default function AdminOrdersPage() {
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <AdminListSurface>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--admin-v2-border)] px-4 py-2">
+          {[
+            { value: ALL_VALUE, label: "全部订单" },
+            { value: "pending_orders", label: "待处理订单" },
+            { value: "manual_delivery", label: "待人工交付" },
+            { value: "auto_delivery_failed", label: "自动发货失败" },
+            { value: "inventory_shortage", label: "库存不足订单" },
+          ].map((tab) => (
+            <Button
+              key={tab.value}
+              size="sm"
+              variant={attention === tab.value ? "default" : "ghost"}
+              onClick={() => {
+                setAttention(tab.value as typeof initialAttention);
+                setPage(1);
+              }}
+            >
+              {tab.label}
+            </Button>
+          ))}
+        </div>
         <AdminFilterBar
           className="sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-[minmax(240px,1fr)_170px_170px_170px_180px_180px_auto]"
           primary={<>
@@ -327,8 +348,17 @@ export default function AdminOrdersPage() {
                         <td className="whitespace-nowrap px-4 py-3 text-center text-slate-500">{formatDate(order.created_at)}</td>
                         <td className="whitespace-nowrap px-4 py-3 text-center text-slate-500">{formatDate(order.updated_at)}</td>
                         <td className="sticky right-0 border-l border-[var(--admin-v2-border)] bg-white px-4 py-3 text-center whitespace-nowrap">
-                          <Button className="min-h-11 sm:min-h-9" size="sm" variant="ghost" onClick={() => setSelectedOrder(order)}>
-                            <Eye className="mr-2 h-4 w-4" />{attention === "manual_delivery" ? "处理交付" : "查看"}
+                          <Button
+                            className={cn(
+                              "min-h-11 sm:min-h-9",
+                              ["paid", "processing"].includes(orderStatus) && "border-orange-200 bg-orange-50/70 text-orange-700 hover:bg-orange-100 hover:text-orange-800"
+                            )}
+                            size="sm"
+                            variant={["paid", "processing"].includes(orderStatus) ? "outline" : "ghost"}
+                            onClick={() => setSelectedOrder(order)}
+                          >
+                            <Eye className="mr-1.5 h-4 w-4" />
+                            {attention === "manual_delivery" ? "处理交付" : ["paid", "processing"].includes(orderStatus) ? "去处理" : "查看"}
                           </Button>
                         </td>
                       </tr>
