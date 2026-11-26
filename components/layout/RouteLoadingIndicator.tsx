@@ -270,9 +270,9 @@ export default function RouteLoadingIndicator() {
   if (!visible) return null;
 
   return (
-    <div className="route-loading-shell pointer-events-none fixed top-0 left-0 right-0 z-[100]">
-      <div className="h-[2.5px] w-full overflow-hidden bg-primary/15">
-        <div className="route-loading-bar h-full w-2/3 rounded-r-full bg-primary" />
+    <div className="route-loading-shell pointer-events-none fixed top-0 left-0 right-0 z-[120]">
+      <div className="h-[3px] w-full overflow-hidden bg-orange-200/35">
+        <div className="route-loading-bar h-full w-2/3 rounded-full bg-gradient-to-r from-orange-400/20 via-[#df7334] to-amber-400/90 shadow-[0_0_10px_rgba(223,115,52,0.55)]" />
       </div>
     </div>
   );

@@ -384,7 +384,7 @@ export default function AllProductsContent() {
                   className={cn(
                     "pointer-events-none absolute top-1 bottom-1 left-0 rounded-full bg-gradient-to-r from-[#e67b39] to-[#d96727] shadow-[0_4px_12px_-3px_rgba(217,103,39,0.48)]",
                     tabSlider.ready
-                      ? "opacity-100 transition-[transform,width] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                      ? "opacity-100 transition-[transform,width] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform"
                       : "opacity-0"
                   )}
                   style={{
@@ -455,14 +455,15 @@ export default function AllProductsContent() {
               {Array.from({ length: 12 }).map((_, idx) => (
                 <div
                   key={idx}
-                  className="flex h-[74px] items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-4"
+                  className="catalog-placeholder flex h-[74px] items-center gap-3 rounded-2xl border border-orange-100/70 px-4"
+                  style={{ animationDelay: `${idx * 45}ms` }}
                 >
-                  <div className="h-11 w-11 shrink-0 animate-pulse rounded-xl bg-slate-200" />
+                  <div className="h-11 w-11 shrink-0 rounded-xl bg-orange-100/60" />
                   <div className="flex-1 space-y-2">
-                    <div className="h-4 w-2/3 animate-pulse rounded bg-slate-200" />
-                    <div className="h-3 w-1/2 animate-pulse rounded bg-slate-100" />
+                    <div className="h-4 w-2/3 rounded bg-orange-100/65" />
+                    <div className="h-3 w-1/2 rounded bg-orange-50/90" />
                   </div>
-                  <div className="h-5 w-16 animate-pulse rounded bg-slate-200" />
+                  <div className="h-5 w-16 rounded bg-orange-100/65" />
                 </div>
               ))}
             </div>
@@ -495,9 +496,10 @@ export default function AllProductsContent() {
             </div>
           ) : (
             <div
+              key={listRenderKey}
               ref={scrollRef}
               className={cn(
-                "mt-3.5 grid min-h-0 flex-1 grid-cols-1 content-start gap-2.5 overflow-y-auto pr-1 sidebar-scroll xl:grid-cols-2",
+                "page-turn-enter mt-3.5 grid min-h-0 flex-1 grid-cols-1 content-start gap-2.5 overflow-y-auto pr-1 sidebar-scroll xl:grid-cols-2",
                 isMobile && "!overflow-visible !pr-0"
               )}
             >
@@ -604,7 +606,7 @@ export default function AllProductsContent() {
                   size="sm"
                   disabled={page <= 1 || loading}
                   onClick={() => handlePageChange(page - 1)}
-                  className="h-8 rounded-lg border-orange-200/80 px-2.5 text-xs"
+                  className="h-8 rounded-lg border-orange-200/80 px-2.5 text-xs transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-x-0.5 hover:border-orange-300 hover:bg-orange-50/70 active:scale-95"
                 >
                   <ChevronLeft className="mr-0.5 h-3.5 w-3.5" />
                   上一页
@@ -615,7 +617,7 @@ export default function AllProductsContent() {
                   size="sm"
                   disabled={page >= totalPages || loading}
                   onClick={() => handlePageChange(page + 1)}
-                  className="h-8 rounded-lg border-orange-200/80 px-2.5 text-xs"
+                  className="h-8 rounded-lg border-orange-200/80 px-2.5 text-xs transition-all duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:translate-x-0.5 hover:border-orange-300 hover:bg-orange-50/70 active:scale-95"
                 >
                   下一页
                   <ChevronRight className="ml-0.5 h-3.5 w-3.5" />

@@ -122,8 +122,9 @@ function getDefaultSubcategoryForCategory(category: DisplayCategory | null | und
   if (!category) return "";
   const slug = normalizeText(category.slug);
   const name = normalizeText(category.name);
-  if (slug === "telegram" || name === "telegram") {
-    return category.metadata?.subcategories?.[0]?.name?.trim() ?? "";
+  const configured = category.metadata?.subcategories ?? [];
+  if ((slug === "telegram" || name === "telegram") && configured.length >= 2) {
+    return configured[0]?.name?.trim() ?? "";
   }
   return "";
 }
@@ -767,6 +768,25 @@ function SupabaseMallContentInner({
       .map((entry) => entry.prod);
   }, [products, effectiveSubcategory, availableSubcategories]);
 
+  const [discoveredSubcategoriesByCategory, setDiscoveredSubcategoriesByCategory] = useState<
+    Record<string, Array<{ name: string; slug: string; sort_order: number }>>
+  >({});
+
+  useEffect(() => {
+    if (!resolvedCategory?.id || availableSubcategories.length === 0) return;
+    setDiscoveredSubcategoriesByCategory((prev) => {
+      const existing = prev[resolvedCategory.id];
+      if (
+        existing &&
+        existing.length === availableSubcategories.length &&
+        existing.every((item, idx) => item.name === availableSubcategories[idx]?.name)
+      ) {
+        return prev;
+      }
+      return { ...prev, [resolvedCategory.id]: availableSubcategories };
+    });
+  }, [resolvedCategory?.id, availableSubcategories]);
+
   const handleSubcategoryToggle = useCallback(
     (subName: string) => {
       const fallbackSub = getDefaultSubcategoryForCategory(resolvedCategory);
@@ -799,6 +819,7 @@ function SupabaseMallContentInner({
           selectedCategoryId={routePending ? (pendingSelectedCategoryId || pendingSecondaryCategories?.[0]?.id || "") : (resolvedCategory?.id ?? "")}
           selectedSubcategory={effectiveSubcategory}
           activeCategorySubcategories={availableSubcategories}
+          discoveredSubcategoriesByCategory={discoveredSubcategoriesByCategory}
           onSelectCategory={routePending ? handlePendingCategorySelect : handleCategorySelect}
           onSelectSubcategory={handleSubcategoryToggle}
           onPrefetchCategory={(category) => {
@@ -863,6 +884,7 @@ function CategoryPanel({
   selectedCategoryId,
   selectedSubcategory = "",
   activeCategorySubcategories = [],
+  discoveredSubcategoriesByCategory = {},
   onPrefetchCategory,
   onSelectCategory,
   onSelectSubcategory,
@@ -879,6 +901,7 @@ function CategoryPanel({
   selectedCategoryId: string;
   selectedSubcategory?: string;
   activeCategorySubcategories?: Array<{ name: string; slug: string; sort_order: number }>;
+  discoveredSubcategoriesByCategory?: Record<string, Array<{ name: string; slug: string; sort_order: number }>>;
   onPrefetchCategory: (category: DisplayCategory) => void;
   onSelectCategory: (category: DisplayCategory, initialSubcategory?: string) => void;
   onSelectSubcategory?: (subName: string) => void;
@@ -906,9 +929,8 @@ function CategoryPanel({
     }
     if (selectedCategoryId && selectedCategoryId !== lastAutoExpandedSelectionRef.current) {
       lastAutoExpandedSelectionRef.current = selectedCategoryId;
-      setExpandedCategoryIds((prev) =>
-        prev.includes(selectedCategoryId) ? prev : [...prev, selectedCategoryId]
-      );
+      // Clean single-open accordion: switching categories smoothly collapses the previous sub-tree.
+      setExpandedCategoryIds([selectedCategoryId]);
     }
   }, [pageRoute, selectedCategoryId]);
 
@@ -989,14 +1011,16 @@ function CategoryPanel({
               </div>
             ) : categories.length > 0 ? categories.map((category, index) => {
               const isSelected = visualSelectionId === category.id;
+              const cachedSubItems = discoveredSubcategoriesByCategory[category.id];
               const subItems = isSelected
-                ? (activeCategorySubcategories.length > 0 ? activeCategorySubcategories : (category.metadata?.subcategories ?? []))
-                : (category.metadata?.subcategories ?? []);
-              const hasSubcategories = subItems.length > 0;
+                ? (activeCategorySubcategories.length > 0 ? activeCategorySubcategories : (cachedSubItems ?? category.metadata?.subcategories ?? []))
+                : (cachedSubItems ?? category.metadata?.subcategories ?? []);
+              // Only show expandable sub-directory when a category has 2 or more subcategories.
+              const hasSubcategories = subItems.length >= 2;
               const isExpanded = hasSubcategories && expandedCategoryIds.includes(category.id);
               return (
               <div key={`${pageRoute}-${category.id}`} data-wheel-item={category.id} className={cn("catalog-wheel-item relative z-10 shrink-0 lg:shrink", isMobile && "!w-full")}>
-                <div className={isMobile ? undefined : "catalog-enter-item"} style={isMobile ? undefined : { animationDelay: `${Math.min(index * 35, 210)}ms` }}>
+                <div className={isMobile ? undefined : "catalog-enter-item"} style={isMobile ? undefined : { animationDelay: `${Math.min(index * 24, 160)}ms` }}>
                   <CategoryButton
                     category={category}
                     active={isSelected}
@@ -1018,16 +1042,16 @@ function CategoryPanel({
                           setExpandedCategoryIds((prev) =>
                             prev.includes(category.id)
                               ? prev.filter((id) => id !== category.id)
-                              : [...prev, category.id]
+                              : [category.id]
                           );
                           if (selectedSubcategory && !getDefaultSubcategoryForCategory(category)) {
                             onSelectCategory(category);
                           }
                           return;
                         }
-                        setExpandedCategoryIds((prev) =>
-                          prev.includes(category.id) ? prev : [...prev, category.id]
-                        );
+                        setExpandedCategoryIds([category.id]);
+                      } else if (!isMobile) {
+                        setExpandedCategoryIds([]);
                       }
                       setClickedCategoryId(category.id);
                       setClickPulseId(category.id);
@@ -1043,7 +1067,7 @@ function CategoryPanel({
                       data-testid="storefront-subcategory-tree"
                       aria-hidden={!isExpanded}
                       className={cn(
-                        "grid transition-[grid-template-rows,opacity,margin] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                        "grid transition-[grid-template-rows,opacity,margin] duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)]",
                         isExpanded
                           ? "mt-1.5 mb-2 grid-rows-[1fr] opacity-100"
                           : "mt-0 mb-0 grid-rows-[0fr] opacity-0 pointer-events-none"
@@ -1052,11 +1076,11 @@ function CategoryPanel({
                       <div className="min-h-0 overflow-hidden">
                         <div
                           className={cn(
-                            "relative ml-6 space-y-1 border-l-2 border-[#ead5c3] pl-3 py-0.5 transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                            isExpanded ? "translate-y-0" : "-translate-y-2"
+                            "relative ml-6 space-y-1 border-l-2 border-[#ead5c3]/90 pl-3 py-0.5 transition-[transform,opacity] duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)] origin-top",
+                            isExpanded ? "translate-y-0 scale-100 opacity-100" : "-translate-y-2 scale-[0.985] opacity-0"
                           )}
                         >
-                          {subItems.map((sub) => {
+                          {subItems.map((sub, subIdx) => {
                             const subActive =
                               isSelected &&
                               normalizeSubcategoryMatch(selectedSubcategory) === normalizeSubcategoryMatch(sub.name);
@@ -1065,29 +1089,31 @@ function CategoryPanel({
                                 key={sub.slug || sub.name}
                                 type="button"
                                 tabIndex={isExpanded ? 0 : -1}
+                                style={{
+                                  transitionDelay: isExpanded ? `${Math.min(subIdx * 24, 140)}ms` : "0ms",
+                                }}
                                 onClick={() => {
                                   if (isSelected) {
                                     onSelectSubcategory?.(sub.name);
                                   } else {
-                                    setExpandedCategoryIds((prev) =>
-                                      prev.includes(category.id) ? prev : [...prev, category.id]
-                                    );
+                                    setExpandedCategoryIds([category.id]);
                                     setClickedCategoryId(category.id);
                                     centerItem(category.id);
                                     onSelectCategory(category, sub.name);
                                   }
                                 }}
                                 className={cn(
-                                  "group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs sm:text-[13px] transition-all duration-150",
+                                  "group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs sm:text-[13px] transition-[transform,opacity,background-color,color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                  isExpanded ? "translate-x-0 opacity-100" : "-translate-x-1.5 opacity-0",
                                   subActive
                                     ? "bg-gradient-to-r from-[#fde8d7] via-[#fef2e8] to-[#fce3cd] font-bold text-[#c85e22] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_-2px_rgba(161,92,42,0.14)] ring-1 ring-[#e6a679]/50"
-                                    : "font-medium text-slate-600 hover:bg-[#fff7f0]/90 hover:text-[#b4531a]"
+                                    : "font-medium text-slate-600 hover:translate-x-[3px] hover:bg-[#fff7f0]/90 hover:text-[#b4531a]"
                                 )}
                               >
                                 <span
                                   className={cn(
-                                    "h-1.5 w-1.5 shrink-0 rounded-full transition-colors",
-                                    subActive ? "bg-[#d96927]" : "bg-slate-300 group-hover:bg-[#e59866]"
+                                    "h-1.5 w-1.5 shrink-0 rounded-full transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                                    subActive ? "scale-125 bg-[#d96927]" : "bg-slate-300 group-hover:scale-110 group-hover:bg-[#e59866]"
                                   )}
                                 />
                                 <span className="truncate leading-snug">{sub.name}</span>
@@ -1235,14 +1261,14 @@ function CategoryButton({
         {hasSubcategories ? (
           <ChevronDown
             className={cn(
-              "hidden h-5 w-5 shrink-0 lg:block transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              "hidden h-5 w-5 shrink-0 lg:block transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
               active ? "text-primary" : "text-muted-foreground/60",
               !expanded && "-rotate-90",
               loading && "opacity-0"
             )}
           />
         ) : (
-          <ChevronRight className={cn("hidden h-5 w-5 shrink-0 lg:block transition-opacity duration-150", active ? "text-primary" : "text-muted-foreground/60", loading && "opacity-0")} />
+          <ChevronRight className={cn("hidden h-5 w-5 shrink-0 lg:block transition-[opacity,transform] duration-200 ease-out", active ? "text-primary" : "text-muted-foreground/60", loading && "opacity-0")} />
         )}
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center">
@@ -1381,7 +1407,7 @@ function ProductPanel({
           </div>
         </div>
 
-        {isMobile && availableSubcategories.length > 0 && onSelectSubcategory ? (
+        {isMobile && availableSubcategories.length >= 2 && onSelectSubcategory ? (
           <div className="mb-2 flex items-center gap-1.5 overflow-x-auto pb-1">
             {availableSubcategories.map((sub) => {
               const subActive = normalizeSubcategoryMatch(selectedSubcategory) === normalizeSubcategoryMatch(sub.name);
@@ -1426,7 +1452,7 @@ function ProductPanel({
             <div ref={containerRef} data-wheel-container="products" className={cn("relative min-h-0 space-y-2.5 px-1 py-1 lg:scroll-fade-y lg:h-full lg:overflow-y-auto lg:px-1.5 lg:pr-2 lg:sidebar-scroll", isMobile && "!h-auto !overflow-visible !px-0 !space-y-1.5")}>
               {currentProducts.map((product, index) => (
                 <div key={`${loadedProductKey || activeCategory?.id || "list"}-${product.id}`} data-wheel-item={product.id} className="catalog-wheel-item">
-                  <div className={isMobile ? undefined : "catalog-enter-item"} style={isMobile ? undefined : { animationDelay: `${Math.min(index * 35, 210)}ms` }}>
+                  <div className={isMobile ? undefined : "catalog-enter-item"} style={isMobile ? undefined : { animationDelay: `${Math.min(index * 26, 180)}ms` }}>
                     <ProductRowCompact
                       product={product}
                       category={activeCategory}

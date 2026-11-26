@@ -408,11 +408,11 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       ) : null}
 
       <Dialog open={supportOpen} onOpenChange={setSupportOpen}>
-        <DialogContent onCloseAutoFocus={(event) => {
+        <DialogContent overlayClassName="z-[100] bg-stone-950/45 backdrop-blur-[3px]" onCloseAutoFocus={(event) => {
           event.preventDefault();
           const trigger = supportTrigger.current?.isConnected ? supportTrigger.current : document.querySelector<HTMLElement>("[data-storefront-menu-trigger]");
           trigger?.focus();
-        }} className="max-h-[85dvh] w-[calc(100%-32px)] max-w-[460px] overflow-y-auto rounded-2xl border-slate-200 bg-white p-5 shadow-none sm:rounded-2xl">
+        }} className="z-[101] max-h-[85dvh] w-[calc(100%-32px)] max-w-[460px] overflow-y-auto rounded-2xl border-slate-200 bg-white p-5 shadow-2xl sm:rounded-2xl">
           <DialogHeader className="flex-row items-center gap-3 space-y-0 pr-6 text-left">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-primary"><Headphones className="h-5 w-5" /></div>
             <div className="min-w-0 space-y-1">
