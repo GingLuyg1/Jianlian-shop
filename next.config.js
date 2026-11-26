@@ -64,10 +64,20 @@ const nextConfig = {
           { key: "X-Robots-Tag", value: "noindex, nofollow" },
         ],
       },
-      // Tutorial screenshots and brand assets rarely change: let browsers
-      // reuse them for 7 days and refresh silently afterwards.
+      // Never long-cache the /tutorials page HTML or RSC payload: every
+      // deployment rotates _next/static/chunks/* hashes, and caching HTML
+      // causes stale chunk 404 / blank-content hydration failures.
       {
-        source: "/tutorials/:path*",
+        source: "/tutorials",
+        headers: [
+          ...securityHeaders,
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        ],
+      },
+      // Tutorial screenshots and brand assets rarely change: let browsers
+      // reuse static media files for 7 days without matching the /tutorials page itself.
+      {
+        source: "/tutorials/:path+.:ext(png|jpg|jpeg|webp|gif|svg|ico|avif|mp4|webm|pdf)",
         headers: [
           ...securityHeaders,
           { key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=86400" },

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { Component, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -380,6 +380,95 @@ function ScrollProgressFab({
   );
 }
 
+const TUTORIAL_CHUNK_RELOAD_KEY = "jianlian_tutorial_chunk_reload_ts";
+
+function isTutorialChunkError(error: Error | null): boolean {
+  if (!error) return false;
+  const name = String(error.name || "");
+  const message = String(error.message || "");
+  return (
+    name === "ChunkLoadError" ||
+    /Loading chunk [\w-]+ failed|Failed to fetch dynamically imported module|Importing a module script failed|CSS_CHUNK_LOAD_FAILED/i.test(
+      message
+    )
+  );
+}
+
+class TutorialContentErrorBoundary extends Component<
+  { resetKey: string; children: ReactNode },
+  { error: Error | null }
+> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    if (isTutorialChunkError(error) && typeof window !== "undefined") {
+      try {
+        const lastReload = Number(window.sessionStorage.getItem(TUTORIAL_CHUNK_RELOAD_KEY) || "0");
+        if (!Number.isFinite(lastReload) || Date.now() - lastReload > 15_000) {
+          window.sessionStorage.setItem(TUTORIAL_CHUNK_RELOAD_KEY, String(Date.now()));
+          window.location.reload();
+        }
+      } catch {
+        // Ignore storage errors and show manual reload fallback below.
+      }
+    }
+  }
+
+  componentDidUpdate(prevProps: { resetKey: string }) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.error) {
+      this.setState({ error: null });
+    }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    const chunkErr = isTutorialChunkError(this.state.error);
+    return (
+      <div className="flex min-h-[240px] flex-col items-center justify-center gap-3 rounded-2xl border border-orange-200/80 bg-orange-50/40 p-6 text-center">
+        <p className="text-sm font-bold text-slate-900">
+          {chunkErr ? "教程版本已更新，需要刷新页面加载最新内容" : "当前教程模块加载异常"}
+        </p>
+        <p className="max-w-md text-xs leading-relaxed text-slate-500">
+          {chunkErr
+            ? "网站刚刚发布了新版资源，点击下方按钮刷新即可正常查看全部教程。"
+            : "网络波动可能导致教程资源加载中断，请重试或刷新页面。"}
+        </p>
+        <div className="mt-1 flex items-center gap-2.5">
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => {
+              if (chunkErr && typeof window !== "undefined") {
+                window.location.reload();
+                return;
+              }
+              this.setState({ error: null });
+            }}
+          >
+            重新加载教程
+          </Button>
+          {!chunkErr ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                if (typeof window !== "undefined") window.location.reload();
+              }}
+            >
+              刷新整页
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+}
+
 function TutorialQuerySync({
   onSync,
 }: {
@@ -454,7 +543,20 @@ function TutorialsPageContent() {
   const showChatgpt = matchingTopics.length > 0 && topic.id === "chatgpt-guide";
   const showTwitter = matchingTopics.length > 0 && topic.id === "twitter";
   const showGoogle = matchingTopics.length > 0 && topic.id === "google-region";
-  const resetScroll = () => { if (scrollRef.current) scrollRef.current.scrollTop = 0; };
+  const resetScroll = () => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    if (isMobile && typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+  const mobilePillStripRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isMobile || !mobilePillStripRef.current) return;
+    const activePill = mobilePillStripRef.current.querySelector<HTMLElement>('[data-mobile-pill-active="true"]');
+    if (activePill && typeof activePill.scrollIntoView === "function") {
+      activePill.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+    }
+  }, [isMobile, topic.id]);
   const titleMeta = getTutorialTitleMeta({
     topicId: topic.id,
     giffgaffGuide,
@@ -471,18 +573,26 @@ function TutorialsPageContent() {
             {/* 一级教程分类胶囊栏 (横向滚动 + 右侧展开全部按钮，悬浮置顶冻结) */}
             <div className="flex items-center gap-1.5">
               <div className="relative min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-0.5 touch-pan-x pr-8">
+                <div ref={mobilePillStripRef} className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden py-0.5 touch-pan-x pr-10">
                   {tutorialTopics.map(({ id, label, icon: Icon }) => {
                     const current = topic.id === id && matchingTopics.length > 0;
                     return (
                       <button
                         key={id}
                         type="button"
-                        onClick={() => {
+                        data-mobile-pill-active={current ? "true" : undefined}
+                        onClick={(event) => {
                           setSelected(id);
                           setSearch("");
                           if (id === "giffgaff") setGiffgaffTreeOpen(true);
                           if (id === "one-nz") setOneNzTreeOpen(true);
+                          if (id === "chatgpt-guide") setChatgptTreeOpen(true);
+                          if (id === "twitter") setTwitterTreeOpen(true);
+                          if (id === "google-region") setGoogleTreeOpen(true);
+                          setExpandAllOpen(false);
+                          if (typeof event.currentTarget.scrollIntoView === "function") {
+                            event.currentTarget.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+                          }
                           resetScroll();
                         }}
                         className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all ${
@@ -497,14 +607,14 @@ function TutorialsPageContent() {
                     );
                   })}
                 </div>
-                <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white/95 via-white/75 to-transparent" />
+                <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-0 w-5 bg-gradient-to-l from-white/95 via-white/60 to-transparent" />
               </div>
 
               {/* 右侧展开全部/收起按钮 */}
               <button
                 type="button"
                 onClick={() => setExpandAllOpen(!expandAllOpen)}
-                className="inline-flex shrink-0 items-center gap-1 rounded-full border border-orange-200/90 bg-white/95 px-2.5 py-1.5 text-[11px] font-semibold text-primary shadow-2xs hover:bg-orange-50 active:scale-95 transition-all"
+                className="relative z-10 inline-flex shrink-0 items-center gap-1 rounded-full border border-orange-200/90 bg-white/95 px-2.5 py-1.5 text-[11px] font-semibold text-primary shadow-2xs hover:bg-orange-50 active:scale-95 transition-all"
                 title={expandAllOpen ? "收起教程分类" : "展开全部教程分类"}
               >
                 <span>{expandAllOpen ? "收起" : "展开全部"}</span>
@@ -824,6 +934,7 @@ function TutorialsPageContent() {
           aria-label={`${topic.label}正文`}
         >
           <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showGoogle ? googleGuide : showTwitter ? twitterGuide : ""}` : "empty"} className={tutorial.topicEnter}>
+          <TutorialContentErrorBoundary resetKey={`${topic.id}-${giffgaffGuide}-${oneNzGuide}-${chatgptGuide}-${googleGuide}-${twitterGuide}`}>
           {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "gemini" ? <GeminiTutorial onGoToGoogleRegion={() => { setSelected("google-region"); setSearch(""); setGoogleTreeOpen(true); setGoogleGuide("region"); setGiffgaffTreeOpen(false); setOneNzTreeOpen(false); setChatgptTreeOpen(false); setTwitterTreeOpen(false); resetScroll(); }} /> : topic.id === "google-region" ? (googleGuide === "qr-sms" ? <GoogleQrSmsTutorial /> : googleGuide === "appeal" ? <GoogleAppealTutorial onSwitchToQrSms={() => { setGoogleGuide("qr-sms"); resetScroll(); }} onSwitchToRegion={() => { setGoogleGuide("region"); resetScroll(); }} /> : googleGuide === "student-discount" ? <GeminiStudentDiscountTutorial onGoToGoogleRegion={() => { setGoogleGuide("region"); resetScroll(); }} /> : <GoogleRegionTutorial onSwitchToQrSms={() => { setGoogleGuide("qr-sms"); resetScroll(); }} />) : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : topic.id === "rakuten-mobile" ? <RakutenMobileTutorial /> : <div className="space-y-6">
             {/* 1. 平台服务说明与三大核心准则 */}
             <section aria-labelledby="tutorial-service-title" className="space-y-4">
@@ -963,6 +1074,7 @@ function TutorialsPageContent() {
               </Button>
             </div>
           </div>}
+          </TutorialContentErrorBoundary>
           </div>
         </div>
       </section>
