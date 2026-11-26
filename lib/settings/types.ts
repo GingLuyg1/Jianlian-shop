@@ -19,7 +19,10 @@ export type PublicSiteSettings = {
   site_description: string;
   site_subtitle: string;
   site_status: string;
+  support_telegram: string;
   support_email: string;
+  support_hours: string;
+  support_note: string;
   support_phone: string;
   support_contact: string;
   currency: string;
@@ -82,8 +85,13 @@ export type SiteSettingLog = {
 export const DEFAULT_ANNOUNCEMENT =
   "请牢记域名 www.jianlian.shop，本站不提供任何中国大陆业务。网站出售的商品仅限个人或团体合法电商拓客使用，严禁用于违法犯罪活动。";
 
+export const DEFAULT_SUPPORT_TELEGRAM = "https://t.me/Ezeasl";
+export const DEFAULT_SUPPORT_EMAIL = "Yac0000189@gmail.com";
+export const DEFAULT_SUPPORT_HOURS = "12:00 - 24:00 (GMT+8)";
+export const DEFAULT_SUPPORT_NOTE = "有问题均可留言，客服会在24小时内处理并留言。";
+
 export const DEFAULT_SUPPORT_CONTACT =
-  "Telegram：\nWhatsApp：\nEmail：\n工作时间：12:00 AM - 24:00 PM GMT+8\n有问题均可留言";
+  "Telegram：https://t.me/Ezeasl\nEmail：Yac0000189@gmail.com\n工作时间：12:00 - 24:00 (GMT+8)\n有问题均可留言";
 
 export const DEFAULT_MAINTENANCE_MESSAGE =
   "网站正在维护升级，请稍后再访问。管理员后台和健康检查保持可用。";
@@ -93,12 +101,15 @@ export const DEFAULT_CHECKOUT_NOTICE =
 
 export const SITE_SETTING_DEFINITIONS = {
   site_name: { key: "site_name", type: "string", group: "basic", isPublic: true, description: "站点名称", defaultValue: "Jianlian" },
-  site_description: { key: "site_description", type: "string", group: "basic", isPublic: true, description: "站点描述", defaultValue: "数字商品服务" },
+  site_description: { key: "site_description", type: "string", group: "basic", isPublic: true, description: "站点副标题与描述", defaultValue: "数字商品服务" },
   site_subtitle: { key: "site_subtitle", type: "string", group: "basic", isPublic: true, description: "站点副标题（兼容旧字段）", defaultValue: "数字商品服务" },
-  site_status: { key: "site_status", type: "string", group: "basic", isPublic: true, description: "站点状态", defaultValue: "open" },
-  support_email: { key: "support_email", type: "string", group: "basic", isPublic: true, description: "公开客服邮箱", defaultValue: "" },
-  support_phone: { key: "support_phone", type: "string", group: "basic", isPublic: true, description: "公开客服电话", defaultValue: "" },
-  support_contact: { key: "support_contact", type: "string", group: "basic", isPublic: true, description: "客服联系方式", defaultValue: DEFAULT_SUPPORT_CONTACT },
+  site_status: { key: "site_status", type: "string", group: "basic", isPublic: true, description: "站点运行状态", defaultValue: "open" },
+  support_telegram: { key: "support_telegram", type: "string", group: "basic", isPublic: true, description: "在线客服 Telegram 链接", defaultValue: DEFAULT_SUPPORT_TELEGRAM },
+  support_email: { key: "support_email", type: "string", group: "basic", isPublic: true, description: "在线客服邮箱", defaultValue: DEFAULT_SUPPORT_EMAIL },
+  support_hours: { key: "support_hours", type: "string", group: "basic", isPublic: true, description: "客服上班时间", defaultValue: DEFAULT_SUPPORT_HOURS },
+  support_note: { key: "support_note", type: "string", group: "basic", isPublic: true, description: "客服弹窗底部说明", defaultValue: DEFAULT_SUPPORT_NOTE },
+  support_phone: { key: "support_phone", type: "string", group: "basic", isPublic: true, description: "公开客服电话（已弃用）", defaultValue: "" },
+  support_contact: { key: "support_contact", type: "string", group: "basic", isPublic: true, description: "客服联系方式（已弃用）", defaultValue: DEFAULT_SUPPORT_CONTACT },
   top_announcement: { key: "top_announcement", type: "string", group: "basic", isPublic: true, description: "全站顶部公告", defaultValue: DEFAULT_ANNOUNCEMENT },
   checkout_notice: { key: "checkout_notice", type: "string", group: "basic", isPublic: true, description: "Checkout 购买提醒", defaultValue: DEFAULT_CHECKOUT_NOTICE },
   maintenance_enabled: { key: "maintenance_enabled", type: "boolean", group: "basic", isPublic: true, description: "维护模式开关", defaultValue: false },
@@ -164,6 +175,10 @@ export function serializeSettingValue(value: SettingValue) {
 function applyAliases(parsed: Record<string, SettingValue>) {
   parsed.site_description = parsed.site_description || parsed.site_subtitle;
   parsed.site_subtitle = parsed.site_subtitle || parsed.site_description;
+  parsed.support_telegram = parsed.support_telegram || DEFAULT_SUPPORT_TELEGRAM;
+  parsed.support_email = parsed.support_email || DEFAULT_SUPPORT_EMAIL;
+  parsed.support_hours = parsed.support_hours || DEFAULT_SUPPORT_HOURS;
+  parsed.support_note = parsed.support_note || DEFAULT_SUPPORT_NOTE;
   parsed.currency = parsed.currency || parsed.default_currency;
   parsed.default_currency = parsed.default_currency || parsed.currency;
   parsed.timezone = parsed.timezone || parsed.business_timezone;

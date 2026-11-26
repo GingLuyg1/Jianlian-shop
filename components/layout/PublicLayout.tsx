@@ -54,12 +54,18 @@ export default function PublicLayout({
   );
 }
 
-// This dialog has an explicitly approved storefront contact card. Keep the
-// admin-managed support settings intact for their other consumers.
+// Approved storefront support card defaults. Live values are read from
+// public site_settings (/admin/settings -> contact) with safe fallback.
 const SUPPORT_TELEGRAM_URL = "https://t.me/Ezeasl";
 const SUPPORT_EMAIL = "Yac0000189@gmail.com";
 const SUPPORT_HOURS = "12:00 - 24:00 (GMT+8)";
+const SUPPORT_NOTE = "有问题均可留言，客服会在24小时内处理并留言。";
 const FALLBACK_COPYRIGHT_YEAR = 2026;
+
+function resolveSupportTelegramUrl(value: string | undefined) {
+  const trimmed = (value ?? "").trim();
+  return /^https:\/\/[^\s]+$/i.test(trimmed) ? trimmed : SUPPORT_TELEGRAM_URL;
+}
 
 function MobileSupportFab({
   isMobile,
@@ -196,6 +202,10 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
     homeAnnouncement?.content.trim() ||
     settings.top_announcement.trim();
   const subtitle = settings.site_description || settings.site_subtitle || "数字商品服务";
+  const supportTelegramUrl = resolveSupportTelegramUrl(settings.support_telegram);
+  const supportEmail = settings.support_email?.trim() || SUPPORT_EMAIL;
+  const supportHours = settings.support_hours?.trim() || SUPPORT_HOURS;
+  const supportNote = settings.support_note?.trim() || SUPPORT_NOTE;
   const hideMobileSupportFab =
     pathname.startsWith("/tutorials") ||
     pathname.startsWith("/checkout") ||
@@ -425,18 +435,18 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
               <Send className="h-5 w-5 shrink-0 text-primary" />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">Telegram</div>
-                <a href={SUPPORT_TELEGRAM_URL} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block max-w-full break-all text-xs text-muted-foreground underline underline-offset-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">{SUPPORT_TELEGRAM_URL}</a>
+                <a href={supportTelegramUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block max-w-full break-all text-xs text-muted-foreground underline underline-offset-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">{supportTelegramUrl}</a>
               </div>
-              <Button asChild size="sm" variant="outline" className="h-8 shrink-0"><a href={SUPPORT_TELEGRAM_URL} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />打开</a></Button>
+              <Button asChild size="sm" variant="outline" className="h-8 shrink-0"><a href={supportTelegramUrl} target="_blank" rel="noopener noreferrer"><ExternalLink className="mr-1 h-3.5 w-3.5" />打开</a></Button>
             </div>
             <div className="flex min-w-0 items-center gap-3 py-3">
               <Mail className="h-5 w-5 shrink-0 text-primary" />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">Email</div>
-                <p className="mt-1 break-all text-xs text-muted-foreground">{SUPPORT_EMAIL}</p>
+                <p className="mt-1 break-all text-xs text-muted-foreground">{supportEmail}</p>
               </div>
               <Button type="button" size="sm" variant="outline" className="h-8 shrink-0" onClick={async () => {
-                try { await navigator.clipboard.writeText(SUPPORT_EMAIL); toast.success("邮箱已复制"); }
+                try { await navigator.clipboard.writeText(supportEmail); toast.success("邮箱已复制"); }
                 catch { toast.error("复制失败，请手动复制邮箱"); }
               }}><Copy className="mr-1 h-3.5 w-3.5" />复制</Button>
             </div>
@@ -444,11 +454,11 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
               <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
               <div className="min-w-0">
                 <div className="text-sm font-medium">上班时间</div>
-                <p className="mt-1 text-xs text-muted-foreground">{SUPPORT_HOURS}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{supportHours}</p>
               </div>
             </div>
           </div>
-          <p className="text-center text-xs text-muted-foreground">有问题均可留言，客服会在24小时内处理并留言。</p>
+          <p className="text-center text-xs text-muted-foreground">{supportNote}</p>
         </DialogContent>
       </Dialog>
     </div>

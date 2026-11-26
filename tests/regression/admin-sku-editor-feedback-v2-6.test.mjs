@@ -76,8 +76,8 @@ test("customer support preserves the approved contact card and accessible Radix 
   const layout = file("components/layout/PublicLayout.tsx");
   assert.match(layout, /const SUPPORT_TELEGRAM_URL = "https:\/\/t\.me\/Ezeasl"/);
   assert.match(layout, /const SUPPORT_EMAIL = "Yac0000189@gmail\.com"/);
-  assert.match(layout, /href=\{SUPPORT_TELEGRAM_URL\}/);
-  assert.match(layout, /writeText\(SUPPORT_EMAIL\)/);
+  assert.match(layout, /href=\{supportTelegramUrl\}/);
+  assert.match(layout, /writeText\(supportEmail\)/);
   assert.match(layout, /<Dialog open=\{supportOpen\} onOpenChange=\{setSupportOpen\}/);
   assert.match(layout, /<DialogTitle>客服联系方式/);
   assert.match(layout, /max-w-\[460px\]/);

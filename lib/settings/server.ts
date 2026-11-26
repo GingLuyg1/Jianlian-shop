@@ -113,8 +113,21 @@ export function validateSettingsPatch(values: Partial<AdminSiteSettings>) {
   if ("site_name" in normalized && !String(normalized.site_name ?? "").trim()) {
     return { ok: false as const, error: "站点名称不能为空" };
   }
+  if ("support_telegram" in normalized) {
+    const tg = String(normalized.support_telegram ?? "").trim();
+    if (tg && (!/^https:\/\/[^\s]+$/i.test(tg) || tg.length > 240)) {
+      return { ok: false as const, error: "Telegram 客服链接必须以 https:// 开头且不超过 240 个字符" };
+    }
+    normalized.support_telegram = tg;
+  }
   if ("support_email" in normalized && !isReasonableEmail(String(normalized.support_email ?? "").trim())) {
     return { ok: false as const, error: "公开邮箱格式不正确" };
+  }
+  if ("support_hours" in normalized && String(normalized.support_hours ?? "").length > 100) {
+    return { ok: false as const, error: "客服上班时间说明不能超过 100 个字符" };
+  }
+  if ("support_note" in normalized && String(normalized.support_note ?? "").length > 300) {
+    return { ok: false as const, error: "客服底部留言说明不能超过 300 个字符" };
   }
   if ("support_phone" in normalized && String(normalized.support_phone ?? "").length > 40) {
     return { ok: false as const, error: "公开电话长度不能超过 40 个字符" };
