@@ -522,12 +522,37 @@ export default function AdminSuppliersWorkspace() {
                     aria-label="选择 Bitrefill 国家地区"
                   >
                     <option value="US">US 美国</option>
-                    <option value="GB">GB 英国</option>
-                    <option value="HK">HK 中国香港</option>
+                    <option value="TR">TR 土耳其</option>
+                    <option value="IN">IN 印度</option>
+                    <option value="ID">ID 印度尼西亚</option>
+                    <option value="BR">BR 巴西</option>
+                    <option value="MX">MX 墨西哥</option>
                     <option value="JP">JP 日本</option>
-                    <option value="SG">SG 新加坡</option>
-                    <option value="DE">DE 德国</option>
+                    <option value="GB">GB 英国</option>
+                    <option value="AU">AU 澳大利亚</option>
                     <option value="CA">CA 加拿大</option>
+                    <option value="DE">DE 德国</option>
+                    <option value="FR">FR 法国</option>
+                    <option value="ES">ES 西班牙</option>
+                    <option value="IT">IT 意大利</option>
+                    <option value="NL">NL 荷兰</option>
+                    <option value="AE">AE 阿联酋</option>
+                    <option value="SA">SA 沙特阿拉伯</option>
+                    <option value="NZ">NZ 新西兰</option>
+                    <option value="CH">CH 瑞士</option>
+                    <option value="PL">PL 波兰</option>
+                    <option value="AT">AT 奥地利</option>
+                    <option value="BE">BE 比利时</option>
+                    <option value="IE">IE 爱尔兰</option>
+                    <option value="PT">PT 葡萄牙</option>
+                    <option value="DK">DK 丹麦</option>
+                    <option value="NO">NO 挪威</option>
+                    <option value="SE">SE 瑞典</option>
+                    <option value="FI">FI 芬兰</option>
+                    <option value="HK">HK 中国香港</option>
+                    <option value="SG">SG 新加坡</option>
+                    <option value="CN">CN 中国大陆</option>
+                    <option value="EG">EG 埃及</option>
                   </select>
                 ) : null}
                 <Button size="sm" className="h-8 text-xs" onClick={loadProducts} disabled={productsLoading}>
