@@ -550,7 +550,20 @@ export default function AdminSuppliersWorkspace() {
                     <option value="SE">SE 瑞典</option>
                     <option value="FI">FI 芬兰</option>
                     <option value="HK">HK 中国香港</option>
+                    <option value="TW">TW 中国台湾</option>
+                    <option value="KR">KR 韩国</option>
                     <option value="SG">SG 新加坡</option>
+                    <option value="MY">MY 马来西亚</option>
+                    <option value="TH">TH 泰国</option>
+                    <option value="VN">VN 越南</option>
+                    <option value="PH">PH 菲律宾</option>
+                    <option value="CL">CL 智利</option>
+                    <option value="CO">CO 哥伦比亚</option>
+                    <option value="PE">PE 秘鲁</option>
+                    <option value="UY">UY 乌拉圭</option>
+                    <option value="ZA">ZA 南非</option>
+                    <option value="KW">KW 科威特</option>
+                    <option value="QA">QA 卡塔尔</option>
                     <option value="CN">CN 中国大陆</option>
                     <option value="EG">EG 埃及</option>
                   </select>

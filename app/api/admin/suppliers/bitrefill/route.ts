@@ -74,6 +74,18 @@ const COUNTRY_ZH: Record<string, string> = {
   FI: "芬兰",
   CN: "中国大陆",
   EG: "埃及",
+  CO: "哥伦比亚",
+  CL: "智利",
+  KW: "科威特",
+  PE: "秘鲁",
+  QA: "卡塔尔",
+  TH: "泰国",
+  UY: "乌拉圭",
+  VN: "越南",
+  ZA: "南非",
+  PH: "菲律宾",
+  MY: "马来西亚",
+  EU: "欧洲",
 };
 
 const BRAND_TRANSLATIONS: Array<[RegExp, string]> = [
