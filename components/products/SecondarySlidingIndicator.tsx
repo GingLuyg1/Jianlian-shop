@@ -89,15 +89,42 @@ export default function SecondarySlidingIndicator({ containerRef, activeId, read
     const schedule = () => { if (!frame) frame = requestAnimationFrame(update); };
     update();
     const settleFrame = requestAnimationFrame(update);
+    // Re-sync after sibling accordion sub-directory transitions (380ms) complete
+    // so collapsing an upper category tree never leaves the indicator shifted.
+    const settleTimerMid = window.setTimeout(schedule, 220);
+    const settleTimerEnd = window.setTimeout(schedule, 430);
+
     const resize = new ResizeObserver(schedule);
-    resize.observe(container);
+    const observeItems = () => {
+      resize.disconnect();
+      resize.observe(container);
+      container.querySelectorAll<HTMLElement>("[data-wheel-item]").forEach((row) => {
+        resize.observe(row);
+      });
+    };
+    observeItems();
+
     const mutations = new MutationObserver((records) => {
-      if (records.some((record) => record.target !== indicator)) schedule();
+      if (records.some((record) => record.target !== indicator)) {
+        if (records.some((record) => record.type === "childList")) {
+          observeItems();
+        }
+        schedule();
+      }
     });
     mutations.observe(container, { subtree: true, childList: true, attributes: true, attributeFilter: ["style", "class", "aria-hidden"] });
+    const onTransition = (event: Event) => {
+      if (event.target !== indicator) schedule();
+    };
+    container.addEventListener("transitionrun", onTransition, true);
+    container.addEventListener("transitionend", onTransition, true);
     return () => {
       resize.disconnect();
       mutations.disconnect();
+      container.removeEventListener("transitionrun", onTransition, true);
+      container.removeEventListener("transitionend", onTransition, true);
+      window.clearTimeout(settleTimerMid);
+      window.clearTimeout(settleTimerEnd);
       cancelAnimationFrame(frame);
       cancelAnimationFrame(settleFrame);
     };

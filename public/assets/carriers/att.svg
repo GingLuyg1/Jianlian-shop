@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#00A8E0"/>
+  <circle cx="60" cy="46" r="20" fill="none" stroke="#FFFFFF" stroke-width="4.5"/>
+  <path d="M41 42 H79 M42 50 H78 M46 34 H74 M46 58 H74" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round"/>
+  <text x="60" y="94" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="22" fill="#FFFFFF">AT&amp;T</text>
+</svg>

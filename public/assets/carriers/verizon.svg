@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <rect width="120" height="120" rx="24" fill="#111111"/>
+  <path d="M40 58 L54 78 L82 32" fill="none" stroke="#CD040B" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="60" y="102" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="16" fill="#FFFFFF" letter-spacing="0.5">verizon</text>
+</svg>
