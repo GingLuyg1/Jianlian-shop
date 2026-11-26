@@ -955,12 +955,15 @@ function LocalPaymentQr({
 function ExpiredRechargeNotice({ rechargeNo }: { rechargeNo: string }) {
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-900">
-      <div className="font-semibold">已过期</div>
-      <p className="mt-1">充值订单已过期。如您已完成转账，请联系人工客服并提供充值订单编号。</p>
+      <div className="font-semibold">已过期 · 订单已自动关闭</div>
+      <p className="mt-1">充值订单已超时关闭，请勿继续转账。如您已完成付款但会话已过期，请携带充值单号联系在线客服或提交工单处理。</p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <code className="rounded bg-white px-2 py-1 text-xs">{rechargeNo}</code>
-        <Button type="button" size="sm" variant="outline" onClick={() => void copyWithFeedback(rechargeNo)}>复制订单编号</Button>
-        <Button type="button" size="sm" onClick={openPublicSupport}>联系客服</Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => void copyWithFeedback(rechargeNo)}>复制单号</Button>
+        <Button type="button" size="sm" onClick={openPublicSupport}>联系在线客服</Button>
+        <Button asChild size="sm" variant="outline">
+          <Link href="/faq">提交工单</Link>
+        </Button>
       </div>
     </div>
   );
@@ -1675,8 +1678,17 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                     ) : null}
 
                     {sessionPaymentBlocked ? (
-                      <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                        该支付会话已结束或过期，不能继续扫码、打开付款入口或创建替代支付单。如已付款，请联系客服并提供订单编号。
+                      <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                        <div>该支付会话已超时关闭，不能继续扫码或付款。如您已完成付款，请携带订单编号联系在线客服或提交工单核实处理。</div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button type="button" size="sm" onClick={openPublicSupport}>
+                            <Headphones className="mr-1.5 h-3.5 w-3.5" />
+                            联系在线客服
+                          </Button>
+                          <Button asChild size="sm" variant="outline">
+                            <Link href="/faq">提交工单</Link>
+                          </Button>
+                        </div>
                       </div>
                     ) : !session.qrCodeValue && !session.qrCodeUrl && !session.walletAddress && !session.paymentUrl && !session.deepLinkUrl && !session.submitForm ? (
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
@@ -1789,15 +1801,20 @@ function Bep20PaymentPanel({
               ? "本订单的链上支付会话已过期，请勿继续转账。如您已完成转账，请联系在线客服并提供订单号和 TxHash，由客服人工核验。"
               : "当前订单不能继续付款，如有疑问请联系在线客服。"}
           </div>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={openPublicSupport}
-          >
-            <Headphones className="mr-2 h-4 w-4" />
-            联系在线客服
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={openPublicSupport}
+            >
+              <Headphones className="mr-2 h-4 w-4" />
+              联系在线客服
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/faq">提交工单</Link>
+            </Button>
+          </div>
         </div>
       );
     }
@@ -1857,15 +1874,20 @@ function Bep20PaymentPanel({
         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-700">
           <div>{terminalNotice}</div>
           {normalizedOrderStatus === "expired" || session.status === "expired" || session.paymentAction === "closed" || countdownExpired ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={openPublicSupport}
-            >
-              <Headphones className="mr-2 h-4 w-4" />
-              联系在线客服
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={openPublicSupport}
+              >
+                <Headphones className="mr-2 h-4 w-4" />
+                联系在线客服
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/faq">提交工单</Link>
+              </Button>
+            </div>
           ) : null}
         </div>
       ) : null}
