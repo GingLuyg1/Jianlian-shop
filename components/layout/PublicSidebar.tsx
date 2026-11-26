@@ -41,7 +41,7 @@ const menuItems = [
   { label: "数字 / 社媒账号", href: "/products/digital-accounts", icon: KeyRound },
   { label: "AI 会员充值", href: "/products/ai-membership", icon: Sparkles },
   { label: "账号充值", href: "/products/account-recharge", icon: Wallet },
-  { label: "我的订单", href: "/account/orders", icon: ClipboardList },
+  { label: "订单查询", href: "/account/orders", icon: ClipboardList },
   { label: "个人中心", href: "/account", icon: UserCircle },
 ];
 

@@ -148,7 +148,7 @@ function getTutorialPurchaseAction(topicId: string): { href: string; label: stri
     case "gemini":
       return { href: "/products/ai-membership?category=gemini", label: "去购买" };
     case "google-region":
-      return { href: "/products/ai-membership?category=gemini", label: "去购买" };
+      return { href: "/products/digital-accounts?category=gmail", label: "去购买" };
     case "facebook":
       return { href: "/products/digital-accounts?category=facebook", label: "去购买" };
     case "twitter":
@@ -846,33 +846,16 @@ function TutorialsPageContent() {
       </aside>
       <section data-testid="tutorial-content" className={`relative ${glass.surface} ${styles.panel} ${tutorial.content} ${isMobile ? "!overflow-visible" : ""}`}>
         {!isMobile && headerCollapsed && !headerOverlayOpen ? (
-          <div className="absolute right-4 top-2.5 z-30 flex items-center gap-2">
-            {(() => {
-              const collapsedPurchaseAction = getTutorialPurchaseAction(topic.id);
-              if (!collapsedPurchaseAction) return null;
-              return (
-                <Link
-                  href={collapsedPurchaseAction.href}
-                  data-testid="tutorial-collapsed-go-buy-button"
-                  className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#df7334] to-[#c85f22] px-3 py-1 text-[11px] font-bold text-white shadow-md shadow-orange-900/15 transition hover:-translate-y-0.5 hover:from-[#d26728] hover:to-[#b85319]"
-                >
-                  <ShoppingBag className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  <span>{collapsedPurchaseAction.label}</span>
-                  <ArrowRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-                </Link>
-              );
-            })()}
-            <button
-              type="button"
-              onClick={() => setHeaderOverlayOpen(true)}
-              aria-label="展开教程标题栏"
-              title="展开教程标题与购买入口"
-              className="inline-flex items-center gap-1 rounded-full border border-orange-200/90 bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-primary shadow-md shadow-orange-900/10 backdrop-blur transition hover:bg-orange-50"
-            >
-              <span>展开顶栏</span>
-              <ChevronDown className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => setHeaderOverlayOpen(true)}
+            aria-label="展开教程标题栏"
+            title="展开教程标题与购买入口"
+            className="absolute right-4 top-2.5 z-30 inline-flex items-center gap-1 rounded-full border border-orange-200/90 bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-primary shadow-md shadow-orange-900/10 backdrop-blur transition hover:bg-orange-50"
+          >
+            <span>展开顶栏</span>
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
         ) : null}
         <header
           className={cn(

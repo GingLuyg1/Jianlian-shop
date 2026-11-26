@@ -48,6 +48,7 @@ import {
   type PublicCategory,
 } from "@/lib/supabase/public-catalog";
 import CategoryContentBoundary from "./CategoryContentBoundary";
+import SecondarySlidingIndicator from "./SecondarySlidingIndicator";
 import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
 import selectionMotion from "@/components/ui/SelectionMotion.module.css";
 import catalogMotion from "./CatalogSelectionMotion.module.css";
@@ -714,27 +715,32 @@ function SupabaseMallContentInner({
     pendingFilters.search, pendingFilters.page, pendingFilters.pageSize,
   ]) : "";
 
+  const [discoveredSubcategoriesByCategory, setDiscoveredSubcategoriesByCategory] = useState<
+    Record<string, Array<{ name: string; slug: string; sort_order: number }>>
+  >({});
+
   const availableSubcategories = useMemo(() => {
     const configured = resolvedCategory?.metadata?.subcategories ?? [];
+    const cached = resolvedCategory?.id ? (discoveredSubcategoriesByCategory[resolvedCategory.id] ?? []) : [];
     const seenLower = new Set<string>();
     const list: Array<{ name: string; slug: string; sort_order: number }> = [];
-    for (const item of configured) {
+    const appendUnique = (item: { name: string; slug: string; sort_order: number }) => {
       const name = item.name.trim();
       const lower = normalizeSubcategoryMatch(name);
-      if (!name || seenLower.has(lower)) continue;
+      if (!name || seenLower.has(lower)) return;
       seenLower.add(lower);
-      list.push(item);
-    }
+      list.push({ ...item, name });
+    };
+    for (const item of configured) appendUnique(item);
+    for (const item of cached) appendUnique(item);
     for (const prod of products) {
       const label = extractProductSubcategoryLabel(prod);
-      const lower = normalizeSubcategoryMatch(label);
-      if (label && !seenLower.has(lower)) {
-        seenLower.add(lower);
-        list.push({ name: label, slug: label, sort_order: (list.length + 1) * 10 });
+      if (label) {
+        appendUnique({ name: label, slug: label, sort_order: (list.length + 1) * 10 });
       }
     }
     return list;
-  }, [resolvedCategory?.metadata?.subcategories, products]);
+  }, [resolvedCategory?.id, resolvedCategory?.metadata?.subcategories, discoveredSubcategoriesByCategory, products]);
 
   const filteredProducts = useMemo(() => {
     const isOutOfStock = (prod: Product) => {
@@ -768,22 +774,22 @@ function SupabaseMallContentInner({
       .map((entry) => entry.prod);
   }, [products, effectiveSubcategory, availableSubcategories]);
 
-  const [discoveredSubcategoriesByCategory, setDiscoveredSubcategoriesByCategory] = useState<
-    Record<string, Array<{ name: string; slug: string; sort_order: number }>>
-  >({});
-
   useEffect(() => {
     if (!resolvedCategory?.id || availableSubcategories.length === 0) return;
     setDiscoveredSubcategoriesByCategory((prev) => {
-      const existing = prev[resolvedCategory.id];
-      if (
-        existing &&
-        existing.length === availableSubcategories.length &&
-        existing.every((item, idx) => item.name === availableSubcategories[idx]?.name)
-      ) {
-        return prev;
+      const existing = prev[resolvedCategory.id] ?? [];
+      const seen = new Set(existing.map((item) => normalizeSubcategoryMatch(item.name)));
+      const merged = [...existing];
+      let changed = false;
+      for (const item of availableSubcategories) {
+        const key = normalizeSubcategoryMatch(item.name);
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        merged.push(item);
+        changed = true;
       }
-      return { ...prev, [resolvedCategory.id]: availableSubcategories };
+      if (!changed) return prev;
+      return { ...prev, [resolvedCategory.id]: merged };
     });
   }, [resolvedCategory?.id, availableSubcategories]);
 
@@ -1001,6 +1007,14 @@ function CategoryPanel({
               isMobile && "!flex !flex-col !gap-2 !overflow-y-auto !overflow-x-hidden !space-y-0 !p-1"
             )}
           >
+            {!isMobile && categories.length > 0 ? (
+              <SecondarySlidingIndicator
+                containerRef={containerRef}
+                activeId={visualSelectionId}
+                ready={!isLoading && !error && Boolean(visualSelectionId)}
+                layoutKey={`${pageRoute}:${categories.map((c) => c.id).join(",")}:${expandedCategoryIds.join(",")}:${selectedSubcategory}`}
+              />
+            ) : null}
             {error ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-center text-xs text-red-700">
                 失败 <button type="button" className="font-semibold underline" onClick={onRetry}>重试</button>
@@ -1074,53 +1088,22 @@ function CategoryPanel({
                       )}
                     >
                       <div className="min-h-0 overflow-hidden">
-                        <div
-                          className={cn(
-                            "relative ml-6 space-y-1 border-l-2 border-[#ead5c3]/90 pl-3 py-0.5 transition-[transform,opacity] duration-[380ms] ease-[cubic-bezier(0.22,1,0.36,1)] origin-top",
-                            isExpanded ? "translate-y-0 scale-100 opacity-100" : "-translate-y-2 scale-[0.985] opacity-0"
-                          )}
-                        >
-                          {subItems.map((sub, subIdx) => {
-                            const subActive =
-                              isSelected &&
-                              normalizeSubcategoryMatch(selectedSubcategory) === normalizeSubcategoryMatch(sub.name);
-                            return (
-                              <button
-                                key={sub.slug || sub.name}
-                                type="button"
-                                tabIndex={isExpanded ? 0 : -1}
-                                style={{
-                                  transitionDelay: isExpanded ? `${Math.min(subIdx * 24, 140)}ms` : "0ms",
-                                }}
-                                onClick={() => {
-                                  if (isSelected) {
-                                    onSelectSubcategory?.(sub.name);
-                                  } else {
-                                    setExpandedCategoryIds([category.id]);
-                                    setClickedCategoryId(category.id);
-                                    centerItem(category.id);
-                                    onSelectCategory(category, sub.name);
-                                  }
-                                }}
-                                className={cn(
-                                  "group flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs sm:text-[13px] transition-[transform,opacity,background-color,color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                                  isExpanded ? "translate-x-0 opacity-100" : "-translate-x-1.5 opacity-0",
-                                  subActive
-                                    ? "bg-gradient-to-r from-[#fde8d7] via-[#fef2e8] to-[#fce3cd] font-bold text-[#c85e22] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_8px_-2px_rgba(161,92,42,0.14)] ring-1 ring-[#e6a679]/50"
-                                    : "font-medium text-slate-600 hover:translate-x-[3px] hover:bg-[#fff7f0]/90 hover:text-[#b4531a]"
-                                )}
-                              >
-                                <span
-                                  className={cn(
-                                    "h-1.5 w-1.5 shrink-0 rounded-full transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
-                                    subActive ? "scale-125 bg-[#d96927]" : "bg-slate-300 group-hover:scale-110 group-hover:bg-[#e59866]"
-                                  )}
-                                />
-                                <span className="truncate leading-snug">{sub.name}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                        <SubcategorySlidingList
+                          subItems={subItems}
+                          isSelected={isSelected}
+                          isExpanded={isExpanded}
+                          selectedSubcategory={selectedSubcategory}
+                          onPick={(subName) => {
+                            if (isSelected) {
+                              onSelectSubcategory?.(subName);
+                            } else {
+                              setExpandedCategoryIds([category.id]);
+                              setClickedCategoryId(category.id);
+                              centerItem(category.id);
+                              onSelectCategory(category, subName);
+                            }
+                          }}
+                        />
                       </div>
                     </div>
                   ) : null}
@@ -1132,6 +1115,97 @@ function CategoryPanel({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function SubcategorySlidingList({
+  subItems,
+  isSelected,
+  isExpanded,
+  selectedSubcategory,
+  onPick,
+}: {
+  subItems: Array<{ name: string; slug: string; sort_order: number }>;
+  isSelected: boolean;
+  isExpanded: boolean;
+  selectedSubcategory: string;
+  onPick: (subName: string) => void;
+}) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const indicatorRef = useRef<HTMLSpanElement>(null);
+  const activeIdx = isSelected
+    ? subItems.findIndex(
+        (sub) => normalizeSubcategoryMatch(selectedSubcategory) === normalizeSubcategoryMatch(sub.name)
+      )
+    : -1;
+
+  useIsomorphicLayoutEffect(() => {
+    const list = listRef.current;
+    const indicator = indicatorRef.current;
+    if (!list || !indicator) return;
+    if (activeIdx < 0 || !isExpanded) {
+      indicator.style.opacity = "0";
+      return;
+    }
+    const buttons = list.querySelectorAll<HTMLButtonElement>("button[data-sub-item]");
+    const target = buttons[activeIdx];
+    if (!target) {
+      indicator.style.opacity = "0";
+      return;
+    }
+    indicator.style.transform = `translate3d(0, ${target.offsetTop}px, 0)`;
+    indicator.style.height = `${target.offsetHeight}px`;
+    if (indicator.dataset.ready !== "true") {
+      indicator.getBoundingClientRect();
+      indicator.dataset.ready = "true";
+    }
+    indicator.style.opacity = "1";
+  }, [activeIdx, isExpanded, subItems.length]);
+
+  return (
+    <div
+      ref={listRef}
+      className={cn(
+        "relative ml-6 space-y-1 border-l border-[#ead7c5] pl-2.5 py-0.5 transition-[transform,opacity] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] origin-top",
+        isExpanded ? "translate-y-0 scale-100 opacity-100" : "-translate-y-2 scale-[0.985] opacity-0"
+      )}
+    >
+      <span
+        ref={indicatorRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute left-2.5 right-0 top-0 z-0 rounded-xl border border-orange-400/30 border-l-[3px] border-l-orange-500 bg-gradient-to-r from-[#ffebd8]/95 to-[#fff7ef]/80 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_2px_8px_rgba(249,115,22,0.12)] transition-[transform,height,opacity] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+      />
+      {subItems.map((sub, subIdx) => {
+        const subActive = subIdx === activeIdx;
+        return (
+          <button
+            key={sub.slug || sub.name}
+            data-sub-item={sub.name}
+            type="button"
+            tabIndex={isExpanded ? 0 : -1}
+            style={{
+              transitionDelay: isExpanded ? `${Math.min(subIdx * 20, 120)}ms` : "0ms",
+            }}
+            onClick={() => onPick(sub.name)}
+            className={cn(
+              "group relative z-10 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs sm:text-[13px] transition-[transform,opacity,background-color,color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
+              isExpanded ? "translate-x-0 opacity-100" : "-translate-x-1.5 opacity-0",
+              subActive
+                ? "font-bold text-[#ac5624]"
+                : "font-medium text-slate-600 hover:translate-x-[2px] hover:bg-[#fff5eb]/65 hover:text-[#332920]"
+            )}
+          >
+            <span
+              className={cn(
+                "h-1.5 w-1.5 shrink-0 rounded-full transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+                subActive ? "scale-125 bg-[#f97316]" : "bg-slate-300 group-hover:scale-110 group-hover:bg-[#e59866]"
+              )}
+            />
+            <span className="truncate leading-snug">{sub.name}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -1231,10 +1305,10 @@ function CategoryButton({
       className={cn(
         interactiveButtonClass,
         selectionMotion.item,
-        "flex items-center justify-between rounded-xl px-3 py-2 text-left disabled:cursor-default lg:w-full lg:px-3.5 lg:py-3 [-webkit-tap-highlight-color:transparent] transition-all duration-150",
+        "flex items-center justify-between rounded-[14px] px-3 py-2 text-left disabled:cursor-default lg:w-full lg:px-3.5 lg:py-3 [-webkit-tap-highlight-color:transparent] transition-colors duration-200",
         active
-          ? "border border-[#e6a679]/65 bg-gradient-to-r from-[#fde6d4] via-[#fef0e4] to-[#fce1ca] hover:from-[#fcdec7] hover:via-[#fee9d9] hover:to-[#fbd9be] text-[#c85e22] shadow-[inset_0_1px_0_rgba(255,255,255,0.92),0_4px_12px_-3px_rgba(161,92,42,0.16)] font-bold"
-          : "border border-slate-100/90 bg-white/80 text-foreground hover:border-orange-200/55 hover:bg-[#fff7f0]/90"
+          ? "border border-transparent bg-transparent text-[#ac5624] font-bold"
+          : "border border-slate-100/80 bg-white/75 text-foreground hover:border-orange-200/55 hover:bg-[#fff7f0]/85"
       )}
     >
       <div className="flex min-w-0 flex-1 items-center gap-2 lg:gap-3">

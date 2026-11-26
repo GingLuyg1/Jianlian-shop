@@ -91,6 +91,7 @@ import { cn } from "@/lib/utils";
 import { listProducts } from "@/lib/supabase/admin-catalog";
 import {
   computeFinanceCostSummary,
+  isFiatOnlineGatewayMethod,
   type FinanceCostDataPayload,
   type FinanceCostSummary,
 } from "@/lib/admin/finance-cost";
@@ -903,7 +904,7 @@ export default function AdminDashboardPage() {
   const [dateFilter, setDateFilter] = useState<DashboardDateFilterValue>(() => getPresetDateRange("today"));
   const [detailProduct, setDetailProduct] = useState<ProductDetailModalData | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
-  const [productSortBy, setProductSortBy] = useState<"amount" | "orders" | "stock" | "conversionRate">("amount");
+  const [productSortBy, setProductSortBy] = useState<"amount" | "orders" | "stock" | "conversionRate" | "price">("amount");
   const [productSortOrder, setProductSortOrder] = useState<"desc" | "asc">("desc");
   const [productPage, setProductPage] = useState(1);
   const [productPageSize, setProductPageSize] = useState(15);
@@ -1153,11 +1154,11 @@ export default function AdminDashboardPage() {
     if (!data?.rawSeries.products) return [];
     const items = (data.rawSeries.orderItems ?? []).filter((item) => inDateFilterRange(item.created_at));
     const visits = (data.rawSeries.visits ?? []).filter((v) => inDateFilterRange(v.visit_date));
-    const salesByProduct = new Map<string, { orders: number; amount: number }>();
+    const salesByProduct = new Map<string, { orders: number; amount: number; name: string }>();
     for (const item of items) {
       const key = item.product_id ?? item.product_name ?? "";
       if (!key) continue;
-      const cur = salesByProduct.get(key) ?? { orders: 0, amount: 0 };
+      const cur = salesByProduct.get(key) ?? { orders: 0, amount: 0, name: item.product_name ?? "未知商品" };
       cur.orders += safeNumber(item.quantity);
       cur.amount += safeNumber(item.line_total);
       salesByProduct.set(key, cur);
@@ -1171,13 +1172,16 @@ export default function AdminDashboardPage() {
       const m2 = p.match(/[?&](?:p|product)=([^&#]+)/);
       if (m2?.[1]) clicksByToken.set(m2[1], (clicksByToken.get(m2[1]) ?? 0) + 1);
     }
+    const seenProductIds = new Set<string>();
     const rows = data.rawSeries.products.map((product) => {
-      const stats = salesByProduct.get(product.id) ?? { orders: 0, amount: 0 };
+      seenProductIds.add(product.id);
+      const stats = salesByProduct.get(product.id) ?? { orders: 0, amount: 0, name: product.name };
       const clicks =
         (product.slug ? (clicksByToken.get(product.slug) ?? 0) : 0) +
         (product.id !== product.slug ? (clicksByToken.get(product.id) ?? 0) : 0);
-      const numericConversionRate = clicks > 0 ? (stats.orders / clicks) * 100 : 0;
+      const numericConversionRate = clicks > 0 ? (stats.orders / clicks) * 100 : -1;
       const conversionRate = clicks > 0 ? `${numericConversionRate.toFixed(1)}%` : "—";
+      const effectiveStock = Number((product as { effective_stock?: number | null }).effective_stock ?? product.stock ?? 0);
       return {
         id: product.id,
         slug: product.slug,
@@ -1185,7 +1189,7 @@ export default function AdminDashboardPage() {
         price: Number(product.price ?? 0),
         orders: stats.orders,
         amount: stats.amount,
-        stock: Number(product.stock ?? 0),
+        stock: Number.isFinite(effectiveStock) ? effectiveStock : 0,
         status: product.status,
         clicks,
         numericConversionRate,
@@ -1193,18 +1197,40 @@ export default function AdminDashboardPage() {
       };
     });
 
-    return rows.sort((a, b) => {
+    Array.from(salesByProduct.entries()).forEach(([productId, stats]) => {
+      if (seenProductIds.has(productId)) return;
+      const clicks = clicksByToken.get(productId) ?? 0;
+      const numericConversionRate = clicks > 0 ? (stats.orders / clicks) * 100 : -1;
+      rows.push({
+        id: productId,
+        slug: productId,
+        name: stats.name,
+        price: stats.orders > 0 ? Number((stats.amount / stats.orders).toFixed(2)) : 0,
+        orders: stats.orders,
+        amount: stats.amount,
+        stock: 0,
+        status: "active",
+        clicks,
+        numericConversionRate,
+        conversionRate: clicks > 0 ? `${numericConversionRate.toFixed(1)}%` : "—",
+      });
+    });
+
+    return [...rows].sort((a, b) => {
       const mul = productSortOrder === "asc" ? 1 : -1;
+      if (productSortBy === "price") {
+        return (a.price - b.price) * mul || (a.amount - b.amount) * mul || a.name.localeCompare(b.name, "zh-CN") * mul;
+      }
       if (productSortBy === "orders") {
-        return (a.orders - b.orders) * mul || (a.amount - b.amount) * mul;
+        return (a.orders - b.orders) * mul || (a.amount - b.amount) * mul || (a.stock - b.stock) * mul || a.name.localeCompare(b.name, "zh-CN") * mul;
       }
       if (productSortBy === "stock") {
-        return (a.stock - b.stock) * mul;
+        return (a.stock - b.stock) * mul || (a.amount - b.amount) * mul || a.name.localeCompare(b.name, "zh-CN") * mul;
       }
       if (productSortBy === "conversionRate") {
-        return (a.numericConversionRate - b.numericConversionRate) * mul || (a.orders - b.orders) * mul;
+        return (a.numericConversionRate - b.numericConversionRate) * mul || (a.clicks - b.clicks) * mul || (a.orders - b.orders) * mul || a.name.localeCompare(b.name, "zh-CN") * mul;
       }
-      return (a.amount - b.amount) * mul || (a.orders - b.orders) * mul || (a.clicks - b.clicks) * mul;
+      return (a.amount - b.amount) * mul || (a.orders - b.orders) * mul || (a.clicks - b.clicks) * mul || (a.stock - b.stock) * mul || a.name.localeCompare(b.name, "zh-CN") * mul;
     });
   }, [data, inDateFilterRange, productSortBy, productSortOrder]);
 
@@ -1245,9 +1271,14 @@ export default function AdminDashboardPage() {
         ? costData.orderItems.filter((item) => item.order_id && paidOrderIdSet.has(item.order_id))
         : (data.rawSeries.orderItems ?? []).filter((item) => item.order_id && paidOrderIdSet.has(item.order_id));
 
+    const rangeFiatRecharge = (data.rawSeries.recharges ?? [])
+      .filter((r) => isRechargeSucceeded(r.status) && inDateFilterRange(r.created_at) && isFiatOnlineGatewayMethod(r.channel_code))
+      .reduce((sum, r) => sum + safeNumber(r.credited_amount ?? r.amount ?? r.requested_amount), 0);
+
     return computeFinanceCostSummary({
       gmv: rangeGmv,
       recharge: rangeRecharge,
+      fiatRecharge: rangeFiatRecharge,
       paidOrders,
       orderItems: rawItems,
       products: data.rawSeries.products ?? [],
@@ -1497,7 +1528,7 @@ export default function AdminDashboardPage() {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-medium text-emerald-800">分销 / 代理利润</span>
-                      <span className="rounded-full border border-emerald-200 bg-emerald-100/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                      <span className="shrink-0 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-100/80 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
                         分销预留位
                       </span>
                     </div>
@@ -1805,7 +1836,11 @@ export default function AdminDashboardPage() {
                     {
                       label: "预警低库存商品",
                       desc: "可用库存 1~5 件",
-                      value: data?.lowStock.length ?? 0,
+                      value:
+                        data?.todos.find((t) => t.label === "低库存商品")?.value ??
+                        fastSummary?.todos.lowStockProducts ??
+                        data?.lowStock.length ??
+                        0,
                       href: "/admin/products?stockLevel=low",
                       tone: "orange" as const,
                       actionText: "去补货",
@@ -1907,6 +1942,31 @@ export default function AdminDashboardPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <select
+                    aria-label="排序维度"
+                    value={productSortBy}
+                    onChange={(e) => {
+                      setProductSortBy(e.target.value as "amount" | "orders" | "stock" | "conversionRate" | "price");
+                      setProductPage(1);
+                    }}
+                    className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                  >
+                    <option value="amount">按销售额</option>
+                    <option value="orders">按订单量</option>
+                    <option value="stock">按库存</option>
+                    <option value="conversionRate">按点击转化率</option>
+                    <option value="price">按售价</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProductSortOrder((prev) => (prev === "desc" ? "asc" : "desc"));
+                      setProductPage(1);
+                    }}
+                    className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    {productSortOrder === "desc" ? "降序 ▼" : "升序 ▲"}
+                  </button>
+                  <select
                     aria-label="每页显示条数"
                     value={productPageSize}
                     onChange={(e) => setProductPageSize(Number(e.target.value))}
@@ -1935,9 +1995,31 @@ export default function AdminDashboardPage() {
                         <TableHeader>
                           <TableRow className="text-xs">
                             <TableHead className="min-w-[180px] whitespace-nowrap text-left">商品标题</TableHead>
-                            <TableHead className="whitespace-nowrap text-right">售价</TableHead>
                             <TableHead
-                              className="cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900"
+                              className={cn(
+                                "cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900",
+                                productSortBy === "price" && "font-semibold text-blue-700"
+                              )}
+                              onClick={() => {
+                                if (productSortBy === "price") {
+                                  setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
+                                } else {
+                                  setProductSortBy("price");
+                                  setProductSortOrder("desc");
+                                }
+                                setProductPage(1);
+                              }}
+                            >
+                              售价
+                              <span className={cn("ml-1 text-[10px]", productSortBy === "price" ? "text-blue-600" : "text-slate-400")}>
+                                {productSortBy === "price" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
+                              </span>
+                            </TableHead>
+                            <TableHead
+                              className={cn(
+                                "cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900",
+                                productSortBy === "orders" && "font-semibold text-blue-700"
+                              )}
                               onClick={() => {
                                 if (productSortBy === "orders") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1945,15 +2027,19 @@ export default function AdminDashboardPage() {
                                   setProductSortBy("orders");
                                   setProductSortOrder("desc");
                                 }
+                                setProductPage(1);
                               }}
                             >
                               订单量
-                              <span className="ml-1 text-[10px] text-slate-400">
+                              <span className={cn("ml-1 text-[10px]", productSortBy === "orders" ? "text-blue-600" : "text-slate-400")}>
                                 {productSortBy === "orders" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
                               </span>
                             </TableHead>
                             <TableHead
-                              className="cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900"
+                              className={cn(
+                                "cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900",
+                                productSortBy === "amount" && "font-semibold text-blue-700"
+                              )}
                               onClick={() => {
                                 if (productSortBy === "amount") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1961,15 +2047,19 @@ export default function AdminDashboardPage() {
                                   setProductSortBy("amount");
                                   setProductSortOrder("desc");
                                 }
+                                setProductPage(1);
                               }}
                             >
                               销售额
-                              <span className="ml-1 text-[10px] text-slate-400">
+                              <span className={cn("ml-1 text-[10px]", productSortBy === "amount" ? "text-blue-600" : "text-slate-400")}>
                                 {productSortBy === "amount" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
                               </span>
                             </TableHead>
                             <TableHead
-                              className="cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900"
+                              className={cn(
+                                "cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900",
+                                productSortBy === "stock" && "font-semibold text-blue-700"
+                              )}
                               onClick={() => {
                                 if (productSortBy === "stock") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1977,15 +2067,19 @@ export default function AdminDashboardPage() {
                                   setProductSortBy("stock");
                                   setProductSortOrder("desc");
                                 }
+                                setProductPage(1);
                               }}
                             >
                               库存
-                              <span className="ml-1 text-[10px] text-slate-400">
+                              <span className={cn("ml-1 text-[10px]", productSortBy === "stock" ? "text-blue-600" : "text-slate-400")}>
                                 {productSortBy === "stock" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
                               </span>
                             </TableHead>
                             <TableHead
-                              className="cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900"
+                              className={cn(
+                                "cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900",
+                                productSortBy === "conversionRate" && "font-semibold text-blue-700"
+                              )}
                               onClick={() => {
                                 if (productSortBy === "conversionRate") {
                                   setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
@@ -1993,10 +2087,11 @@ export default function AdminDashboardPage() {
                                   setProductSortBy("conversionRate");
                                   setProductSortOrder("desc");
                                 }
+                                setProductPage(1);
                               }}
                             >
                               点击转化率
-                              <span className="ml-1 text-[10px] text-slate-400">
+                              <span className={cn("ml-1 text-[10px]", productSortBy === "conversionRate" ? "text-blue-600" : "text-slate-400")}>
                                 {productSortBy === "conversionRate" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
                               </span>
                             </TableHead>

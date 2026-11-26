@@ -58,9 +58,48 @@ test("P0-3: standalone product detail shows total price, coupon box, guest check
   assert.match(productDetail, /前往完整结算页/);
 });
 
-test("P0-4: tutorials page keeps buy button when header collapses and renders bottom CTA card", () => {
+test("P0-4: tutorials page renders bottom CTA card and maps Google tutorial to Gmail", () => {
   const tutorialsPage = read("app/tutorials/page.tsx");
-  assert.match(tutorialsPage, /tutorial-collapsed-go-buy-button/);
+  assert.doesNotMatch(tutorialsPage, /tutorial-collapsed-go-buy-button/);
   assert.match(tutorialsPage, /tutorial-bottom-purchase-card/);
   assert.match(tutorialsPage, /看懂流程了？立即选购对应商品/);
+  assert.match(tutorialsPage, /case "google-region":[\s\S]*\/products\/digital-accounts\?category=gmail/);
+});
+
+test("Category tree preserves full subcategory list across filters and uses sliding indicators", () => {
+  const mall = read("components/products/SupabaseMallContent.tsx");
+  assert.match(mall, /SecondarySlidingIndicator/);
+  assert.match(mall, /SubcategorySlidingList/);
+  assert.match(mall, /const cached = resolvedCategory\?\.id \? \(discoveredSubcategoriesByCategory\[resolvedCategory\.id\] \?\? \[\]\) : \[\]/);
+  assert.match(mall, /for \(const item of cached\) appendUnique\(item\)/);
+});
+
+test("Orders page renamed to 订单查询, works without login, and stacks 3rd-layer detail modal", () => {
+  const sidebar = read("components/layout/PublicSidebar.tsx");
+  const mobileMenu = read("components/layout/MobileMenu.tsx");
+  const ordersPage = read("app/account/orders/page.tsx");
+  const accountShell = read("components/account/AccountShell.tsx");
+
+  assert.match(sidebar, /label:\s*"订单查询",\s*href:\s*"\/account\/orders"/);
+  assert.match(mobileMenu, /label:\s*"订单查询",\s*href:\s*"\/account\/orders"/);
+  assert.match(accountShell, /if \(isOrdersPage && checking\)/);
+  assert.match(ordersPage, /guest-orders-query-card/);
+  assert.match(ordersPage, /guest-order-detail-modal/);
+  assert.match(ordersPage, /onInteractOutside=\{\(event\) => \{\s*if \(detailModalOpen\) event\.preventDefault\(\);/);
+});
+
+test("Admin reconciliation uses dropdown action menu and PATCH manual resolution endpoint", () => {
+  const panel = read("components/admin/payments/AdminReconciliationPanel.tsx");
+  const route = read("app/api/admin/payments/reconciliations/[reconciliationId]/route.ts");
+  assert.match(panel, /DropdownMenuTrigger/);
+  assert.match(panel, /标记人工已处理/);
+  assert.match(route, /export async function PATCH/);
+  assert.match(route, /resolve_payment_reconciliation/);
+});
+
+test("Admin dashboard sales ranking supports explicit sorting and deterministic tie-breakers", () => {
+  const dashboard = read("app/admin/page.tsx");
+  assert.match(dashboard, /aria-label="排序维度"/);
+  assert.match(dashboard, /productSortBy === "price"/);
+  assert.match(dashboard, /a\.name\.localeCompare\(b\.name,\s*"zh-CN"\)/);
 });

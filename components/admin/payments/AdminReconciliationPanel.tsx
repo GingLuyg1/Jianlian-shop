@@ -1,9 +1,8 @@
 "use client";
 import { statusLabel } from '@/lib/admin/display-labels';
 
-
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AlertTriangle, Eye, RefreshCcw, Search } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Eye, RefreshCcw, Search, Slash } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -14,6 +13,13 @@ import AdminSection from "@/components/admin/v2/AdminSection";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   RECONCILIATION_DIFFERENCE_TYPES,
@@ -34,6 +40,7 @@ type DetailPayload = { reconciliation?: AdminPaymentReconciliation; error?: stri
 type Props = { attention: "all" | "failed"; onAttentionChange: (attention: "all" | "failed") => void };
 
 const PAGE_SIZE = 20;
+const ACTIONABLE_RESULTS = new Set(["mismatched", "query_failed", "manual_review"]);
 
 function formatMoney(value: number | null | undefined, currency = "CNY") {
   return formatCurrency(value, currency);
@@ -70,6 +77,12 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
   const [recheckingId, setRecheckingId] = useState<string | null>(null);
   const recheckingRef = useRef(new Set<string>());
   const [pendingRecheck, setPendingRecheck] = useState<AdminPaymentReconciliation | null>(null);
+  const [pendingResolve, setPendingResolve] = useState<{
+    row: AdminPaymentReconciliation;
+    action: "resolve" | "ignore";
+  } | null>(null);
+  const [resolveNote, setResolveNote] = useState("");
+  const [resolving, setResolving] = useState(false);
   const debouncedSearch = useDebouncedValue(search);
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
@@ -140,6 +153,43 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
     }
   };
 
+  const openResolveDialog = (row: AdminPaymentReconciliation, action: "resolve" | "ignore") => {
+    setPendingResolve({ row, action });
+    setResolveNote(
+      action === "ignore"
+        ? "历史测试单/超时异常，已人工确认忽略归档"
+        : "已人工核对收款渠道并完成补单或余额入账处理"
+    );
+  };
+
+  const submitResolve = async () => {
+    if (!pendingResolve || resolving) return;
+    const trimmed = resolveNote.trim();
+    if (!trimmed) {
+      toast.warning("请填写处理说明");
+      return;
+    }
+    const { row, action } = pendingResolve;
+    setResolving(true);
+    try {
+      const response = await fetch(`/api/admin/payments/reconciliations/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, resolution: trimmed }),
+      });
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) throw new Error(payload?.error ?? "人工复核标记失败");
+      toast.success(action === "ignore" ? "已标记为忽略归档" : "已标记为人工处理完成");
+      setPendingResolve(null);
+      await loadRows();
+      if (selected?.id === row.id) await loadDetail(row);
+    } catch (resolveError) {
+      toast.error(resolveError instanceof Error ? resolveError.message : "人工复核标记失败");
+    } finally {
+      setResolving(false);
+    }
+  };
+
   return (
     <>
       <div className="grid shrink-0 gap-2 border-b px-4 py-3 min-[1200px]:grid-cols-[minmax(220px,1fr)_160px_190px_86px]">
@@ -162,12 +212,12 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
         <div className="min-h-0 flex-1 p-4"><AdminErrorState description={error} onRetry={loadRows} /></div>
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full min-w-[1500px] table-fixed text-sm">
+          <table className="w-full min-w-[1440px] table-fixed text-sm">
             <colgroup>
               <col className="w-[180px]" /><col className="w-[150px]" /><col className="w-[160px]" />
-              <col className="w-[120px]" /><col className="w-[110px]" /><col className="w-[110px]" />
-              <col className="w-[130px]" /><col className="w-[130px]" /><col className="w-[180px]" />
-              <col className="w-[120px]" /><col className="w-[150px]" /><col className="w-[150px]" />
+              <col className="w-[110px]" /><col className="w-[110px]" /><col className="w-[110px]" />
+              <col className="w-[120px]" /><col className="w-[120px]" /><col className="w-[180px]" />
+              <col className="w-[115px]" /><col className="w-[150px]" /><col className="w-[110px]" />
             </colgroup>
             <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-slate-500">
               <tr className="border-b">
@@ -177,7 +227,10 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
             </thead>
             <tbody>
               {loading ? Array.from({ length: 8 }).map((_, index) => <tr key={index} className="border-b"><td colSpan={12} className="px-4 py-3 text-slate-400">正在加载对账记录...</td></tr>) : null}
-              {!loading && rows.length ? rows.map((row) => (
+              {!loading && rows.length ? rows.map((row) => {
+                const canRecheck = Boolean(row.provider) && recheckingId !== row.id && ACTIONABLE_RESULTS.has(row.result);
+                const canResolve = ACTIONABLE_RESULTS.has(row.result);
+                return (
                 <tr key={row.id} className="border-b hover:bg-slate-50">
                   <Td mono>{row.reconciliation_no}</Td>
                   <Td mono>{row.payment_session_id ?? "—"}</Td>
@@ -191,13 +244,50 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
                   <Td><Badge variant="outline" className={getReconciliationResultClass(row.result)}>{getReconciliationResultLabel(row.result)}</Badge></Td>
                   <Td>{formatDate(row.checked_at)}</Td>
                   <Td className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={() => loadDetail(row)}><Eye className="mr-1 h-3.5 w-3.5" />查看</Button>
-                      <Button variant="outline" size="sm" disabled={!row.provider || recheckingId === row.id || !["mismatched", "query_failed", "manual_review"].includes(row.result)} onClick={() => setPendingRecheck(row)} title={!row.provider ? "支付平台 未配置，无法重新检查" : !["mismatched", "query_failed", "manual_review"].includes(row.result) ? "当前对账状态不允许重新检查" : "重新检查渠道状态"}><RefreshCcw className="mr-1 h-3.5 w-3.5" />重查</Button>
-                    </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 gap-1 px-2.5 text-xs">
+                          操作
+                          <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuItem onClick={() => void loadDetail(row)}>
+                          <Eye className="mr-2 h-3.5 w-3.5" />
+                          查看详情
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          disabled={!canRecheck}
+                          onClick={() => setPendingRecheck(row)}
+                        >
+                          <RefreshCcw className="mr-2 h-3.5 w-3.5" />
+                          {recheckingId === row.id ? "重查中..." : "重新查询渠道"}
+                        </DropdownMenuItem>
+                        {canResolve ? (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-emerald-700 focus:text-emerald-700"
+                              onClick={() => openResolveDialog(row, "resolve")}
+                            >
+                              <CheckCircle2 className="mr-2 h-3.5 w-3.5" />
+                              标记人工已处理
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-slate-600"
+                              onClick={() => openResolveDialog(row, "ignore")}
+                            >
+                              <Slash className="mr-2 h-3.5 w-3.5" />
+                              确认忽略归档
+                            </DropdownMenuItem>
+                          </>
+                        ) : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </Td>
                 </tr>
-              )) : null}
+                );
+              }) : null}
               {!loading && !rows.length ? <tr><td colSpan={12} className="h-[360px] px-4"><AdminEmptyState title="暂无对账记录" description="尚未执行支付对账任务，或当前筛选条件下没有记录。" className="min-h-full" /></td></tr> : null}
             </tbody>
           </table>
@@ -211,7 +301,19 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
           <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</Button>
         </div>
       </div>
-      {selected ? <ReconciliationDrawer selected={selected} detail={detail} detailLoading={detailLoading} detailError={detailError} onClose={() => setSelected(null)} onRetry={() => loadDetail(selected)} /> : null}
+      {selected ? (
+        <ReconciliationDrawer
+          selected={selected}
+          detail={detail}
+          detailLoading={detailLoading}
+          detailError={detailError}
+          rechecking={recheckingId === selected.id}
+          onRecheck={() => setPendingRecheck(detail ?? selected)}
+          onResolve={(action) => openResolveDialog(detail ?? selected, action)}
+          onClose={() => setSelected(null)}
+          onRetry={() => loadDetail(selected)}
+        />
+      ) : null}
       <AlertDialog open={Boolean(pendingRecheck)} onOpenChange={(open) => !open && !recheckingId && setPendingRecheck(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -228,19 +330,98 @@ export default function AdminReconciliationPanel({ attention, onAttentionChange 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={Boolean(pendingResolve)} onOpenChange={(open) => !open && !resolving && setPendingResolve(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingResolve?.action === "ignore" ? "确认忽略并归档该对账异常？" : "标记为人工复核已处理？"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingResolve?.action === "ignore"
+                ? "此操作仅将对账记录标记为「已解决（忽略归档）」，不会自动修改用户余额或订单状态。"
+                : "请确认已在订单/充值/用户余额中完成核对或补单，提交后该记录将从异常待办中移除并写入审计日志。"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-1">
+            <label className="block text-xs font-medium text-slate-700">处理说明（写入审计日志）</label>
+            <Input
+              value={resolveNote}
+              onChange={(event) => setResolveNote(event.target.value)}
+              maxLength={300}
+              placeholder="例如：已核对支付宝收款并手动补入用户余额"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resolving}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resolving || !resolveNote.trim()}
+              onClick={(event) => {
+                event.preventDefault();
+                void submitResolve();
+              }}
+            >
+              {resolving ? "提交中..." : "确认提交"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
 
-function ReconciliationDrawer({ selected, detail, detailLoading, detailError, onClose, onRetry }: { selected: AdminPaymentReconciliation; detail: AdminPaymentReconciliation | null; detailLoading: boolean; detailError: string; onClose: () => void; onRetry: () => void }) {
+function ReconciliationDrawer({
+  selected,
+  detail,
+  detailLoading,
+  detailError,
+  rechecking,
+  onRecheck,
+  onResolve,
+  onClose,
+  onRetry,
+}: {
+  selected: AdminPaymentReconciliation;
+  detail: AdminPaymentReconciliation | null;
+  detailLoading: boolean;
+  detailError: string;
+  rechecking: boolean;
+  onRecheck: () => void;
+  onResolve: (action: "resolve" | "ignore") => void;
+  onClose: () => void;
+  onRetry: () => void;
+}) {
   const item = detail ?? selected;
+  const actionable = ACTIONABLE_RESULTS.has(item.result);
   return (
     <AdminDetailDrawer title={item.reconciliation_no} eyebrow="对账详情" onClose={onClose} className="max-w-[680px]">
           {detailLoading ? <div className="space-y-3">{Array.from({ length: 8 }).map((_, index) => <div key={index} className="h-14 animate-pulse rounded-xl bg-slate-100" />)}</div> : null}
           {detailError ? <AdminErrorState description={detailError} onRetry={onRetry} /> : null}
           {!detailLoading && !detailError ? (
             <div className="space-y-4">
-              {item.risk_level === "high" ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />高风险异常</div><p className="mt-1 text-xs">系统不会自动回滚余额、订单或已交付库存，请人工核查。</p></div> : null}
+              {item.risk_level === "high" ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />高风险异常（{getDifferenceTypeLabel(item.difference_type)}）</div>
+                  <p className="mt-1 text-xs leading-5">
+                    渠道已扣款但本地会话已过期未入账：请先核对业务单号（{item.business_id ?? "—"}）是否已补发或补入用户余额，核实无误后再点击下方「标记人工已处理」结案。
+                  </p>
+                </div>
+              ) : null}
+              {actionable ? (
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                  <Button variant="outline" size="sm" disabled={!item.provider || rechecking} onClick={onRecheck}>
+                    <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />
+                    {rechecking ? "重查中..." : "重新查询渠道"}
+                  </Button>
+                  <Button size="sm" onClick={() => onResolve("resolve")}>
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                    标记人工已处理
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => onResolve("ignore")}>
+                    <Slash className="mr-1.5 h-3.5 w-3.5" />
+                    忽略归档
+                  </Button>
+                </div>
+              ) : null}
               <DetailGroup title="本地支付信息" rows={[["业务类型", item.business_type === "recharge" ? "账户充值" : "商品订单"], ["支付会话", item.payment_session_id ?? "—"], ["业务单号", item.business_id ?? "—"], ["本地状态", statusLabel(item.local_status)], ["本地金额", formatMoney(item.local_amount, item.currency)]]} />
               <DetailGroup title="渠道查询摘要" rows={[["渠道", item.channel_code ?? "—"], ["支付平台", item.provider ?? "—"], ["渠道状态", statusLabel(item.provider_status)], ["渠道交易号", item.provider_trade_no ? "已脱敏保存" : "—"]]} />
               <DetailGroup title="状态对比" rows={[["结果", getReconciliationResultLabel(item.result)], ["差异类型", getDifferenceTypeLabel(item.difference_type)], ["风险等级", getRiskLevelLabel(item.risk_level)]]} />

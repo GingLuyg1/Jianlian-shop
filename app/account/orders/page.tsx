@@ -3,16 +3,20 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Clipboard, ClipboardList, Search, X } from "lucide-react";
+import { Clipboard, ClipboardList, Headphones, LogIn, Mail, Search, ShieldCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 
 import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
 import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
+import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
+import TurnstileWidget from "@/components/security/TurnstileWidget";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { isGuestAuthUser } from "@/lib/auth/guest-user";
+import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { normalizeOrderItemDeliveryType } from "@/lib/orders/order-fulfillment-status";
 import {
@@ -21,6 +25,7 @@ import {
   getUserOrderDisplayStatus,
 } from "@/lib/orders/order-status";
 import type { OrderRecord } from "@/lib/orders/order-types";
+import { openPublicSupport } from "@/lib/support/open-public-support";
 import { cn } from "@/lib/utils";
 import glass from "@/components/account/AccountGlass.module.css";
 import styles from "@/components/account/orders/OrdersGlass.module.css";
@@ -29,13 +34,35 @@ import { useAccountRecordIdentity } from "@/hooks/use-account-record-identity";
 
 const PAGE_SIZE = 10;
 
-function formatMoney(value: number | string | null | undefined) {
-  return `¥${Number(value ?? 0).toFixed(2)}`;
+type GuestLookupOrder = {
+  orderNo: string;
+  status: string;
+  paymentStatus: string;
+  deliveryStatus: string;
+  totalAmount: number;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+  items: Array<{
+    productName: string;
+    skuTitle: string | null;
+    skuCode: string | null;
+    quantity: number;
+    unitPrice: number;
+    lineTotal: number;
+  }>;
+};
+
+function formatMoney(value: number | string | null | undefined, currency = "CNY") {
+  const prefix = currency === "CNY" ? "¥" : `${currency} `;
+  return `${prefix}${Number(value ?? 0).toFixed(2)}`;
 }
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "未记录";
-  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return "未记录";
+  return dt.toLocaleString("zh-CN", { hour12: false });
 }
 
 function getDeliveryLabel(deliveryType: string | null | undefined) {
@@ -46,26 +73,100 @@ function getDeliveryLabel(deliveryType: string | null | undefined) {
   return "人工处理";
 }
 
+function guestStatusLabel(value: string) {
+  const map: Record<string, string> = {
+    pending_payment: "待支付",
+    paid: "已支付",
+    processing: "处理中",
+    delivered: "已发货",
+    completed: "已完成",
+    cancelled: "已取消",
+    expired: "已过期",
+    refunded: "已退款",
+    failed: "处理失败",
+    unpaid: "未支付",
+    pending: "待处理",
+  };
+  return map[value] ?? (value || "—");
+}
+
+function guestStatusBadgeClass(status: string) {
+  if (status === "delivered" || status === "completed" || status === "paid") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+  if (status === "pending_payment" || status === "processing") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+  if (status === "cancelled" || status === "expired" || status === "failed") {
+    return "border-slate-200 bg-slate-100 text-slate-600";
+  }
+  return "border-orange-200 bg-orange-50 text-orange-700";
+}
+
 export default function MyOrdersPage() {
   const router = useRouter();
   const identity = useAccountRecordIdentity();
+  const { user: authUser, authReady } = usePublicAuthProfile();
+  const isSignedInMember = authReady && Boolean(authUser) && !isGuestAuthUser(authUser);
+
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [storedCount, setCount] = useState(0);
   const [loadedEpoch, setLoadedEpoch] = useState(identity.epoch);
   const [page, setPage] = useState(1);
   const [queryOpen, setQueryOpen] = useState(false);
+  const [guestInitialEmail, setGuestInitialEmail] = useState("");
+  const [guestInitialOrders, setGuestInitialOrders] = useState<GuestLookupOrder[] | null>(null);
   const [requestLoading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
+  const [selectedGuestOrder, setSelectedGuestOrder] = useState<GuestLookupOrder | null>(null);
+
+  // Inline guest email form state (when unauthenticated)
+  const [guestEmailInput, setGuestEmailInput] = useState("");
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const [turnstileEnabled, setTurnstileEnabled] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
+  const [guestSearching, setGuestSearching] = useState(false);
+  const [guestError, setGuestError] = useState("");
+
   const listRequest = useRef<{ page: number; epoch: number; controller: AbortController; promise?: Promise<void> } | null>(null);
   const ownerMatches = loadedEpoch === identity.epoch;
   const count = ownerMatches ? storedCount : 0;
-  const loading = requestLoading || !ownerMatches;
-  useEffect(() => { setSelectedOrder(null); setQueryOpen(false); setPage(1); }, [identity.epoch]);
+  const loading = isSignedInMember ? (requestLoading || !ownerMatches) : !authReady;
+
+  useEffect(() => {
+    setSelectedOrder(null);
+    setSelectedGuestOrder(null);
+    setQueryOpen(false);
+    setPage(1);
+  }, [identity.epoch]);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/order-query", { cache: "no-store" })
+      .then((res) => res.json().catch(() => null))
+      .then((payload: { turnstileEnabled?: boolean; turnstileSiteKey?: string } | null) => {
+        if (!active || !payload) return;
+        setTurnstileEnabled(Boolean(payload.turnstileEnabled));
+        setTurnstileSiteKey(String(payload.turnstileSiteKey || ""));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
   const loadOrders = useCallback((force = false) => {
+    if (!isSignedInMember) {
+      setLoading(false);
+      setOrders([]);
+      setCount(0);
+      setLoadedEpoch(identity.epoch);
+      return Promise.resolve();
+    }
     const prior = listRequest.current;
     if (!force && prior?.page === page && prior.epoch === identity.epoch && !prior.controller.signal.aborted) return prior.promise;
     prior?.controller.abort();
@@ -91,8 +192,9 @@ export default function MyOrdersPage() {
       if (!isCurrent()) return;
 
       if (response.status === 401) {
-        toast.error("登录状态已失效，请重新登录。");
-        router.push("/login?redirect=/account/orders");
+        setOrders([]);
+        setCount(0);
+        setLoadedEpoch(epoch);
         return;
       }
 
@@ -111,22 +213,23 @@ export default function MyOrdersPage() {
     }
     })();
     return request.promise;
-  }, [page, router, identity.epoch]);
+  }, [page, isSignedInMember, identity.epoch]);
 
   useEffect(() => {
+    if (!authReady) return;
     void loadOrders();
     return () => { listRequest.current?.controller.abort(); listRequest.current = null; };
-  }, [loadOrders]);
+  }, [authReady, loadOrders]);
 
   const refreshSelectedOrder = useCallback(async (orderNo: string) => {
     const epoch = identity.epoch;
     const refreshDetail = async () => {
-    const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}`, { cache: "no-store" });
-    const result = (await response.json().catch(() => null)) as { order?: OrderRecord; error?: string } | null;
-    if (!response.ok || !result?.order) {
-      throw new Error(result?.error ?? "订单状态刷新失败");
-    }
-    if (accountRecordPreload.getSnapshot().epoch === epoch) setSelectedOrder((current) => current?.order_no === orderNo ? result.order! : current);
+      const response = await fetch(`/api/orders/${encodeURIComponent(orderNo)}`, { cache: "no-store" });
+      const result = (await response.json().catch(() => null)) as { order?: OrderRecord; error?: string } | null;
+      if (!response.ok || !result?.order) {
+        throw new Error(result?.error ?? "订单状态刷新失败");
+      }
+      if (accountRecordPreload.getSnapshot().epoch === epoch) setSelectedOrder((current) => current?.order_no === orderNo ? result.order! : current);
     };
     await Promise.all([refreshDetail(), loadOrders(true)]);
   }, [loadOrders, identity.epoch]);
@@ -138,6 +241,48 @@ export default function MyOrdersPage() {
     catch { toast.error("复制失败，请手动复制"); }
   }
 
+  async function handleGuestInlineSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (guestSearching) return;
+    setGuestError("");
+    const normalized = guestEmailInput.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+      setGuestError("请输入下单时填写的有效邮箱地址。");
+      return;
+    }
+    if (turnstileEnabled && !turnstileToken) {
+      setGuestError("请先完成下方 Cloudflare 人机验证后再查询。");
+      return;
+    }
+    setGuestSearching(true);
+    try {
+      const response = await fetchWithTimeout("/api/order-query", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "email",
+          email: normalized,
+          turnstileToken: turnstileToken || undefined,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as { orders?: GuestLookupOrder[]; error?: string } | null;
+      if (!response.ok) {
+        throw new Error(payload?.error || "订单查询失败，请稍后重试");
+      }
+      setGuestInitialEmail(normalized);
+      setGuestInitialOrders(Array.isArray(payload?.orders) ? payload!.orders : []);
+      setQueryOpen(true);
+    } catch (err) {
+      setGuestError(err instanceof Error ? err.message : "订单查询失败，请稍后重试");
+    } finally {
+      if (turnstileEnabled) {
+        setTurnstileToken("");
+        setTurnstileResetSignal((v) => v + 1);
+      }
+      setGuestSearching(false);
+    }
+  }
+
   return (
     <div data-testid="orders-glass-page" data-account-orders-ready={!loading} className={cn(styles.page, "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden")}>
       <Card className={cn(glass.surface, "flex min-h-[340px] min-w-0 flex-1 flex-col overflow-hidden sm:min-h-[480px] md:min-h-0")}>
@@ -146,16 +291,31 @@ export default function MyOrdersPage() {
               <div className="flex min-w-0 items-start gap-3">
                 <span aria-hidden="true" className={cn(glass.icon, "h-12 w-12")}><ClipboardList className="h-6 w-6" strokeWidth={1.6} /></span>
                 <div className="min-w-0">
-                <CardTitle className="text-xl">我的订单</CardTitle>
+                <CardTitle className="text-xl">订单查询</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  查询当前账号的订单记录、支付状态和交付信息。
+                  {isSignedInMember
+                    ? "查看当前账号的订单记录，也可按任意下单邮箱快捷查单。"
+                    : "无需登录，输入下单时填写的邮箱即可查询订单状态与发货进度。"}
                 </p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" className={cn(glass.button, "rounded-xl")} onClick={() => setQueryOpen(true)}>
-                <Search className="mr-2 h-4 w-4" />
-                订单查询
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {isSignedInMember ? (
+                  <Button variant="outline" size="sm" className={cn(glass.button, "rounded-xl")} onClick={() => setQueryOpen(true)}>
+                    <Search className="mr-2 h-4 w-4" />
+                    邮箱订单查询
+                  </Button>
+                ) : (
+                  <>
+                    <Button variant="outline" size="sm" className={cn(glass.button, "rounded-xl")} asChild>
+                      <Link href="/login?redirect=/account/orders">
+                        <LogIn className="mr-1.5 h-4 w-4" />
+                        登录查看账号订单
+                      </Link>
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </CardHeader>
 
@@ -166,6 +326,90 @@ export default function MyOrdersPage() {
                   <div key={index} className={cn(glass.inset, "h-12 animate-pulse rounded-xl motion-reduce:animate-none")} />
                 ))}
                 <div role="status" className="absolute inset-0 flex items-center justify-center bg-white/45 backdrop-blur-[2px]"><div className={cn(glass.inset, "flex items-center gap-3 rounded-full px-5 py-3 text-sm text-primary shadow-sm")}><span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-primary/20 border-t-primary motion-reduce:animate-none" />正在加载订单</div></div>
+              </div>
+            ) : !isSignedInMember ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center py-6">
+                <div
+                  data-testid="guest-orders-query-card"
+                  className={cn(glass.inset, "w-full max-w-lg rounded-2xl border border-orange-100/90 bg-white/85 p-6 shadow-sm sm:p-7")}
+                >
+                  <div className="mb-5 flex items-center gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 ring-1 ring-orange-100">
+                      <Mail className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900">游客免登录邮箱查单</h2>
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        输入下单时绑定的收货/接收邮箱，查询匹配订单列表与实时进度。
+                      </p>
+                    </div>
+                  </div>
+                  <form onSubmit={handleGuestInlineSubmit} className="space-y-4">
+                    <div>
+                      <label htmlFor="orders-guest-email" className="mb-1.5 block text-xs font-semibold text-slate-700">
+                        下单邮箱
+                      </label>
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          id="orders-guest-email"
+                          type="email"
+                          value={guestEmailInput}
+                          onChange={(e) => {
+                            setGuestEmailInput(e.target.value);
+                            if (guestError) setGuestError("");
+                          }}
+                          placeholder="请输入下单时填写的邮箱地址"
+                          className="h-11 bg-white pl-9"
+                          autoComplete="email"
+                        />
+                      </div>
+                    </div>
+
+                    {turnstileSiteKey ? (
+                      <div className="rounded-xl border border-orange-100 bg-orange-50/35 p-3">
+                        <div className="mb-1.5 text-xs font-medium text-slate-600">Cloudflare 人机验证</div>
+                        <TurnstileWidget
+                          siteKey={turnstileSiteKey}
+                          onVerify={(token) => {
+                            setTurnstileToken(token);
+                            setGuestError("");
+                          }}
+                          onExpire={() => setTurnstileToken("")}
+                          resetSignal={turnstileResetSignal}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-700">
+                        <ShieldCheck className="h-4 w-4 shrink-0" />
+                        <span>已启用安全频控保护，查询结果弹窗支持一键查看订单详情</span>
+                      </div>
+                    )}
+
+                    {guestError ? (
+                      <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+                        {guestError}
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-col gap-2.5 sm:flex-row">
+                      <Button type="submit" className="h-11 flex-1 rounded-xl font-semibold" disabled={guestSearching}>
+                        <Search className="mr-2 h-4 w-4" />
+                        {guestSearching ? "查询中..." : "查询订单"}
+                      </Button>
+                      <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={openPublicSupport}>
+                        <Headphones className="mr-1.5 h-4 w-4" />
+                        联系客服
+                      </Button>
+                    </div>
+                  </form>
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-orange-100/80 pt-3 text-xs text-slate-500">
+                    <span>已有账号？登录后可查看历史全部订单与站内卡密</span>
+                    <Link href="/login?redirect=/account/orders" className="font-semibold text-primary hover:underline">
+                      立即登录 →
+                    </Link>
+                  </div>
+                </div>
               </div>
             ) : error ? (
               <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
@@ -178,17 +422,22 @@ export default function MyOrdersPage() {
               </div>
             ) : rows.length === 0 ? (
               <div className="flex min-h-0 flex-1 items-center justify-center">
-                <div className={cn(glass.empty, "w-full max-w-[340px] rounded-2xl border px-7 py-8 text-center")}>
+                <div className={cn(glass.empty, "w-full max-w-[360px] rounded-2xl border px-7 py-8 text-center")}>
                   <div className={cn(glass.icon, "mx-auto h-14 w-14")}>
                     <ClipboardList className="h-6 w-6" />
                   </div>
                   <h2 className="mt-4 text-xl font-semibold">暂无订单</h2>
                   <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                    当前筛选条件下没有订单记录。
+                    当前账号暂无订单记录，也可以点击「按邮箱查单」查询游客下单记录。
                   </p>
-                  <Button asChild className="mt-4 rounded-xl">
-                    <Link href="/">返回商城</Link>
-                  </Button>
+                  <div className="mt-4 flex justify-center gap-2">
+                    <Button variant="outline" className="rounded-xl" onClick={() => setQueryOpen(true)}>
+                      按邮箱查单
+                    </Button>
+                    <Button asChild className="rounded-xl">
+                      <Link href="/">返回商城</Link>
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -276,36 +525,56 @@ export default function MyOrdersPage() {
             )}
           </CardContent>
 
-          <div className={cn(glass.footer, "mt-4 flex min-h-[48px] shrink-0 flex-wrap items-center justify-between gap-3 border-t px-5 py-3 text-sm text-muted-foreground")}>
-            <span>共 {count} 条订单</span>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
-                上一页
-              </Button>
-              <span>
-                第 {page} / {totalPages} 页
-              </span>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
-                下一页
-              </Button>
+          {isSignedInMember ? (
+            <div className={cn(glass.footer, "mt-4 flex min-h-[48px] shrink-0 flex-wrap items-center justify-between gap-3 border-t px-5 py-3 text-sm text-muted-foreground")}>
+              <span>共 {count} 条订单</span>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>
+                  上一页
+                </Button>
+                <span>
+                  第 {page} / {totalPages} 页
+                </span>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>
+                  下一页
+                </Button>
+              </div>
             </div>
-          </div>
+          ) : null}
       </Card>
 
       <OrderEmailQueryDialog
-        key={`query-${identity.epoch}`}
+        key={`query-${identity.epoch}-${isSignedInMember ? "member" : "guest"}`}
         open={queryOpen}
-        onClose={() => setQueryOpen(false)}
+        isSignedInMember={isSignedInMember}
+        detailModalOpen={Boolean(selectedOrder || selectedGuestOrder)}
+        initialEmail={guestInitialEmail}
+        initialGuestOrders={guestInitialOrders}
+        turnstileSiteKey={turnstileSiteKey}
+        turnstileEnabled={turnstileEnabled}
+        onClose={() => {
+          setQueryOpen(false);
+          setSelectedOrder(null);
+          setSelectedGuestOrder(null);
+        }}
         onCopyOrderNo={copyOrderNo}
-        onViewOrder={setSelectedOrder}
+        onViewMemberOrder={(order) => setSelectedOrder(order)}
+        onViewGuestOrder={(order) => setSelectedGuestOrder(order)}
       />
 
       <UserOrderDrawer
         key={`detail-${identity.epoch}`}
         order={ownerMatches ? selectedOrder : null}
+        stacked={queryOpen}
         onClose={() => setSelectedOrder(null)}
         onCopyOrderNo={copyOrderNo}
         onOrderUpdated={refreshSelectedOrder}
+      />
+
+      <GuestOrderDetailModal
+        order={selectedGuestOrder}
+        onClose={() => setSelectedGuestOrder(null)}
+        onCopyOrderNo={copyOrderNo}
       />
     </div>
   );
@@ -313,25 +582,54 @@ export default function MyOrdersPage() {
 
 function OrderEmailQueryDialog({
   open,
+  isSignedInMember,
+  detailModalOpen,
+  initialEmail,
+  initialGuestOrders,
+  turnstileSiteKey,
+  turnstileEnabled,
   onClose,
   onCopyOrderNo,
-  onViewOrder,
+  onViewMemberOrder,
+  onViewGuestOrder,
 }: {
   open: boolean;
+  isSignedInMember: boolean;
+  detailModalOpen: boolean;
+  initialEmail: string;
+  initialGuestOrders: GuestLookupOrder[] | null;
+  turnstileSiteKey: string;
+  turnstileEnabled: boolean;
   onClose: () => void;
   onCopyOrderNo: (orderNo: string) => void | Promise<void>;
-  onViewOrder: (order: OrderRecord) => void;
+  onViewMemberOrder: (order: OrderRecord) => void;
+  onViewGuestOrder: (order: GuestLookupOrder) => void;
 }) {
   const [email, setEmail] = useState("");
   const [queryEmail, setQueryEmail] = useState("");
-  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [memberOrders, setMemberOrders] = useState<OrderRecord[]>([]);
+  const [guestOrders, setGuestOrders] = useState<GuestLookupOrder[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [modalTurnstileToken, setModalTurnstileToken] = useState("");
+  const [modalTurnstileReset, setModalTurnstileReset] = useState(0);
   const queryRequest = useRef<AbortController | null>(null);
   useEffect(() => () => { queryRequest.current?.abort(); queryRequest.current = null; }, []);
+
+  useEffect(() => {
+    if (open && !isSignedInMember && initialEmail && initialGuestOrders !== null) {
+      setEmail(initialEmail);
+      setQueryEmail(initialEmail);
+      setGuestOrders(initialGuestOrders);
+      setCount(initialGuestOrders.length);
+      setSubmitted(true);
+      setError("");
+      setLoading(false);
+    }
+  }, [open, isSignedInMember, initialEmail, initialGuestOrders]);
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
   const normalizedEmail = email.trim().toLowerCase();
@@ -344,14 +642,52 @@ function OrderEmailQueryDialog({
       const isCurrent = () => queryRequest.current === controller && !controller.signal.aborted;
       if (!emailToQuery) {
         setError("请输入下单邮箱");
-        setOrders([]);
+        setMemberOrders([]);
+        setGuestOrders([]);
         setCount(0);
+        return;
+      }
+
+      if (!isSignedInMember) {
+        if (turnstileEnabled && !modalTurnstileToken) {
+          setError("请先完成下方 Cloudflare 人机验证后再查询");
+          return;
+        }
+        setLoading(true);
+        setError("");
+        try {
+          const response = await fetchWithTimeout("/api/order-query", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              mode: "email",
+              email: emailToQuery,
+              turnstileToken: modalTurnstileToken || undefined,
+            }),
+          });
+          const result = (await response.json().catch(() => null)) as { orders?: GuestLookupOrder[]; error?: string } | null;
+          if (!isCurrent()) return;
+          if (!response.ok) throw new Error(result?.error ?? "订单查询失败");
+          const list = Array.isArray(result?.orders) ? result!.orders : [];
+          setGuestOrders(list);
+          setCount(list.length);
+        } catch (queryError) {
+          if (!isCurrent()) return;
+          setError(getOrderErrorMessage(queryError, "订单查询失败，请稍后重试"));
+          setGuestOrders([]);
+          setCount(0);
+        } finally {
+          if (turnstileEnabled) {
+            setModalTurnstileToken("");
+            setModalTurnstileReset((v) => v + 1);
+          }
+          if (isCurrent()) { setLoading(false); queryRequest.current = null; }
+        }
         return;
       }
 
       setLoading(true);
       setError("");
-
       try {
         const params = new URLSearchParams({
           page: String(targetPage),
@@ -374,31 +710,32 @@ function OrderEmailQueryDialog({
           throw new Error(result?.error ?? "订单查询失败");
         }
 
-        setOrders(result?.orders ?? []);
+        setMemberOrders(result?.orders ?? []);
         setCount(Number(result?.count ?? 0));
       } catch (queryError) {
         if (!isCurrent()) return;
         setError(getOrderErrorMessage(queryError, "订单查询失败，请稍后重试"));
-        setOrders([]);
+        setMemberOrders([]);
         setCount(0);
       } finally {
         if (isCurrent()) { setLoading(false); queryRequest.current = null; }
       }
     },
-    [page, queryEmail]
+    [isSignedInMember, modalTurnstileToken, page, queryEmail, turnstileEnabled]
   );
 
   useEffect(() => {
-    if (!open || !queryEmail) return;
-    queryOrders(page);
-  }, [open, page, queryEmail, queryOrders]);
+    if (!open || !queryEmail || !isSignedInMember) return;
+    void queryOrders(page);
+  }, [open, page, queryEmail, isSignedInMember, queryOrders]);
 
   useEffect(() => {
     if (open) return;
     queryRequest.current?.abort(); queryRequest.current = null;
     setLoading(false);
     setEmail("");
-    setOrders([]);
+    setMemberOrders([]);
+    setGuestOrders([]);
     setCount(0);
     setPage(1);
     setQueryEmail("");
@@ -413,30 +750,59 @@ function OrderEmailQueryDialog({
     setSubmitted(true);
     if (!normalizedEmail) {
       setError("请输入下单邮箱");
-      setOrders([]);
+      setMemberOrders([]);
+      setGuestOrders([]);
       setCount(0);
       setQueryEmail("");
+      return;
+    }
+    if (!isSignedInMember) {
+      setQueryEmail(normalizedEmail);
+      setPage(1);
+      void queryOrders(1, normalizedEmail);
       return;
     }
     const shouldQueryNow = queryEmail === normalizedEmail && page === 1;
     setQueryEmail(normalizedEmail);
     setPage(1);
     if (shouldQueryNow) {
-      queryOrders(1, normalizedEmail);
+      void queryOrders(1, normalizedEmail);
     }
   }
 
+  const displayedGuestOrders = guestOrders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const activeCount = isSignedInMember ? memberOrders.length : displayedGuestOrders.length;
+
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+    <DialogPrimitive.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !detailModalOpen) onClose();
+      }}
+    >
       <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className={styles.overlay} />
       <DialogPrimitive.Content
+        data-testid="order-email-query-dialog"
+        onInteractOutside={(event) => {
+          if (detailModalOpen) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (detailModalOpen) event.preventDefault();
+        }}
+        onEscapeKeyDown={(event) => {
+          if (detailModalOpen) event.preventDefault();
+        }}
         className={cn(styles.queryDialog, "flex min-w-0 flex-col overflow-hidden")}
       >
         <div className={cn(styles.dialogHeader, "flex shrink-0 items-start justify-between gap-4 border-b px-5 py-4")}>
           <div>
             <DialogPrimitive.Title className="text-lg font-semibold text-slate-950">订单查询</DialogPrimitive.Title>
-            <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">输入下单邮箱，查询当前账号下匹配的订单。</DialogPrimitive.Description>
+            <DialogPrimitive.Description className="mt-1 text-sm text-muted-foreground">
+              {isSignedInMember
+                ? "输入下单邮箱，查询匹配的订单记录；点击查看详情可在上层弹窗预览，点空白即可返回本列表。"
+                : `邮箱 ${queryEmail || "—"} 下的订单列表；点击查看详情可在上层弹窗查看，点空白处返回本列表。`}
+            </DialogPrimitive.Description>
           </div>
           <button
             type="button"
@@ -448,20 +814,30 @@ function OrderEmailQueryDialog({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex shrink-0 flex-col gap-3 border-b px-5 py-4 md:flex-row">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              type="email"
-              placeholder="输入下单邮箱"
-              className="pl-9"
-            />
+        <form onSubmit={handleSubmit} className="flex shrink-0 flex-col gap-3 border-b px-5 py-4">
+          <div className="flex flex-col gap-3 md:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                type="email"
+                placeholder="输入下单邮箱"
+                className="pl-9"
+              />
+            </div>
+            <Button type="submit" disabled={loading}>
+              {loading ? "查询中..." : "查询"}
+            </Button>
           </div>
-          <Button type="submit" disabled={loading}>
-            {loading ? "查询中..." : "查询"}
-          </Button>
+          {!isSignedInMember && turnstileSiteKey ? (
+            <TurnstileWidget
+              siteKey={turnstileSiteKey}
+              onVerify={(token) => setModalTurnstileToken(token)}
+              onExpire={() => setModalTurnstileToken("")}
+              resetSignal={modalTurnstileReset}
+            />
+          ) : null}
         </form>
 
         <div className="min-h-0 flex-1 overflow-hidden px-5 py-4">
@@ -475,7 +851,7 @@ function OrderEmailQueryDialog({
             <div className="flex h-full items-center justify-center rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">
               <div className="text-center">
                 <div>{error}</div>
-                <Button variant="outline" size="sm" className="mt-4" onClick={() => queryOrders(page)}>
+                <Button variant="outline" size="sm" className="mt-4" onClick={() => void queryOrders(page, queryEmail)}>
                   重试
                 </Button>
               </div>
@@ -484,9 +860,13 @@ function OrderEmailQueryDialog({
             <div className="flex h-full items-center justify-center rounded-xl border border-dashed bg-slate-50 text-sm text-muted-foreground">
               请输入邮箱后查询订单。
             </div>
-          ) : orders.length === 0 ? (
-            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-orange-200 bg-orange-50/50 text-sm text-muted-foreground">
-              当前邮箱下没有可显示的订单。
+          ) : activeCount === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-orange-200 bg-orange-50/50 p-6 text-center text-sm text-muted-foreground">
+              <div>当前邮箱下没有可显示的订单。</div>
+              <Button type="button" variant="outline" size="sm" onClick={openPublicSupport}>
+                <Headphones className="mr-1.5 h-3.5 w-3.5" />
+                联系在线客服核查
+              </Button>
             </div>
           ) : (
             <div className={cn(glass.table, styles.list, "h-full overflow-auto rounded-2xl border")}>
@@ -512,60 +892,107 @@ function OrderEmailQueryDialog({
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((order) => {
-                    const firstItem = order.order_items?.[0];
-                    const productName = firstItem?.product_name ?? "订单商品";
-                    const quantity = (order.order_items ?? []).reduce(
-                      (sum, item) => sum + Number(item.quantity ?? 0),
-                      0
-                    );
-                    const displayStatus = getUserOrderDisplayStatus(order);
+                  {isSignedInMember
+                    ? memberOrders.map((order) => {
+                        const firstItem = order.order_items?.[0];
+                        const productName = firstItem?.product_name ?? "订单商品";
+                        const quantity = (order.order_items ?? []).reduce(
+                          (sum, item) => sum + Number(item.quantity ?? 0),
+                          0
+                        );
+                        const displayStatus = getUserOrderDisplayStatus(order);
 
-                    return (
-                      <tr key={order.id} className="border-b hover:bg-slate-50">
-                        <td data-label="订单编号" className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-mono text-xs">
-                          <button
-                            type="button"
-                            onClick={() => onCopyOrderNo(order.order_no)}
-                              title={order.order_no}
-                              className="inline-flex max-w-full items-center justify-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
-                          >
-                              <span className="min-w-0 truncate">{order.order_no}</span>
-                              <Clipboard className="h-3 w-3 shrink-0" />
-                          </button>
-                        </td>
-                        <td data-label="商品名称" className="px-3 py-2.5 text-center align-middle font-medium">
-                          <div className="mx-auto max-w-[260px] truncate whitespace-nowrap" title={productName}>
-                            {productName}
-                          </div>
-                        </td>
-                        <td data-label="数量" className="whitespace-nowrap px-3 py-2.5 text-center align-middle">{quantity || 1}</td>
-                        <td data-label="金额" className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-semibold text-primary">
-                          {formatMoney(order.total_amount)}
-                        </td>
-                        <td data-label="状态" className="px-3 py-2.5 text-center align-middle">
-                          <Badge variant="outline" className={cn("whitespace-nowrap text-xs", displayStatus.className)}>
-                            {displayStatus.label}
-                          </Badge>
-                        </td>
-                        <td data-label="下单时间" className="whitespace-nowrap px-3 py-2.5 text-center align-middle text-muted-foreground">
-                          {formatDate(order.created_at)}
-                        </td>
-                        <td data-label="操作" className="px-3 py-2.5 text-center align-middle">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              onClose();
-                              onViewOrder(order);
-                            }}
-                          >
-                            查看详情
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        return (
+                          <tr key={order.id} className="border-b hover:bg-slate-50">
+                            <td data-label="订单编号" className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-mono text-xs">
+                              <button
+                                type="button"
+                                onClick={() => onCopyOrderNo(order.order_no)}
+                                title={order.order_no}
+                                className="inline-flex max-w-full items-center justify-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
+                              >
+                                <span className="min-w-0 truncate">{order.order_no}</span>
+                                <Clipboard className="h-3 w-3 shrink-0" />
+                              </button>
+                            </td>
+                            <td data-label="商品名称" className="px-3 py-2.5 text-center align-middle font-medium">
+                              <div className="mx-auto max-w-[260px] truncate whitespace-nowrap" title={productName}>
+                                {productName}
+                              </div>
+                            </td>
+                            <td data-label="数量" className="whitespace-nowrap px-3 py-2.5 text-center align-middle">{quantity || 1}</td>
+                            <td data-label="金额" className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-semibold text-primary">
+                              {formatMoney(order.total_amount)}
+                            </td>
+                            <td data-label="状态" className="px-3 py-2.5 text-center align-middle">
+                              <Badge variant="outline" className={cn("whitespace-nowrap text-xs", displayStatus.className)}>
+                                {displayStatus.label}
+                              </Badge>
+                            </td>
+                            <td data-label="下单时间" className="whitespace-nowrap px-3 py-2.5 text-center align-middle text-muted-foreground">
+                              {formatDate(order.created_at)}
+                            </td>
+                            <td data-label="操作" className="px-3 py-2.5 text-center align-middle">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onViewMemberOrder(order)}
+                              >
+                                查看详情
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    : displayedGuestOrders.map((order) => {
+                        const firstItem = order.items?.[0];
+                        const productName = firstItem?.productName ?? "订单商品";
+                        const quantity = (order.items ?? []).reduce(
+                          (sum, item) => sum + Number(item.quantity ?? 0),
+                          0
+                        );
+                        return (
+                          <tr key={order.orderNo} className="border-b hover:bg-slate-50">
+                            <td data-label="订单编号" className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-mono text-xs">
+                              <button
+                                type="button"
+                                onClick={() => onCopyOrderNo(order.orderNo)}
+                                title={order.orderNo}
+                                className="inline-flex max-w-full items-center justify-center gap-1 rounded px-1 py-0.5 hover:bg-muted"
+                              >
+                                <span className="min-w-0 truncate">{order.orderNo}</span>
+                                <Clipboard className="h-3 w-3 shrink-0" />
+                              </button>
+                            </td>
+                            <td data-label="商品名称" className="px-3 py-2.5 text-center align-middle font-medium">
+                              <div className="mx-auto max-w-[260px] truncate whitespace-nowrap" title={productName}>
+                                {productName}
+                              </div>
+                            </td>
+                            <td data-label="数量" className="whitespace-nowrap px-3 py-2.5 text-center align-middle">{quantity || 1}</td>
+                            <td data-label="金额" className="whitespace-nowrap px-3 py-2.5 text-center align-middle font-semibold text-primary">
+                              {formatMoney(order.totalAmount, order.currency)}
+                            </td>
+                            <td data-label="状态" className="px-3 py-2.5 text-center align-middle">
+                              <Badge variant="outline" className={cn("whitespace-nowrap text-xs", guestStatusBadgeClass(order.status))}>
+                                {guestStatusLabel(order.status)}
+                              </Badge>
+                            </td>
+                            <td data-label="下单时间" className="whitespace-nowrap px-3 py-2.5 text-center align-middle text-muted-foreground">
+                              {formatDate(order.createdAt)}
+                            </td>
+                            <td data-label="操作" className="px-3 py-2.5 text-center align-middle">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onViewGuestOrder(order)}
+                              >
+                                查看详情
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
                 </tbody>
               </table>
             </div>
@@ -602,13 +1029,140 @@ function OrderEmailQueryDialog({
   );
 }
 
+function GuestOrderDetailModal({
+  order: requestedOrder,
+  onClose,
+  onCopyOrderNo,
+}: {
+  order: GuestLookupOrder | null;
+  onClose: () => void;
+  onCopyOrderNo: (orderNo: string) => void;
+}) {
+  const [closingOrder, setClosingOrder] = useState<GuestLookupOrder | null>(null);
+  useEffect(() => {
+    if (requestedOrder) setClosingOrder(requestedOrder);
+    else if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setClosingOrder(null);
+  }, [requestedOrder]);
+  const order = requestedOrder ?? closingOrder;
+  if (!order) return null;
+
+  return (
+    <DialogPrimitive.Root open={Boolean(requestedOrder)} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className={cn(styles.overlay, styles.detailOverlay)} />
+        <DialogPrimitive.Content
+          asChild
+          onAnimationEnd={(event) => {
+            if (event.target === event.currentTarget && event.currentTarget.dataset.state === "closed") {
+              setClosingOrder(null);
+            }
+          }}
+        >
+          <aside
+            data-testid="guest-order-detail-modal"
+            className={cn(styles.detailDialog, styles.detailDialogTop, "flex min-w-0 flex-col overflow-hidden")}
+          >
+            <div className={cn(styles.dialogHeader, "flex min-w-0 max-w-full shrink-0 items-center justify-between gap-4 overflow-hidden border-b px-5 py-5 md:px-7")}>
+              <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+                <span aria-hidden="true" className={cn(glass.icon, "h-11 w-11")}>
+                  <ClipboardList className="h-5 w-5" strokeWidth={1.6} />
+                </span>
+                <div className="min-w-0">
+                  <DialogPrimitive.Title className="text-lg font-semibold text-slate-950">订单详情</DialogPrimitive.Title>
+                  <DialogPrimitive.Description className="sr-only">查看游客订单商品、金额与状态信息。</DialogPrimitive.Description>
+                  <button
+                    type="button"
+                    onClick={() => onCopyOrderNo(order.orderNo)}
+                    className="mt-1 inline-flex max-w-full items-center gap-2 overflow-hidden rounded px-1 py-0.5 font-mono text-xs text-slate-500 hover:bg-muted"
+                  >
+                    <span className="min-w-0 truncate">{order.orderNo}</span>
+                    <Clipboard className="h-3 w-3 shrink-0" />
+                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                aria-label="关闭订单详情"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className={cn(styles.detailBody, "flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-5 md:px-7 md:py-6 [&>*]:min-w-0 [&>*]:max-w-full [&>*]:shrink-0")}>
+              {order.status === "pending_payment" && order.paymentStatus !== "paid" ? (
+                <Button asChild className="w-full">
+                  <Link href={`/payment?order=${encodeURIComponent(order.orderNo)}`}>前往支付</Link>
+                </Button>
+              ) : null}
+
+              <section className="grid min-w-0 max-w-full grid-cols-3 gap-2 sm:gap-3">
+                <InfoBlock label="订单金额" value={formatMoney(order.totalAmount, order.currency)} primary />
+                <InfoBlock label="支付状态" value={guestStatusLabel(order.paymentStatus)} />
+                <StatusBlock label="状态" value={guestStatusLabel(order.status)} className={guestStatusBadgeClass(order.status)} />
+              </section>
+
+              <section className={cn(styles.section, "min-w-0 max-w-full overflow-hidden rounded-2xl border")}>
+                <div className="border-b px-4 py-3 font-semibold">订单商品</div>
+                <div className="divide-y">
+                  {order.items.map((item, idx) => (
+                    <div key={`${order.orderNo}-${idx}`} className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 text-sm md:grid-cols-[minmax(0,1fr)_100px_56px]">
+                      <div className="col-span-2 min-w-0 md:col-span-1">
+                        <div className="truncate font-semibold" title={item.productName}>{item.productName}</div>
+                        {item.skuTitle ? (
+                          <div className="mt-1 truncate text-xs text-muted-foreground">规格：{item.skuTitle}</div>
+                        ) : null}
+                        {item.skuCode ? (
+                          <div className="mt-0.5 truncate text-xs text-muted-foreground">SKU：{item.skuCode}</div>
+                        ) : null}
+                      </div>
+                      <div className="text-center font-semibold text-primary">{formatMoney(item.lineTotal, order.currency)}</div>
+                      <div className="text-center text-muted-foreground">x {item.quantity}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className={cn(styles.section, "rounded-2xl border p-4 text-sm")}>
+                <div className="mb-3 font-semibold">订单信息</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <InfoLine label="交付状态" value={guestStatusLabel(order.deliveryStatus)} />
+                  <InfoLine label="下单时间" value={formatDate(order.createdAt)} />
+                  <InfoLine label="最近更新" value={formatDate(order.updatedAt)} />
+                </div>
+              </section>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-xs leading-5 text-amber-800">
+                为保护您的隐私与卡密安全，未登录查单仅展示订单基本信息；支付成功后的数字卡密已自动发往您的下单邮箱。如需协助重发或售后处理，请联系在线客服。
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                <Button type="button" variant="outline" size="sm" onClick={openPublicSupport}>
+                  <Headphones className="mr-1.5 h-4 w-4" />
+                  联系在线客服
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={onClose}>
+                  返回订单列表
+                </Button>
+              </div>
+            </div>
+          </aside>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
+  );
+}
+
 function UserOrderDrawer({
   order: requestedOrder,
+  stacked = false,
   onClose,
   onCopyOrderNo,
   onOrderUpdated,
 }: {
   order: OrderRecord | null;
+  stacked?: boolean;
   onClose: () => void;
   onCopyOrderNo: (orderNo: string) => void;
   onOrderUpdated: (orderNo: string) => Promise<void>;
@@ -632,13 +1186,13 @@ function UserOrderDrawer({
   return (
     <DialogPrimitive.Root open={Boolean(requestedOrder)} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
       <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className={styles.overlay} />
+      <DialogPrimitive.Overlay className={cn(styles.overlay, stacked && styles.detailOverlay)} />
       <DialogPrimitive.Content asChild onAnimationEnd={(event) => {
         if (event.target === event.currentTarget && event.currentTarget.dataset.state === "closed") setClosingOrder(null);
       }}>
       <aside
         data-testid="order-detail-drawer"
-        className={cn(styles.detailDialog, "flex min-w-0 flex-col overflow-hidden")}
+        className={cn(styles.detailDialog, stacked && styles.detailDialogTop, "flex min-w-0 flex-col overflow-hidden")}
       >
         <div className={cn(styles.dialogHeader, "flex min-w-0 max-w-full shrink-0 items-center justify-between gap-4 overflow-hidden border-b px-5 py-5 md:px-7")}>
           <div className="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">

@@ -13,6 +13,7 @@ import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 import { Button } from "@/components/ui/button";
 import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase/client";
+import { isGuestAuthUser } from "@/lib/auth/guest-user";
 import { cn } from "@/lib/utils";
 import glass from "@/components/account/AccountGlass.module.css";
 import center from "@/components/account/AccountCenter.module.css";
@@ -77,9 +78,10 @@ export default function AccountShell({ children }: { children: ReactNode }) {
         const supabase = getSupabaseBrowserClient();
         const { data: sessionData } = await supabase.auth.getSession();
         if (sessionData.session?.user && active) {
-          setEmail(sessionData.session.user.email ?? "");
-          setOrdersLoginRequired(false);
-          setEmailVerified(Boolean(sessionData.session.user.email_confirmed_at));
+          const isGuest = isGuestAuthUser(sessionData.session.user);
+          setEmail(isGuest ? "" : (sessionData.session.user.email ?? ""));
+          setOrdersLoginRequired(isGuest);
+          setEmailVerified(isGuest ? true : Boolean(sessionData.session.user.email_confirmed_at));
           setChecking(false);
         }
 
@@ -90,8 +92,8 @@ export default function AccountShell({ children }: { children: ReactNode }) {
 
         if (!active) return;
 
-        if (error || !user) {
-          if (isOrdersPage) { setOrdersLoginRequired(true); setChecking(false); return; }
+        if (error || !user || isGuestAuthUser(user)) {
+          if (isOrdersPage) { setOrdersLoginRequired(true); setEmail(""); setEmailVerified(true); setChecking(false); return; }
           toast.error("登录状态已失效，请重新登录。");
           router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
           return;
@@ -122,9 +124,10 @@ export default function AccountShell({ children }: { children: ReactNode }) {
         router.replace(`/login?redirect=${encodeURIComponent(redirectPath)}`);
       }
       if (isOrdersPage && session?.user && active) {
-        setOrdersLoginRequired(false);
-        setEmail(session.user.email ?? "");
-        setEmailVerified(Boolean(session.user.email_confirmed_at));
+        const isGuest = isGuestAuthUser(session.user);
+        setOrdersLoginRequired(isGuest);
+        setEmail(isGuest ? "" : (session.user.email ?? ""));
+        setEmailVerified(isGuest ? true : Boolean(session.user.email_confirmed_at));
         setChecking(false);
       }
     }).data.subscription;
@@ -173,17 +176,16 @@ export default function AccountShell({ children }: { children: ReactNode }) {
     }
   }
 
-  if (isOrdersPage && (checking || ordersLoginRequired)) {
+  if (isOrdersPage && checking) {
     return <PublicLayout contentClassName="max-w-none px-4 py-3 md:px-6">
-      <div data-account-orders-ready={!checking} className={`mx-auto flex w-full max-w-[1540px] flex-col ${publicMainPanelHeightClassName}`}>
+      <div data-account-orders-ready={false} className={`mx-auto flex w-full max-w-[1540px] flex-col ${publicMainPanelHeightClassName}`}>
         <section className={cn(glass.surface, "relative flex min-h-[440px] flex-1 flex-col overflow-hidden")}>
-          <div className={cn(glass.hero, "px-6 py-6")}><h1 className="text-xl font-semibold">我的订单</h1><p className="mt-2 text-sm text-muted-foreground">订单记录与卡密信息</p></div>
+          <div className={cn(glass.hero, "px-6 py-6")}><h1 className="text-xl font-semibold">订单查询</h1><p className="mt-2 text-sm text-muted-foreground">订单记录、支付进度与卡密查询</p></div>
           <div className="absolute inset-0 flex items-center justify-center bg-white/55 p-6 backdrop-blur-[3px]">
             <div role="status" className={cn(glass.inset, "w-full max-w-sm rounded-2xl px-7 py-8 text-center shadow-lg")}>
               <span className={cn(glass.icon, "mx-auto mb-4 h-12 w-12")}><FileLock2 className="h-6 w-6" strokeWidth={1.6} /></span>
-              <h2 className="text-lg font-semibold">{checking ? "正在加载" : "暂未登录"}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{checking ? "正在读取账户信息…" : "请登录后查看订单和卡密信息。"}</p>
-              {!checking ? <div className="mt-6 flex justify-center gap-3"><Button asChild><Link href="/login?redirect=%2Faccount%2Forders">登录</Link></Button><Button asChild variant="outline"><Link href="/register?redirect=%2Faccount%2Forders">注册</Link></Button></div> : null}
+              <h2 className="text-lg font-semibold">正在加载</h2>
+              <p className="mt-2 text-sm text-muted-foreground">正在准备订单查询页面…</p>
             </div>
           </div>
         </section>
@@ -221,7 +223,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
     return (
       <PublicLayout contentClassName="max-w-none px-4 py-3 md:px-6">
         <div className={cn(`mx-auto flex w-full max-w-[1640px] flex-col gap-3 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`, isMobile && "!h-auto !overflow-visible")}>
-          {emailNotice}
+          {!ordersLoginRequired ? emailNotice : null}
           {children}
         </div>
       </PublicLayout>

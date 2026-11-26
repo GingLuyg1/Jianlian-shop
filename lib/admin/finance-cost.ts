@@ -57,9 +57,27 @@ function num(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+export function isFiatOnlineGatewayMethod(method: string | null | undefined): boolean {
+  const normalized = String(method ?? "").trim().toLowerCase();
+  if (!normalized) return false;
+  if (
+    normalized === "balance" ||
+    normalized === "manual" ||
+    normalized === "transfer" ||
+    normalized.includes("usdt") ||
+    normalized.includes("bep20") ||
+    normalized.includes("trc20") ||
+    normalized.includes("crypto")
+  ) {
+    return false;
+  }
+  return true;
+}
+
 export function computeFinanceCostSummary({
   gmv,
   recharge,
+  fiatRecharge,
   paidOrders,
   orderItems,
   products,
@@ -68,6 +86,7 @@ export function computeFinanceCostSummary({
 }: {
   gmv: number;
   recharge: number;
+  fiatRecharge?: number;
   paidOrders: Array<{
     id: string;
     total_amount?: number | string | null;
@@ -98,7 +117,6 @@ export function computeFinanceCostSummary({
   costData?: FinanceCostDataPayload | null;
   gatewayFeeRate?: number;
 }): FinanceCostSummary {
-  const revenue = gmv + recharge;
   const productMap = new Map(products.map((p) => [p.id, p]));
 
   const fulfillmentMap = costData?.fulfillmentCostByItemId ?? {};
@@ -181,7 +199,7 @@ export function computeFinanceCostSummary({
     const method = String(ord.payment_method ?? paymentMethodMap[ord.id] ?? "").trim().toLowerCase();
     if (method === "balance") {
       balancePaidAmount += amt;
-    } else {
+    } else if (isFiatOnlineGatewayMethod(method)) {
       gatewayEligibleAmount += amt;
     }
 
@@ -223,11 +241,14 @@ export function computeFinanceCostSummary({
 
   const unconfiguredCostItemCount = productCostRows.filter((r) => r.cost === null).length;
 
+  // Deduplicated net cash inflow: direct non-balance order payments + account recharges (avoids counting balance recharge + balance spend twice)
+  const revenue = Number((Math.max(0, gmv - balancePaidAmount) + recharge).toFixed(2));
   const grossProfit = gmv - totalCost;
   const grossMarginNumber = gmv > 0 ? (grossProfit / gmv) * 100 : 0;
   const grossMargin = gmv > 0 ? `${grossMarginNumber.toFixed(1)}%` : "—";
-  // Gateway fee applies only to third-party online payment gateway amounts (orders not paid via balance + recharges)
-  const gatewayFee = Number(((gatewayEligibleAmount + recharge) * gatewayFeeRate).toFixed(2));
+  // Gateway fee applies only to third-party fiat payment gateways (Alipay/WeChat); balance & USDT/crypto are 0%
+  const taxableRecharge = fiatRecharge !== undefined ? fiatRecharge : 0;
+  const gatewayFee = Number(((gatewayEligibleAmount + taxableRecharge) * gatewayFeeRate).toFixed(2));
   const netProfit = grossProfit - gatewayFee;
 
   return {
