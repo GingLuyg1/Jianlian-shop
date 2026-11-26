@@ -64,10 +64,15 @@ export default function AdminTicketsPage() {
   const searchParams = useSearchParams();
   const initialUrlTicketId = searchParams.get("ticket") || searchParams.get("ticketId") || null;
   const initialUrlQuery = searchParams.get("q") || "";
+  const rawInitialTab = searchParams.get("tab");
+  const initialTab: AdminTicketTab =
+    rawInitialTab === "processing" || rawInitialTab === "completed" || rawInitialTab === "flagged"
+      ? rawInitialTab
+      : "all";
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [loadingTickets, setLoadingTickets] = useState(true);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(initialUrlTicketId);
-  const [activeTab, setActiveTab] = useState<AdminTicketTab>("all");
+  const [activeTab, setActiveTab] = useState<AdminTicketTab>(initialTab);
   const [searchQuery, setSearchQuery] = useState(initialUrlQuery);
 
   // 回复表单状态
@@ -132,6 +137,10 @@ export default function AdminTicketsPage() {
   useEffect(() => {
     const paramTicket = searchParams.get("ticket") || searchParams.get("ticketId");
     const paramQuery = searchParams.get("q");
+    const paramTab = searchParams.get("tab");
+    if (paramTab === "all" || paramTab === "processing" || paramTab === "completed" || paramTab === "flagged") {
+      setActiveTab(paramTab);
+    }
     if (paramQuery !== null) {
       setSearchQuery(paramQuery);
     }
@@ -645,6 +654,20 @@ export default function AdminTicketsPage() {
                     </div>
 
                     <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleToggleStatus}
+                        className={cn(
+                          "rounded-xl text-xs font-bold transition-all whitespace-nowrap",
+                          currentTicket.status === "completed"
+                            ? "border-slate-300 text-slate-700 hover:bg-slate-100"
+                            : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                        )}
+                      >
+                        {currentTicket.status === "completed" ? "恢复处理中" : "标记已解决"}
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"

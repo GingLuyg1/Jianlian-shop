@@ -8,7 +8,7 @@ import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
-import { AdminFilterBar, AdminListSurface, AdminTableViewport, adminListRowClass, adminListTableHeadClass } from "@/components/admin/v2/AdminList";
+import { AdminFilterBar, AdminListPagination, AdminListSurface, AdminTableViewport, adminListRowClass, adminListTableHeadClass } from "@/components/admin/v2/AdminList";
 import AdminSection from "@/components/admin/v2/AdminSection";
 import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/AdminStatusBadge";
 import { Button } from "@/components/ui/button";
@@ -85,6 +85,9 @@ function statusLabel(value: string) {
 
 export default function AdminMediaPage() {
   const [assets, setAssets] = useState<MediaAsset[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const pageSize = 24;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [ownerType, setOwnerType] = useState("all");
@@ -95,6 +98,7 @@ export default function AdminMediaPage() {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [uploading, setUploading] = useState(false);
   const selectedFiles = files ? Array.from(files) : [];
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const filteredAssets = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -109,20 +113,22 @@ export default function AdminMediaPage() {
   const loadAssets = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const params = new URLSearchParams({ pageSize: "24", ownerType, status });
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize), ownerType, status });
     try {
       const response = await fetch(`/api/admin/media?${params.toString()}`, { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "媒体资源读取失败");
       setAssets(Array.isArray(payload.assets) ? payload.assets : []);
+      setTotal(Number(payload.total ?? payload.count ?? (Array.isArray(payload.assets) ? payload.assets.length : 0)));
     } catch (err) {
       const message = err instanceof Error ? err.message : "媒体资源读取失败";
       setError(message);
       setAssets([]);
+      setTotal(0);
     } finally {
       setLoading(false);
     }
-  }, [ownerType, status]);
+  }, [ownerType, page, status]);
 
   useEffect(() => {
     loadAssets();
@@ -231,15 +237,15 @@ export default function AdminMediaPage() {
             <Search className="h-4 w-4 text-[var(--admin-v2-text-muted)]" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="在当前结果搜索文件名、Bucket 或 URL" className="w-full bg-transparent outline-none" />
           </label>
-          <select aria-label="资源归属" value={ownerType} onChange={(event) => setOwnerType(event.target.value)} className={mediaControlClass}>
+          <select aria-label="资源归属" value={ownerType} onChange={(event) => { setOwnerType(event.target.value); setPage(1); }} className={mediaControlClass}>
             {OWNER_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
-          <select aria-label="资源状态" value={status} onChange={(event) => setStatus(event.target.value)} className={mediaControlClass}>
+          <select aria-label="资源状态" value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }} className={mediaControlClass}>
             {STATUS_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         <div className="col-span-full flex flex-wrap gap-2 text-xs text-[var(--admin-v2-text-muted)]">
-          <span>归属 与状态由后端筛选。</span>
-          <span>关键词只搜索当前已加载的 {assets.length} 条结果。</span>
+          <span>归属与状态由后端筛选（共 {total} 个资源）。</span>
+          <span>关键词搜索当前页已加载的 {assets.length} 条结果。</span>
         </div>
       </AdminFilterBar>
 
@@ -248,46 +254,55 @@ export default function AdminMediaPage() {
         ) : loading ? (
           <AdminTableSkeleton rows={7} />
         ) : filteredAssets.length ? (
+          <>
           <AdminTableViewport>
-            <table className="min-w-[1120px] w-full text-left text-sm">
+            <table className="min-w-[1160px] w-full text-left text-sm">
               <thead className={adminListTableHeadClass}>
                 <tr>
-                  <th className="px-4 py-3 text-center">缩略图</th>
-                  <th className="px-4 py-3">文件</th>
-                  <th className="px-4 py-3">用途</th>
-                  <th className="px-4 py-3">Bucket / 路径</th>
-                  <th className="px-4 py-3 text-center">类型</th>
-                  <th className="px-4 py-3 text-center">大小</th>
-                  <th className="px-4 py-3 text-center">尺寸</th>
-                  <th className="px-4 py-3 text-center">状态</th>
-                  <th className="px-4 py-3 text-center">上传时间</th>
-                  <th className="px-4 py-3 text-center">操作</th>
+                  <th className="w-[76px] whitespace-nowrap px-3 py-3 text-center">缩略图</th>
+                  <th className="min-w-[200px] whitespace-nowrap px-3 py-3">文件</th>
+                  <th className="w-[88px] whitespace-nowrap px-3 py-3 text-center">用途</th>
+                  <th className="min-w-[200px] whitespace-nowrap px-3 py-3">Bucket / 路径</th>
+                  <th className="w-[104px] whitespace-nowrap px-3 py-3 text-center">类型</th>
+                  <th className="w-[88px] whitespace-nowrap px-3 py-3 text-center">大小</th>
+                  <th className="w-[96px] whitespace-nowrap px-3 py-3 text-center">尺寸</th>
+                  <th className="w-[92px] whitespace-nowrap px-3 py-3 text-center">状态</th>
+                  <th className="w-[152px] whitespace-nowrap px-3 py-3 text-center">上传时间</th>
+                  <th className="sticky right-0 w-[104px] whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-3 py-3 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--admin-v2-border)]">
                 {filteredAssets.map((asset) => (
                   <tr key={asset.id} className={adminListRowClass}>
-                    <td className="px-4 py-3 text-center">
-                      {asset.public_url ? <img src={asset.public_url} alt="" loading="lazy" decoding="async" className="h-12 w-12 rounded-lg object-cover ring-1 ring-slate-200" /> : <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100"><ImageIcon className="h-5 w-5 text-slate-400" /></div>}
+                    <td className="px-3 py-2.5 text-center">
+                      {asset.public_url ? <img src={asset.public_url} alt="" loading="lazy" decoding="async" className="mx-auto h-11 w-11 shrink-0 rounded-lg object-cover ring-1 ring-slate-200" /> : <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100"><ImageIcon className="h-5 w-5 text-slate-400" /></div>}
                     </td>
-                    <td className="max-w-[220px] px-4 py-3">
-                      <div className="truncate font-medium text-slate-900">{asset.original_name || "—"}</div>
-                      <div className="truncate text-xs text-slate-500">{asset.public_url || "私有资源"}</div>
+                    <td className="max-w-[220px] px-3 py-2.5">
+                      <div className="truncate font-medium text-slate-900" title={asset.original_name || ""}>{asset.original_name || "—"}</div>
+                      <div className="truncate text-xs text-slate-500" title={asset.public_url || ""}>{asset.public_url || "私有资源"}</div>
                     </td>
-                    <td className="px-4 py-3">{OWNER_OPTIONS.find(([key]) => key === asset.owner_type)?.[1] ?? asset.owner_type}</td>
-                    <td className="max-w-[260px] px-4 py-3">
-                      <div className="font-medium text-slate-700">{asset.bucket}</div>
-                      <div className="truncate text-xs text-slate-500">{asset.storage_path}</div>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center">{OWNER_OPTIONS.find(([key]) => key === asset.owner_type)?.[1] ?? asset.owner_type}</td>
+                    <td className="max-w-[240px] px-3 py-2.5">
+                      <div className="truncate font-medium text-slate-700">{asset.bucket}</div>
+                      <div className="truncate text-xs text-slate-500" title={asset.storage_path}>{asset.storage_path}</div>
                     </td>
-                    <td className="px-4 py-3 text-center">{asset.mime_type}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{formatBytes(Number(asset.file_size))}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{asset.width && asset.height ? `${asset.width}×${asset.height}` : "—"}</td>
-                    <td className="px-4 py-3 text-center"><AdminStatusBadge tone={mediaStatusTone(asset.status)}>{statusLabel(asset.status)}</AdminStatusBadge></td>
-                    <td className="whitespace-nowrap px-4 py-3 text-center">{formatDate(asset.created_at)}</td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center text-xs">{asset.mime_type}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center tabular-nums text-xs">{formatBytes(Number(asset.file_size))}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center tabular-nums text-xs">{asset.width && asset.height ? `${asset.width}×${asset.height}` : "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center"><AdminStatusBadge tone={mediaStatusTone(asset.status)}>{statusLabel(asset.status)}</AdminStatusBadge></td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center text-xs tabular-nums">{formatDate(asset.created_at)}</td>
+                    <td className="sticky right-0 bg-white px-3 py-2.5 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">
                       <div className="flex justify-center gap-2 whitespace-nowrap">
                         <Button variant="outline" size="icon" onClick={() => copyUrl(asset)} title="复制地址"><Copy className="h-4 w-4" /></Button>
-                        <Button variant="outline" size="icon" onClick={() => archiveAsset(asset)} disabled={asset.status === "active"} title={asset.status === "active" ? "使用中资源不可归档" : "归档未引用资源"}><Archive className="h-4 w-4" /></Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => archiveAsset(asset)}
+                          disabled={["active", "archived", "deleted"].includes(asset.status)}
+                          title={asset.status === "active" ? "使用中资源不可归档" : asset.status === "archived" ? "资源已归档" : "归档未引用资源"}
+                        >
+                          <Archive className="h-4 w-4" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -295,6 +310,15 @@ export default function AdminMediaPage() {
               </tbody>
             </table>
           </AdminTableViewport>
+          <AdminListPagination
+            summary={`共 ${total} 个资源，第 ${page}/${totalPages} 页`}
+            page={page}
+            totalPages={totalPages}
+            loading={loading}
+            onPrevious={() => setPage((value) => Math.max(1, value - 1))}
+            onNext={() => setPage((value) => Math.min(totalPages, value + 1))}
+          />
+          </>
         ) : (
           <AdminEmptyState
             icon={<ImageIcon className="h-5 w-5" />}

@@ -350,25 +350,33 @@ export default function AdminRefundsPage() {
               </DetailSection>
 
               <DetailSection title="审核操作">
-              <div className={`rounded-lg border px-3 py-2 text-sm ${isBalanceRefund(selected) ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-amber-100 bg-amber-50 text-amber-700"}`}>
-                {isBalanceRefund(selected)
-                  ? "余额支付订单会通过服务端退款流程增加用户余额并创建余额流水。"
-                  : "外部渠道暂未接入自动退款。请完成真实人工退款后，再填写真实退款参考号登记完成，不能伪造退款成功。"}
-              </div>
-              <select value={action} onChange={(event) => setAction(event.target.value)} className="mt-3 h-10 w-full rounded-md border px-3 text-sm">
-                {(isBalanceRefund(selected) ? BALANCE_REFUND_ACTIONS : EXTERNAL_REFUND_ACTIONS).map((item) => (
-                  <option key={item.value} value={item.value}>{item.label}</option>
-                ))}
-              </select>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <Input value={approvedAmount} onChange={(event) => setApprovedAmount(event.target.value)} type="number" min="0" step="0.01" placeholder="批准金额" />
-                <Input value={providerRefundId} onChange={(event) => setProviderRefundId(event.target.value)} placeholder={isBalanceRefund(selected) ? "余额退款无需填写外部参考号" : "外部渠道真实退款参考号或交易摘要（完成时必填）"} />
-              </div>
-              <Textarea value={note} onChange={(event) => setNote(event.target.value)} className="mt-3 min-h-[96px]" placeholder="管理员审核备注（必填）" />
-              <Textarea value={userNote} onChange={(event) => setUserNote(event.target.value)} className="mt-3 min-h-[72px]" placeholder="用户可见说明（选填）" />
-              <Button variant={isDestructiveAction ? "destructive" : "default"} disabled={submitting} onClick={submitAction} className="mt-3 w-full">
-                {submitting ? "处理中..." : "提交审核操作"}
-              </Button>
+              {["succeeded", "rejected", "cancelled"].includes(selected.status) ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
+                  该退款申请已进入终态（{REFUND_STATUS_LABELS[selected.status as keyof typeof REFUND_STATUS_LABELS] ?? adminUnknownStatusLabel(selected.status)}），不可重复提交审核操作。
+                </div>
+              ) : (
+                <>
+                  <div className={`rounded-lg border px-3 py-2 text-sm ${isBalanceRefund(selected) ? "border-emerald-100 bg-emerald-50 text-emerald-700" : "border-amber-100 bg-amber-50 text-amber-700"}`}>
+                    {isBalanceRefund(selected)
+                      ? "余额支付订单会通过服务端退款流程增加用户余额并创建余额流水。"
+                      : "外部渠道暂未接入自动退款。请完成真实人工退款后，再填写真实退款参考号登记完成，不能伪造退款成功。"}
+                  </div>
+                  <select value={action} onChange={(event) => setAction(event.target.value)} className="mt-3 h-10 w-full rounded-md border px-3 text-sm">
+                    {(isBalanceRefund(selected) ? BALANCE_REFUND_ACTIONS : EXTERNAL_REFUND_ACTIONS).map((item) => (
+                      <option key={item.value} value={item.value}>{item.label}</option>
+                    ))}
+                  </select>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <Input value={approvedAmount} onChange={(event) => setApprovedAmount(event.target.value)} type="number" min="0" step="0.01" placeholder="批准金额" />
+                    <Input value={providerRefundId} onChange={(event) => setProviderRefundId(event.target.value)} placeholder={isBalanceRefund(selected) ? "余额退款无需填写外部参考号" : "外部渠道真实退款参考号或交易摘要（完成时必填）"} />
+                  </div>
+                  <Textarea value={note} onChange={(event) => setNote(event.target.value)} className="mt-3 min-h-[96px]" placeholder="管理员审核备注（必填）" />
+                  <Textarea value={userNote} onChange={(event) => setUserNote(event.target.value)} className="mt-3 min-h-[72px]" placeholder="用户可见说明（选填）" />
+                  <Button variant={isDestructiveAction ? "destructive" : "default"} disabled={submitting} onClick={submitAction} className="mt-3 w-full">
+                    {submitting ? "处理中..." : "提交审核操作"}
+                  </Button>
+                </>
+              )}
               </DetailSection>
             </div>
           </aside>

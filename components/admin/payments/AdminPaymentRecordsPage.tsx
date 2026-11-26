@@ -3,6 +3,7 @@ import { statusLabel, detailLabel } from '@/lib/admin/display-labels';
 
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AlertTriangle, Copy, Eye, RefreshCcw, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -146,19 +147,43 @@ function useDebouncedValue(value: string, delay = 350) {
 
 export default function AdminPaymentRecordsPage({ mode }: Props) {
   const isRechargePage = mode === "recharges";
+  const nextSearchParams = useSearchParams();
+  const resolveViewParam = useCallback(
+    (rawView: string | null) =>
+      isRechargePage
+        ? rawView === "review"
+          ? "review"
+          : "all"
+        : rawView === "exceptions"
+          ? "exceptions"
+          : rawView === "callbacks"
+            ? "callbacks"
+            : rawView === "reconciliations"
+              ? "reconciliations"
+              : rawView === "underpayments"
+                ? "underpayments"
+                : "all",
+    [isRechargePage]
+  );
+  const initialSearchText = nextSearchParams.get("search") ?? nextSearchParams.get("paymentId") ?? "";
+  const initialView = resolveViewParam(nextSearchParams.get("view"));
   const [payments, setPayments] = useState<AdminPaymentRecord[]>([]);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState("");
-  const [businessType, setBusinessType] = useState(isRechargePage ? "recharge" : "all");
-  const [channel, setChannel] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [sort, setSort] = useState("created_desc");
-  const [view, setView] = useState<"all" | "exceptions" | "callbacks" | "reconciliations" | "underpayments" | "review">("all");
-  const [attention, setAttention] = useState<PaymentAttention>("all");
-  const [exceptionType, setExceptionType] = useState("all");
+  const [search, setSearch] = useState(initialSearchText);
+  const [businessType, setBusinessType] = useState(isRechargePage ? "recharge" : (nextSearchParams.get("businessType") ?? "all"));
+  const [channel, setChannel] = useState(nextSearchParams.get("channel") ?? "all");
+  const [status, setStatus] = useState(nextSearchParams.get("status") ?? "all");
+  const [startDate, setStartDate] = useState(nextSearchParams.get("startDate") ?? "");
+  const [endDate, setEndDate] = useState(nextSearchParams.get("endDate") ?? "");
+  const [sort, setSort] = useState(nextSearchParams.get("sort") ?? "created_desc");
+  const [view, setView] = useState<"all" | "exceptions" | "callbacks" | "reconciliations" | "underpayments" | "review">(initialView);
+  const [attention, setAttention] = useState<PaymentAttention>(
+    !isRechargePage && ["callbacks", "reconciliations"].includes(initialView) && nextSearchParams.get("attention") === "failed"
+      ? "failed"
+      : "all"
+  );
+  const [exceptionType, setExceptionType] = useState(nextSearchParams.get("exceptionType") ?? "all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<AdminPaymentRecord | null>(null);
@@ -171,6 +196,8 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState("");
   const debouncedSearch = useDebouncedValue(search);
+  const lastReplacedQueryRef = useRef<string | null>(null);
+  const lastExternalParamsRef = useRef(nextSearchParams.toString());
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
   const hasFilters = Boolean(
     search.trim() ||
@@ -185,36 +212,31 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
   );
 
   useEffect(() => {
-    const syncFromLocation = () => {
-      const params = new URLSearchParams(window.location.search);
-      const nextView = isRechargePage
-        ? (params.get("view") === "review" ? "review" : "all")
-        : params.get("view") === "exceptions"
-          ? "exceptions"
-          : params.get("view") === "callbacks"
-            ? "callbacks"
-            : params.get("view") === "reconciliations"
-              ? "reconciliations"
-              : params.get("view") === "underpayments"
-                ? "underpayments"
-                : "all";
+    const syncFromParams = (params: URLSearchParams) => {
+      const nextView = resolveViewParam(params.get("view"));
       setView(nextView);
       setAttention(!isRechargePage && ["callbacks", "reconciliations"].includes(nextView) && params.get("attention") === "failed" ? "failed" : "all");
-    setSearch(params.get("search") ?? "");
-    setStatus(params.get("status") ?? "all");
-    setChannel(params.get("channel") ?? "all");
-    setStartDate(params.get("startDate") ?? "");
-    setEndDate(params.get("endDate") ?? "");
-    setSort(params.get("sort") ?? "created_desc");
+      setSearch(params.get("search") ?? params.get("paymentId") ?? "");
+      setStatus(params.get("status") ?? "all");
+      setChannel(params.get("channel") ?? "all");
+      setStartDate(params.get("startDate") ?? "");
+      setEndDate(params.get("endDate") ?? "");
+      setSort(params.get("sort") ?? "created_desc");
+      setPage(1);
       if (!isRechargePage) {
-      setBusinessType(params.get("businessType") ?? "all");
-      setExceptionType(params.get("exceptionType") ?? "all");
+        setBusinessType(params.get("businessType") ?? "all");
+        setExceptionType(params.get("exceptionType") ?? "all");
       }
     };
-    syncFromLocation();
-    window.addEventListener("popstate", syncFromLocation);
-    return () => window.removeEventListener("popstate", syncFromLocation);
-  }, [isRechargePage]);
+    const nextStr = nextSearchParams.toString();
+    if (nextStr !== lastExternalParamsRef.current && nextStr !== lastReplacedQueryRef.current) {
+      lastExternalParamsRef.current = nextStr;
+      syncFromParams(new URLSearchParams(nextStr));
+    }
+    const onPopState = () => syncFromParams(new URLSearchParams(window.location.search));
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [isRechargePage, nextSearchParams, resolveViewParam]);
 
   const updateView = (nextView: typeof view) => {
     setView(nextView);
@@ -275,7 +297,9 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
       setCount(Number(payload?.count ?? 0));
       const urlParams = new URLSearchParams(params);
       urlParams.delete("pageSize");
-      window.history.replaceState(null, "", `${window.location.pathname}?${urlParams.toString()}`);
+      const nextUrlQuery = urlParams.toString();
+      lastReplacedQueryRef.current = nextUrlQuery;
+      window.history.replaceState(null, "", `${window.location.pathname}?${nextUrlQuery}`);
     } catch (loadError) {
       if (controller.signal.aborted || seq !== listReqSeqRef.current) return;
       setError(loadError instanceof Error ? loadError.message : "支付数据加载失败");
@@ -404,7 +428,7 @@ function PaymentTable({ isRechargePage, payments, copyText, loadDetail, hasFilte
           <Th>{isRechargePage ? "充值单号" : "订单号/充值单号"}</Th>
           <Th>用户邮箱</Th><Th>支付渠道</Th><Th>网络</Th>
           {isRechargePage ? <><Th>申请充值</Th><Th>应付</Th><Th>实际到账</Th><Th>入账</Th></> : <><Th>业务金额</Th><Th>手续费</Th><Th>应付金额</Th><Th>到账金额</Th></>}
-          <Th>支付状态</Th><Th>渠道交易号</Th><Th>创建时间</Th><Th>支付时间</Th><Th className="text-right">操作</Th>
+          <Th>支付状态</Th><Th>渠道交易号</Th><Th>创建时间</Th><Th>支付时间</Th><Th className="sticky right-0 bg-[var(--admin-v2-surface-muted)] text-right shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</Th>
         </tr>
       </thead>
       <tbody>
@@ -424,7 +448,7 @@ function PaymentTable({ isRechargePage, payments, copyText, loadDetail, hasFilte
             <Td><button type="button" onClick={() => copyText(payment.provider_trade_no)} className="flex min-h-11 max-w-full items-center gap-1 text-left text-slate-700 hover:text-primary sm:min-h-0" title={payment.provider_trade_no ?? ""}><span className="truncate font-mono text-xs">{payment.provider_trade_no ?? "—"}</span>{payment.provider_trade_no ? <Copy className="h-3.5 w-3.5 shrink-0" /> : null}</button></Td>
             <Td>{formatDate(payment.created_at)}</Td>
             <Td>{formatDate(payment.paid_at)}</Td>
-            <Td className="text-right">
+            <Td className="sticky right-0 bg-white text-right shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">
               {isRechargePage && ["submitted", "reviewing", "approved", "failed"].includes(payment.status) ? (
                 <Button variant="outline" className="min-h-11 border-orange-200 bg-orange-50/70 text-orange-700 hover:bg-orange-100 hover:text-orange-800 sm:min-h-9" size="sm" onClick={() => loadDetail(payment)}>
                   去审核
@@ -465,7 +489,7 @@ function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackEr
                 {detail.business_type === "order" ? <DetailGroup title="订单支付会话与履约" rows={[["支付会话", detail.payment_session_no ?? "未提供"], ["会话状态", statusLabel(detail.payment_session_status)], ["对账状态", statusLabel(detail.reconciliation_status)], ["履约状态", statusLabel(detail.fulfillment_status)], ["支付/履约错误", detail.payment_session_error ?? "—"], ["历史身份绑定", detail.session_evidence_status ?? "未提供"], ["实际收银台手续费/总额", ["snpay", "liuhaoyi"].includes(detail.provider ?? "") ? "未提供；预计约 3%，以收银台实际金额为准" : "未提供"]]} /> : null}
                 <DetailGroup title="关联业务" rows={[["业务单号", detail.business_no ?? "—"], ["用户邮箱", detail.user_email ?? "—"], ["用户备注", detail.user_note ?? "—"], ["管理员备注", detail.admin_note ?? "—"]]} />
                 {isRechargePage ? <DetailGroup title="金额与汇率" rows={[["申请充值", formatRechargeRequested(detail)], ["应付", formatRechargeExpected(detail)], ["实际到账", formatRechargeActual(detail)], ["入账", formatRechargeCredited(detail)]]} /> : <DetailGroup title="金额与费率" rows={[["订单本金", formatPaymentMoney(detail.business_amount, detail.business_currency)], ["本站手续费", formatPaymentMoney(detail.fee_amount, detail.payable_currency ?? detail.business_currency)], ["本站应付金额", formatPaymentMoney(detail.payable_amount, detail.payable_currency)], ["支付服务商记录到账金额", formatPaymentMoney(detail.received_amount, detail.received_currency)], ["本站到账减本站手续费（非上游结算净额）", formatPaymentMoney(detail.platform_net_amount, detail.received_currency)]]} />}
-                <DetailGroup title="渠道信息" rows={[["网络", detail.channel === "alipay" || detail.channel === "wechat" ? "—" : detail.network ?? "—"], ["渠道交易号", detail.provider_trade_no ?? "—", detail.provider_trade_no ? () => copyText(detail.provider_trade_no) : undefined], ["交易参考号", detail.transaction_reference ?? "—"], ["钱包地址", maskWallet(null)]]} />
+                <DetailGroup title="渠道信息" rows={[["网络", detail.channel === "alipay" || detail.channel === "wechat" ? "—" : detail.network ?? "—"], ["渠道交易号", detail.provider_trade_no ?? "—", detail.provider_trade_no ? () => copyText(detail.provider_trade_no) : undefined], ["交易参考号", detail.transaction_reference ?? "—"], ["钱包地址", maskWallet(chainPayment?.receiveAddress ?? chainPayment?.transaction?.toAddress ?? null)]]} />
               </div>
               {chainPayment || chainPaymentError ? <Bep20ChainPaymentPanel detail={detail} chainPayment={chainPayment} chainPaymentError={chainPaymentError} overpaymentWallet={overpaymentWallet} copyText={copyText} onChanged={onChanged} /> : null}
               <div className="space-y-4">
@@ -474,7 +498,7 @@ function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackEr
                 <DetailGroup title="异常摘要" rows={[["异常类型", detail.exception_type ? getExceptionTypeLabel(detail.exception_type) : "—"], ["错误摘要", detail.error_summary ?? "—"]]} />
               </div>
               <CallbackRecords callbacks={callbacks} callbackError={callbackError} />
-              {!underpaymentCredited && detail.exception_type ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"><div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />重新查询渠道状态</div><p className="mt-1 text-xs">真实支付服务商尚未配置，当前操作不可用。</p></div> : null}
+              {!underpaymentCredited && detail.exception_type ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"><div className="flex items-center gap-2 font-medium"><AlertTriangle className="h-4 w-4" />异常支付核验提示</div><p className="mt-1 text-xs">如需核验外部渠道最新支付状态，请切换至「对账记录」标签页执行一键重查。</p></div> : null}
             </div>
           ) : null}
     </AdminDetailDrawer>

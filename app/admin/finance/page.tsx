@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
   Banknote,
+  BarChart3,
   CheckCircle2,
   CircleDollarSign,
   CreditCard,
@@ -24,6 +26,7 @@ import {
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
+import AdminReportsWorkspace from "@/components/admin/reports/AdminReportsWorkspace";
 import {
   AdminDateRangeFilter,
   getPresetDateRange,
@@ -44,6 +47,7 @@ import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase/clie
 import { listProducts, type AdminProduct } from "@/lib/supabase/admin-catalog";
 import {
   computeFinanceCostSummary,
+  isFiatOnlineGatewayMethod,
   type FinanceCostDataPayload,
 } from "@/lib/admin/finance-cost";
 import { cn } from "@/lib/utils";
@@ -97,14 +101,32 @@ type RawOrderItem = {
 type ChannelConfig = {
   code: string;
   label: string;
+  feeRate: number;
 };
 
 const CHANNELS: ChannelConfig[] = [
-  { code: "alipay", label: "支付宝" },
-  { code: "wechat", label: "微信支付" },
-  { code: "usdt_trc20", label: "USDT-TRC20" },
-  { code: "usdt_bep20", label: "USDT-BEP20" },
+  { code: "alipay", label: "支付宝", feeRate: 0.03 },
+  { code: "wechat", label: "微信支付", feeRate: 0.03 },
+  { code: "usdt_trc20", label: "USDT-TRC20", feeRate: 0 },
+  { code: "usdt_bep20", label: "USDT-BEP20", feeRate: 0 },
 ];
+
+async function fetchAllClientRows<T>(
+  queryPage: (from: number, to: number) => PromiseLike<{ data: unknown; error: unknown }>,
+  maxRows = 10000
+): Promise<T[]> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+  for (let offset = 0; offset < maxRows; offset += pageSize) {
+    const end = Math.min(offset + pageSize - 1, maxRows - 1);
+    const { data, error } = await queryPage(offset, end);
+    if (error) throw error;
+    const batch = Array.isArray(data) ? (data as T[]) : [];
+    rows.push(...batch);
+    if (batch.length < end - offset + 1) break;
+  }
+  return rows;
+}
 
 function formatMoney(amount: number) {
   return `¥${amount.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -116,6 +138,10 @@ function safeNumber(v: unknown): number {
 }
 
 export default function AdminFinancePage() {
+  const searchParams = useSearchParams();
+  const [workspaceTab, setWorkspaceTab] = useState<"finance" | "reports">(() =>
+    searchParams.get("tab") === "reports" ? "reports" : "finance"
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dateFilter, setDateFilter] = useState<DashboardDateFilterValue>(() => getPresetDateRange("today"));
@@ -126,8 +152,15 @@ export default function AdminFinancePage() {
   const [costData, setCostData] = useState<FinanceCostDataPayload | null>(null);
   const [sessions, setSessions] = useState<Array<{ channel_code?: string; status?: string; payable_amount?: number; created_at?: string }>>([]);
   const [productSortBy, setProductSortBy] = useState<"sales" | "profit" | "margin" | "cost">("sales");
+  const fetchedSinceRef = useRef<number>(Number.POSITIVE_INFINITY);
 
-  const loadFinanceData = useCallback(async () => {
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "reports") setWorkspaceTab("reports");
+    else if (tabParam === "finance") setWorkspaceTab("finance");
+  }, [searchParams]);
+
+  const loadFinanceData = useCallback(async (requestedFrom?: Date) => {
     setLoading(true);
     setError("");
     if (!hasSupabaseConfig()) {
@@ -140,28 +173,45 @@ export default function AdminFinancePage() {
       const supabase = getSupabaseBrowserClient();
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-      const sinceIso = ninetyDaysAgo.toISOString();
+      const effectiveSince =
+        requestedFrom && requestedFrom.getTime() < ninetyDaysAgo.getTime()
+          ? new Date(requestedFrom.getTime() - 24 * 3600 * 1000)
+          : ninetyDaysAgo;
+      const sinceIso = effectiveSince.toISOString();
+      fetchedSinceRef.current = effectiveSince.getTime();
 
       const [ordersRes, rechargesRes, productsRes, orderItemsRes, sessionsRes, costDataRes] = await Promise.allSettled([
-        supabase
-          .from("orders")
-          .select("id,order_no,customer_email,total_amount,payment_status,created_at")
-          .gte("created_at", sinceIso)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("account_recharges")
-          .select("id,recharge_no,user_email,amount,credited_amount,channel_code,status,created_at")
-          .gte("created_at", sinceIso)
-          .order("created_at", { ascending: false }),
-        listProducts({ page: 1, pageSize: 500, sortBy: "updated_at", lite: true }),
-        supabase
-          .from("order_items")
-          .select("order_id,product_id,product_name,quantity,line_total,created_at")
-          .gte("created_at", sinceIso),
-        supabase
-          .from("payment_sessions")
-          .select("channel_code,status,payable_amount,created_at")
-          .gte("created_at", sinceIso),
+        fetchAllClientRows<RawOrder>((from, to) =>
+          supabase
+            .from("orders")
+            .select("id,order_no,customer_email,total_amount,payment_status,created_at")
+            .gte("created_at", sinceIso)
+            .order("created_at", { ascending: false })
+            .range(from, to)
+        ),
+        fetchAllClientRows<RawRecharge>((from, to) =>
+          supabase
+            .from("account_recharges")
+            .select("id,recharge_no,user_email,amount,credited_amount,channel_code,status,created_at")
+            .gte("created_at", sinceIso)
+            .order("created_at", { ascending: false })
+            .range(from, to)
+        ),
+        listProducts({ page: 1, pageSize: 100, sortBy: "updated_at", lite: true }),
+        fetchAllClientRows<RawOrderItem>((from, to) =>
+          supabase
+            .from("order_items")
+            .select("order_id,product_id,product_name,quantity,line_total,created_at")
+            .gte("created_at", sinceIso)
+            .range(from, to)
+        ),
+        fetchAllClientRows<{ channel_code?: string; status?: string; payable_amount?: number; created_at?: string }>((from, to) =>
+          supabase
+            .from("payment_sessions")
+            .select("channel_code,status,payable_amount,created_at")
+            .gte("created_at", sinceIso)
+            .range(from, to)
+        ),
         fetch(`/api/admin/finance/cost-data?since=${encodeURIComponent(sinceIso)}`, { cache: "no-store" }).then(
           async (res) => {
             if (!res.ok) throw new Error("cost data unavailable");
@@ -170,20 +220,20 @@ export default function AdminFinancePage() {
         ),
       ]);
 
-      if (ordersRes.status === "fulfilled" && !ordersRes.value.error) {
-        setOrders((ordersRes.value.data ?? []) as RawOrder[]);
+      if (ordersRes.status === "fulfilled") {
+        setOrders(ordersRes.value);
       }
-      if (rechargesRes.status === "fulfilled" && !rechargesRes.value.error) {
-        setRecharges((rechargesRes.value.data ?? []) as RawRecharge[]);
+      if (rechargesRes.status === "fulfilled") {
+        setRecharges(rechargesRes.value);
       }
       if (productsRes.status === "fulfilled") {
         setProducts(productsRes.value.products ?? []);
       }
-      if (orderItemsRes.status === "fulfilled" && !orderItemsRes.value.error) {
-        setOrderItems((orderItemsRes.value.data ?? []) as RawOrderItem[]);
+      if (orderItemsRes.status === "fulfilled") {
+        setOrderItems(orderItemsRes.value);
       }
-      if (sessionsRes.status === "fulfilled" && !sessionsRes.value.error) {
-        setSessions((sessionsRes.value.data ?? []) as any[]);
+      if (sessionsRes.status === "fulfilled") {
+        setSessions(sessionsRes.value);
       }
       if (costDataRes.status === "fulfilled") {
         setCostData(costDataRes.value);
@@ -197,8 +247,14 @@ export default function AdminFinancePage() {
   }, []);
 
   useEffect(() => {
-    void loadFinanceData();
+    void loadFinanceData(dateFilter.from);
   }, [loadFinanceData]);
+
+  useEffect(() => {
+    if (dateFilter.from.getTime() < fetchedSinceRef.current) {
+      void loadFinanceData(dateFilter.from);
+    }
+  }, [dateFilter.from, loadFinanceData]);
 
   const fromDateStr = formatBusinessDateKey(dateFilter.from);
   const toDateStr = formatBusinessDateKey(dateFilter.to);
@@ -236,6 +292,9 @@ export default function AdminFinancePage() {
       (sum, r) => sum + safeNumber(r.credited_amount ?? r.amount),
       0
     );
+    const rangeFiatRechargeAmount = rangeRecharges
+      .filter((r) => isFiatOnlineGatewayMethod(r.channel_code))
+      .reduce((sum, r) => sum + safeNumber(r.credited_amount ?? r.amount), 0);
 
     const rawItems =
       costData && Array.isArray(costData.orderItems)
@@ -245,6 +304,7 @@ export default function AdminFinancePage() {
     const summary = computeFinanceCostSummary({
       gmv: rangeGmv,
       recharge: rangeRechargeAmount,
+      fiatRecharge: rangeFiatRechargeAmount,
       paidOrders: rangeOrders,
       orderItems: rawItems,
       products,
@@ -263,7 +323,7 @@ export default function AdminFinancePage() {
       const s = rangeSessions.filter((row) => row.channel_code === ch.code);
       const count = s.length;
       const amount = s.reduce((sum, row) => sum + safeNumber(row.payable_amount), 0);
-      const fee = Number((amount * 0.03).toFixed(2));
+      const fee = Number((amount * ch.feeRate).toFixed(2));
       const net = amount - fee;
       return {
         ...ch,
@@ -278,6 +338,7 @@ export default function AdminFinancePage() {
       rangeGmv: summary.gmv,
       rangeRechargeAmount: summary.recharge,
       totalRevenue: summary.revenue,
+      balancePaidAmount: summary.balancePaidAmount,
       paidOrderCount: rangeOrders.length,
       paidRechargeCount: rangeRecharges.length,
       totalCost: summary.totalCost,
@@ -293,29 +354,47 @@ export default function AdminFinancePage() {
 
   return (
     <AdminPageShell
-      title="财务收支与成本对账"
-      description="全站营收流水、已售商品成本核算、综合毛利率测算、第三方支付通道费及各渠道结算对账全景。"
+      title="财务与报表"
+      description="统一查看去重现金流入、已售商品成本毛利、渠道通道费（USDT 0% 费率），以及经营报表与 10 类 CSV 导出。"
       actions={
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href="/admin/payments">
-              <CreditCard className="mr-1.5 h-3.5 w-3.5" /> 支付对账服务
-            </Link>
-          </Button>
-          <Button asChild variant="outline" size="sm">
-            <Link href="/admin/balance-ledger">
-              <WalletCards className="mr-1.5 h-3.5 w-3.5" /> 余额流水
-            </Link>
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => void loadFinanceData()} disabled={loading}>
-            {loading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />}
-            刷新
-          </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab("finance")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-colors",
+                workspaceTab === "finance" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              <Landmark className="h-3.5 w-3.5" />
+              财务成本与对账
+            </button>
+            <button
+              type="button"
+              onClick={() => setWorkspaceTab("reports")}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-medium transition-colors",
+                workspaceTab === "reports" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              经营报表与导出
+            </button>
+          </div>
+          {workspaceTab === "finance" ? (
+            <Button variant="outline" size="sm" onClick={() => void loadFinanceData(dateFilter.from)} disabled={loading}>
+              {loading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="mr-1.5 h-3.5 w-3.5" />}
+              刷新
+            </Button>
+          ) : null}
         </div>
       }
     >
-      {error ? (
-        <AdminErrorState description={error} onRetry={() => void loadFinanceData()} />
+      {workspaceTab === "reports" ? (
+        <AdminReportsWorkspace embedded />
+      ) : error ? (
+        <AdminErrorState description={error} onRetry={() => void loadFinanceData(dateFilter.from)} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden pb-1 h-[calc(100vh-var(--admin-header-height)-36px)]">
           <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/95 p-3 shadow-sm">
@@ -340,12 +419,12 @@ export default function AdminFinancePage() {
 
           <div className="grid shrink-0 grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-6">
             <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-              <div className="text-xs text-slate-500">全站总营收流水</div>
+              <div className="text-xs text-slate-500">去重实收现金流入</div>
               <div className="mt-1 text-lg font-bold tabular-nums text-slate-900">
                 {loading ? "…" : formatMoney(metrics.totalRevenue)}
               </div>
               <div className="mt-0.5 text-[10px] text-slate-400">
-                订单 {formatMoney(metrics.rangeGmv)} + 充值 {formatMoney(metrics.rangeRechargeAmount)}
+                GMV {formatMoney(metrics.rangeGmv)} · 充值 {formatMoney(metrics.rangeRechargeAmount)}（已去重余额消费）
               </div>
             </div>
 
@@ -382,12 +461,12 @@ export default function AdminFinancePage() {
             </div>
 
             <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3 shadow-sm">
-              <div className="text-xs font-medium text-amber-800">支付通道手续费 (约 3%)</div>
+              <div className="text-xs font-medium text-amber-800">法币通道手续费 (约 3%)</div>
               <div className="mt-1 text-lg font-bold tabular-nums text-amber-700">
                 {loading ? "…" : formatMoney(metrics.gatewayFee)}
               </div>
               <div className="mt-0.5 text-[10px] text-amber-600/80">
-                仅计在线通道（余额支付 ¥0）
+                仅计支付宝/微信（余额与 USDT ¥0）
               </div>
             </div>
 

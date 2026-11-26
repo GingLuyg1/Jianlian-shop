@@ -126,7 +126,7 @@ export default function AdminOrdersPage() {
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [search, setSearch] = useState(searchParams.get("search") ?? searchParams.get("orderId") ?? "");
   const [status, setStatus] = useState(searchParams.get("status") ?? ALL_VALUE);
   const [paymentStatus, setPaymentStatus] = useState(searchParams.get("paymentStatus") ?? ALL_VALUE);
   const [deliveryType, setDeliveryType] = useState(searchParams.get("deliveryType") ?? ALL_VALUE);
@@ -140,6 +140,27 @@ export default function AdminOrdersPage() {
   const [debouncedSearch, setDebouncedSearch] = useState(search);
   const ordersAbortRef = useRef<AbortController | null>(null);
   const ordersReqSeqRef = useRef(0);
+  const lastSearchParamsRef = useRef(searchParams.toString());
+
+  useEffect(() => {
+    const currentParams = searchParams.toString();
+    if (currentParams === lastSearchParamsRef.current) return;
+    lastSearchParamsRef.current = currentParams;
+    const nextSearch = searchParams.get("search") ?? searchParams.get("orderId") ?? "";
+    const nextStatus = searchParams.get("status") ?? ALL_VALUE;
+    const nextPay = searchParams.get("paymentStatus") ?? ALL_VALUE;
+    const nextDelivery = searchParams.get("deliveryType") ?? ALL_VALUE;
+    const nextAtt = ORDER_ATTENTION_VALUES.includes(searchParams.get("attention") as (typeof ORDER_ATTENTION_VALUES)[number])
+      ? (searchParams.get("attention") as (typeof ORDER_ATTENTION_VALUES)[number])
+      : ALL_VALUE;
+    setSearch(nextSearch);
+    setDebouncedSearch(nextSearch);
+    setStatus(nextStatus);
+    setPaymentStatus(nextPay);
+    setDeliveryType(nextDelivery);
+    setAttention(nextAtt);
+    setPage(1);
+  }, [searchParams]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
@@ -274,7 +295,7 @@ export default function AdminOrdersPage() {
               <option value="auto_delivery_failed">自动发货失败</option>
               <option value="inventory_shortage">库存不足订单</option>
             </NativeSelect>
-            <NativeSelect value={status} onChange={setStatus} label="订单状态">
+            <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} label="订单状态">
               <option value={ALL_VALUE}>全部订单状态</option>
               <option value="pending_payment">待支付</option>
               <option value="paid">已支付</option>
@@ -287,7 +308,7 @@ export default function AdminOrdersPage() {
             </NativeSelect>
           </>}
           advanced={<>
-            <NativeSelect value={paymentStatus} onChange={setPaymentStatus} label="支付状态">
+            <NativeSelect value={paymentStatus} onChange={(value) => { setPaymentStatus(value); setPage(1); }} label="支付状态">
               <option value={ALL_VALUE}>全部支付状态</option>
               <option value="unpaid">未支付</option>
               <option value="paid">已支付</option>
@@ -295,7 +316,7 @@ export default function AdminOrdersPage() {
               <option value="refunded">已退款</option>
               <option value="failed">失败</option>
             </NativeSelect>
-            <NativeSelect value={deliveryType} onChange={setDeliveryType} label="交付方式">
+            <NativeSelect value={deliveryType} onChange={(value) => { setDeliveryType(value); setPage(1); }} label="交付方式">
               <option value={ALL_VALUE}>全部交付方式</option>
               <option value="automatic">自动发货</option>
               <option value="card">卡密交付</option>
@@ -303,7 +324,7 @@ export default function AdminOrdersPage() {
               <option value="shipping">物流发货</option>
               <option value="manual">人工处理</option>
             </NativeSelect>
-            <NativeSelect value={sort} onChange={setSort} label="排序">
+            <NativeSelect value={sort} onChange={(value) => { setSort(value); setPage(1); }} label="排序">
               <option value="created_at_desc">下单时间倒序</option>
               <option value="created_at_asc">下单时间正序</option>
               <option value="updated_at_desc">更新时间倒序</option>
@@ -322,12 +343,12 @@ export default function AdminOrdersPage() {
           ) : (
             <>
               <AdminTableViewport>
-            <table className="min-w-[1180px] w-full text-sm">
+            <table className="min-w-[1140px] w-full text-sm">
               <thead className={adminListTableHeadClass}>
                 <tr>
-                  {["订单编号", "用户邮箱", "商品摘要"].map((heading) => <th scope="col" key={heading} className="px-4 py-3 text-left">{heading}</th>)}
-                  {["金额", "订单状态", "支付状态", "交付方式", "下单时间", "更新时间"].map((heading) => <th scope="col" key={heading} className="px-4 py-3 text-center">{heading}</th>)}
-                  <th scope="col" className="sticky right-0 bg-[var(--admin-v2-surface-muted)] px-4 py-3 text-center">操作</th>
+                  {["订单编号", "用户邮箱", "商品摘要"].map((heading) => <th scope="col" key={heading} className="whitespace-nowrap px-4 py-3 text-left">{heading}</th>)}
+                  {["金额", "订单状态", "支付状态", "交付方式", "下单时间", "更新时间"].map((heading) => <th scope="col" key={heading} className="whitespace-nowrap px-4 py-3 text-center">{heading}</th>)}
+                  <th scope="col" className="sticky right-0 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-4 py-3 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -559,6 +580,19 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
     return transitions[orderStatus] ?? [];
   }, [orderStatus]);
 
+  const refundedAmount = useMemo(() => {
+    const refundItems = relations?.groups?.find((g) => g.key === "refunds")?.items ?? [];
+    const succeededSum = refundItems
+      .filter((item) => item.status === "succeeded")
+      .reduce((sum, item) => {
+        const parsed = Number(String(item.amount ?? "").replace(/[^0-9.-]/g, ""));
+        return sum + (Number.isFinite(parsed) ? parsed : 0);
+      }, 0);
+    if (succeededSum > 0) return succeededSum;
+    if (orderStatus === "refunded" || paymentStatus === "refunded") return Number(order.total_amount ?? 0);
+    return 0;
+  }, [order.total_amount, orderStatus, paymentStatus, relations]);
+
   return (
     <AdminDetailDrawer
       title={getOrderNo(order)}
@@ -579,7 +613,7 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
               <InfoRow label="订单总额" value={formatMoney(order.total_amount, order.currency)} strong />
               <InfoRow label="支付方式" value={order.payment_method ? `${getPaymentMethodLabel(order.payment_method)} (${order.payment_method})` : "—"} />
               <InfoRow label="实付金额" value={formatMoney(order.paid_at ? order.total_amount : 0, order.currency)} />
-              <InfoRow label="退款金额" value={formatMoney(0, order.currency)} />
+              <InfoRow label="退款金额" value={formatMoney(refundedAmount, order.currency)} />
               <InfoRow label="创建时间" value={formatDate(order.created_at)} />
               <InfoRow label="更新时间" value={formatDate(order.updated_at)} />
             </InfoCard>

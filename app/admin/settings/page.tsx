@@ -9,6 +9,7 @@ import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import PaymentSettingsPanel from "@/components/admin/payments/PaymentSettingsPanel";
 import RechargeRateSettings from "@/components/admin/payments/RechargeRateSettings";
+import AdminAnnouncementsManager from "@/components/admin/settings/AdminAnnouncementsManager";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -242,13 +243,16 @@ function MaintenanceSettings({ settings, saving, onChange, onSave }: SettingsSec
 function AnnouncementSettings({ settings, saving, onChange, onSave }: SettingsSectionProps) {
   return (
     <Section>
-      <div className="flex justify-end">
-        <Button asChild variant="outline"><Link href="/admin/settings/announcements">管理结构化公告</Link></Button>
+      <AdminAnnouncementsManager embedded />
+      <div className="border-t pt-4 space-y-4">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">兜底文本公告（仅在未启用结构化公告时生效）</div>
+          <p className="mt-0.5 text-xs text-slate-500">公告以纯文本方式渲染，不执行 HTML 或脚本；前台会优先展示上方已启用的结构化公告。</p>
+        </div>
+        <Field label="兜底全站顶部公告"><Textarea rows={3} value={settings.top_announcement} onChange={(e) => onChange({ top_announcement: e.target.value })} /></Field>
+        <Field label="Checkout 购买提醒"><Textarea rows={3} value={settings.checkout_notice} onChange={(e) => onChange({ checkout_notice: e.target.value })} /></Field>
+        <SaveButton saving={saving} onClick={() => onSave({ top_announcement: settings.top_announcement, checkout_notice: settings.checkout_notice })} />
       </div>
-      <Field label="全站顶部公告"><Textarea rows={5} value={settings.top_announcement} onChange={(e) => onChange({ top_announcement: e.target.value })} /></Field>
-      <Field label="Checkout 购买提醒"><Textarea rows={5} value={settings.checkout_notice} onChange={(e) => onChange({ checkout_notice: e.target.value })} /></Field>
-      <p className="text-xs text-slate-500">公告以纯文本方式渲染，不执行 HTML 或脚本。多公告结构已通过 数据库结构升级 预留，当前顶部公告和购买提醒从系统设置读取。</p>
-      <SaveButton saving={saving} onClick={() => onSave({ top_announcement: settings.top_announcement, checkout_notice: settings.checkout_notice })} />
     </Section>
   );
 }

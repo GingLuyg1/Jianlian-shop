@@ -350,6 +350,8 @@ export default function AdminProductsPage() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
   const productReadRequestRef = useRef(0);
   const productListRequestRef = useRef(0);
+  const lastReplacedProductsQueryRef = useRef<string | null>(null);
+  const lastExternalProductsParamsRef = useRef(searchParams.toString());
   const setMessage = (message: string) => {
     if (message) toast.success(message);
   };
@@ -499,9 +501,34 @@ export default function AdminProductsPage() {
     });
     const next = params.toString();
     if (next !== searchParams.toString()) {
+      lastReplacedProductsQueryRef.current = next;
       router.replace(`${pathname}${next ? `?${next}` : ""}`, { scroll: false });
     }
   }, [activeView, debouncedSearch, deliveryFilter, fulfillmentHealthFilter, inventoryVerificationFilter, pathname, primaryFilter, productPage, productPageSize, productStatusFilter, productTypeFilter, router, searchParams, secondaryFilter, skuStatusFilter, sortBy, stockFilter, supplierBindingFilter, supplierStockFilter]);
+
+  useEffect(() => {
+    const incoming = searchParams.toString();
+    if (incoming === lastExternalProductsParamsRef.current || incoming === lastReplacedProductsQueryRef.current) {
+      return;
+    }
+    lastExternalProductsParamsRef.current = incoming;
+    const nextSearch = searchParams.get("search") ?? searchParams.get("productId");
+    if (nextSearch !== null) {
+      setProductSearch(nextSearch);
+      setDebouncedSearch(nextSearch);
+      setProductPage(1);
+    }
+    const nextStock = searchParams.get("stockLevel");
+    if (nextStock) {
+      setStockFilter(nextStock as AdminCatalogStockLevel);
+      setProductPage(1);
+    }
+    const nextStatus = searchParams.get("status") ?? searchParams.get("productStatus");
+    if (nextStatus) {
+      setProductStatusFilter(nextStatus as ProductStatus | "all");
+      setProductPage(1);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const shouldBlock = productDirty || categoryDirty || isSaving;

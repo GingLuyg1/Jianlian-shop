@@ -120,29 +120,29 @@ export default async function EmailDeliveriesPage(props: { searchParams?: Promis
             <table className="min-w-full text-left text-sm">
               <thead className={adminListTableHeadClass}>
                 <tr>
-                  <th className="whitespace-nowrap px-4 py-3 text-center">时间</th>
-                  <th className="whitespace-nowrap px-4 py-3">模板</th>
-                  <th className="whitespace-nowrap px-4 py-3">业务</th>
-                  <th className="whitespace-nowrap px-4 py-3">收件人</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center">状态</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center">尝试</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center">邮件服务商</th>
-                  <th className="whitespace-nowrap px-4 py-3">错误摘要</th>
-                  <th className="whitespace-nowrap px-4 py-3 text-center">操作</th>
+                  <th className="whitespace-nowrap px-3 py-3 text-center">时间</th>
+                  <th className="whitespace-nowrap px-3 py-3">模板</th>
+                  <th className="whitespace-nowrap px-3 py-3">业务</th>
+                  <th className="whitespace-nowrap px-3 py-3">收件人</th>
+                  <th className="whitespace-nowrap px-3 py-3 text-center">状态</th>
+                  <th className="whitespace-nowrap px-3 py-3 text-center">尝试</th>
+                  <th className="whitespace-nowrap px-3 py-3 text-center">邮件服务商</th>
+                  <th className="whitespace-nowrap px-3 py-3">错误摘要</th>
+                  <th className="sticky right-0 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-3 py-3 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--admin-v2-border)]">
                 {deliveries.map((row) => (
                   <tr key={row.id} className={adminListRowClass}>
-                    <td className="whitespace-nowrap px-4 py-3 text-center text-[var(--admin-v2-text-muted)]">{formatTime(row.created_at)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-[var(--admin-v2-text-primary)]">{row.template_code} {row.template_version ? `v${row.template_version}` : ""}</td>
-                    <td className="px-4 py-3">{businessTypeLabel(row.business_type)}<div className="text-xs text-[var(--admin-v2-text-muted)]">{row.business_no || "—"}</div></td>
-                    <td className="whitespace-nowrap px-4 py-3">{row.recipient_summary}</td>
-                    <td className="px-4 py-3 text-center">{renderStatus(row.status)}</td>
-                    <td className="px-4 py-3 text-center tabular-nums">{row.attempts}/{row.max_attempts}</td>
-                    <td className="px-4 py-3 text-center">{row.provider || "—"}</td>
-                    <td className="max-w-[280px] truncate px-4 py-3 text-[var(--admin-v2-text-muted)]" title={row.last_error_message || ""}>{row.last_error_code || row.last_error_message || "—"}</td>
-                    <td className="px-4 py-3 text-center whitespace-nowrap"><EmailDeliveryActions jobId={row.id} status={row.status} /></td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center text-xs text-[var(--admin-v2-text-muted)]">{formatTime(row.created_at)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 font-medium text-[var(--admin-v2-text-primary)]">{row.template_code} {row.template_version ? `v${row.template_version}` : ""}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5">{businessTypeLabel(row.business_type)}<div className="text-xs text-[var(--admin-v2-text-muted)]">{row.business_no || "—"}</div></td>
+                    <td className="whitespace-nowrap px-3 py-2.5">{row.recipient_summary}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center">{renderStatus(row.status)}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center tabular-nums">{row.attempts}/{row.max_attempts}</td>
+                    <td className="whitespace-nowrap px-3 py-2.5 text-center">{row.provider || "—"}</td>
+                    <td className="max-w-[220px] truncate px-3 py-2.5 text-[var(--admin-v2-text-muted)]" title={row.last_error_message || ""}>{row.last_error_code || row.last_error_message || "—"}</td>
+                    <td className="sticky right-0 whitespace-nowrap bg-white px-3 py-2.5 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]"><EmailDeliveryActions jobId={row.id} status={row.status} /></td>
                   </tr>
                 ))}
               </tbody>

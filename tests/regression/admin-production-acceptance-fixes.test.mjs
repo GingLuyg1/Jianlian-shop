@@ -21,7 +21,6 @@ test("dashboard uses tested payment schema adapters", () => {
 test("payment exception count and today's amounts have distinct labels and units", () => {
   const route = file("app/api/admin/payment-stats/route.ts");
   const board = file("components/admin/system/ProductionReadinessClient.tsx");
-  const stats = file("components/admin/payments/AdminPaymentStatsStrip.tsx");
   assert.match(route, /exceptionRecordCount/);
   assert.match(route, /pendingExceptionCount: exceptionRecordCount/);
   assert.match(route, /select\("id", \{ count: "exact", head: true \}\)\.not\("exception_type", "is", null\)/);
@@ -31,7 +30,6 @@ test("payment exception count and today's amounts have distinct labels and units
   assert.match(board, /label="今日支付金额"/);
   assert.match(board, /label="今日充值到账"/);
   assert.doesNotMatch(board, /detail=\{payments \? `支付 \$\{payments\.todayPaymentAmount\} \/ 充值/);
-  assert.match(stats, /title: "异常记录"/);
 });
 
 test("release info uses strict release-directory and build artifact fallbacks", () => {

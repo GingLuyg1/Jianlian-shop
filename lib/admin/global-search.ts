@@ -246,7 +246,7 @@ export async function runAdminGlobalSearch(
             amountLabel: money(row.payable_amount, row.currency),
             status: text(row.status),
             createdAt: text(row.created_at),
-            href: `/admin/payments?search=${encodeURIComponent(no)}`,
+            href: `/admin/payments?search=${encodeURIComponent(text(row.business_no) ?? no)}`,
             exact: exactCandidate ? [row.session_no, row.provider_order_no, row.provider_transaction_id].some((v) => text(v)?.toLowerCase() === exactCandidate) : false,
           };
         }),

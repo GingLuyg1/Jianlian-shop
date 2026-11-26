@@ -4,7 +4,7 @@ import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labe
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Eye, RefreshCw, Search } from "lucide-react";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -112,12 +112,17 @@ export default function AdminPrivacyRequestsPage() {
     }
   }, [queryString]);
 
+  const lastReplacedQueryRef = useRef<string | null>(null);
+
   useEffect(() => {
+    lastReplacedQueryRef.current = queryString;
     router.replace(pathname + "?" + queryString, { scroll: false });
     void loadRows();
   }, [loadRows, pathname, queryString, router]);
 
   useEffect(() => {
+    const currentUrlQuery = params.toString();
+    if (lastReplacedQueryRef.current === currentUrlQuery) return;
     setSearch(params.get("search") ?? "");
     setStatus(normalizeFilter(params.get("status"), STATUS_LABELS));
     setType(normalizeFilter(params.get("type"), TYPE_LABELS));
@@ -144,7 +149,20 @@ export default function AdminPrivacyRequestsPage() {
       variant="v2"
       title="隐私请求"
       description="只读查询数据导出与账号注销请求、处理时间线和审计记录。"
-      actions={<Button className="h-11 sm:h-9" variant="outline" onClick={() => void loadRows()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}
+      actions={(
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] p-0.5 text-xs">
+            <Link href="/admin/users" className="rounded-md px-2.5 py-1.5 font-medium text-slate-600 transition-colors hover:text-slate-900">
+              用户列表
+            </Link>
+            <span className="rounded-md bg-white px-2.5 py-1.5 font-medium text-slate-900 shadow-sm">隐私请求</span>
+          </div>
+          <Button className="h-11 sm:h-9" variant="outline" onClick={() => void loadRows()} disabled={loading}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
+            {loading ? "刷新中..." : "刷新"}
+          </Button>
+        </div>
+      )}
     >
       <AdminListStats>
         <AdminListStat label="当前待处理" value={stats.pending} tone={stats.pending > 0 ? "warning" : "neutral"} />
@@ -173,7 +191,7 @@ export default function AdminPrivacyRequestsPage() {
           {error ? <AdminErrorState title="隐私请求加载失败" description={error} onRetry={() => void loadRows()} /> : loading ? <AdminTableSkeleton rows={10} /> : rows.length === 0 ? <AdminEmptyState title={hasFilters ? "没有符合条件的隐私请求" : "暂无隐私请求"} description={hasFilters ? "请调整筛选条件后再试。" : "用户提交隐私请求后会显示在这里。"} /> : (
             <table className="w-full min-w-[1180px] table-fixed text-sm">
               <colgroup><col className="w-[190px]" /><col className="w-[240px]" /><col className="w-[120px]" /><col className="w-[110px]" /><col className="w-[240px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[80px]" /></colgroup>
-              <thead className={adminListTableHeadClass}><tr className="border-b">{["请求编号", "用户", "类型", "状态", "阻塞原因", "提交时间", "最近更新", "操作"].map((heading) => <th scope="col" key={heading} className={`h-10 whitespace-nowrap px-3 font-medium ${["类型", "状态", "提交时间", "最近更新", "操作"].includes(heading) ? "text-center" : "text-left"}`}>{heading}</th>)}</tr></thead>
+              <thead className={adminListTableHeadClass}><tr className="border-b">{["请求编号", "用户", "类型", "状态", "阻塞原因", "提交时间", "最近更新"].map((heading) => <th scope="col" key={heading} className={`h-10 whitespace-nowrap px-3 font-medium ${["类型", "状态", "提交时间", "最近更新"].includes(heading) ? "text-center" : "text-left"}`}>{heading}</th>)}<th scope="col" className="sticky right-0 h-10 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-3 text-center font-medium shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</th></tr></thead>
               <tbody>{rows.map((row) => <tr key={row.id} className={adminListRowClass}>
                 <td className="px-3 py-2"><div className="truncate font-medium text-slate-900">{row.requestNo || "—"}</div><div className="truncate font-mono text-[11px] text-slate-400" title={row.id}>{row.id}</div></td>
                 <td className="px-3 py-2"><div className="truncate" title={row.userEmail ?? ""}>{row.userEmail || row.userLabel || "—"}</div><div className="truncate font-mono text-[11px] text-slate-400">{row.userId || "—"}</div></td>
@@ -182,7 +200,7 @@ export default function AdminPrivacyRequestsPage() {
                 <td className="truncate px-3 py-2 text-slate-500" title={row.blockReasons.join("；")}>{row.blockReasons.length ? row.blockReasons.join("；") : "—"}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(row.createdAt)}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(row.updatedAt)}</td>
-                <td className="px-3 py-2 text-center whitespace-nowrap"><Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9"><Link href={"/admin/privacy-requests/" + row.id}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
+                <td className="sticky right-0 bg-white px-3 py-2 text-center whitespace-nowrap shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]"><Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9"><Link href={"/admin/privacy-requests/" + row.id}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
               </tr>)}</tbody>
             </table>
           )}

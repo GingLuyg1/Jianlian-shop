@@ -54,17 +54,14 @@ test("database status workspace stays read-only and reports real probe sources",
   assert.doesNotMatch(route, /connection[_ -]?string|database[_ -]?password|service[_ -]?role[_ -]?key/i);
 });
 
-test("completed system workspaces share one ordered navigation group", () => {
+test("completed system workspaces share one streamlined operations group and toolbox", () => {
   const navigation = file("components/admin/admin-navigation.ts");
-  const systemGroup = navigation.slice(navigation.indexOf('label: "系统运营"'), navigation.indexOf("export function isAdminNavigationGroup"));
-  const labels = ["生产看板", "异常中心", "请求追踪", "事务补偿", "数据库状态", "操作日志"];
+  const toolbox = file("app/admin/system/toolbox/page.tsx");
+  const systemGroup = navigation.slice(navigation.indexOf('label: "系统运维"'), navigation.indexOf("export function isAdminNavigationGroup"));
 
-  let previousIndex = -1;
-  for (const label of labels) {
-    const index = systemGroup.indexOf(`label: "${label}"`);
-    assert.ok(index > previousIndex, `${label} should appear once in the system operations order`);
-    previousIndex = index;
+  assert.match(systemGroup, /label: "操作日志", href: "\/admin\/audit-logs"/);
+  assert.match(systemGroup, /label: "运维排障工具箱", href: "\/admin\/system\/toolbox"/);
+  for (const label of ["生产看板", "异常中心", "风险监控", "数据一致性", "事务补偿", "定时任务", "数据库状态"]) {
+    assert.match(toolbox, new RegExp(`label: "${label}"`));
   }
-  assert.equal((navigation.match(/href: "\/admin\/system\/compensations"/g) ?? []).length, 1);
-  assert.equal((navigation.match(/href: "\/admin\/system\/database"/g) ?? []).length, 1);
 });

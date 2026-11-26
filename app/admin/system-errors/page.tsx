@@ -44,22 +44,32 @@ export default function AdminSystemErrorsPage() {
   const [status, setStatus] = useState(initial.get("status") ?? "");
   const [requestId, setRequestId] = useState(initial.get("requestId") ?? "");
   const [businessId, setBusinessId] = useState(initial.get("orderId") ?? "");
+  const [debouncedRequestId, setDebouncedRequestId] = useState(requestId);
+  const [debouncedBusinessId, setDebouncedBusinessId] = useState(businessId);
   const [startAt, setStartAt] = useState(initial.get("startAt") ?? "");
   const [endAt, setEndAt] = useState(initial.get("endAt") ?? "");
   const [page, setPage] = useState(Number(initial.get("page") ?? 1) || 1);
   const pageSize = 20;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedRequestId(requestId);
+      setDebouncedBusinessId(businessId);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [businessId, requestId]);
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (level) params.set("level", level);
     if (category) params.set("category", category);
     if (status) params.set("status", status);
-    if (requestId.trim()) params.set("requestId", requestId.trim());
-    if (businessId.trim()) params.set("orderId", businessId.trim());
+    if (debouncedRequestId.trim()) params.set("requestId", debouncedRequestId.trim());
+    if (debouncedBusinessId.trim()) params.set("orderId", debouncedBusinessId.trim());
     if (startAt) params.set("startAt", startAt);
     if (endAt) params.set("endAt", endAt);
     return params.toString();
-  }, [businessId, category, endAt, level, page, requestId, startAt, status]);
+  }, [category, debouncedBusinessId, debouncedRequestId, endAt, level, page, startAt, status]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,7 +98,7 @@ export default function AdminSystemErrorsPage() {
       const response = await fetch("/api/admin/system-errors", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: selected.id, status: next, resolutionNote: note }) });
       const body = await response.json().catch(() => null) as { event?: EventRow; error?: ApiError } | null;
       if (!response.ok) throw new Error(errorMessage(body?.error, response));
-      if (body?.event) { setSelected(body.event); setRows((current) => current.map((row) => row.id === body.event?.id ? body.event : row)); }
+      if (body?.event) { setSelected(body.event); setRows((current) => current.map((row) => row.id === body.event?.id ? body.event : row)); toast.success("异常状态已更新"); }
     } catch (caught) { toast.error(caught instanceof Error ? caught.message : "状态更新失败，请稍后重试。"); }
     finally { setSaving(false); }
   }
@@ -120,7 +130,7 @@ export default function AdminSystemErrorsPage() {
 }
 
 function ErrorTable({ rows, onSelect }: { rows: EventRow[]; onSelect: (row: EventRow) => void }) {
-  return <table className="w-full min-w-[1100px] text-sm"><thead className={adminListTableHeadClass}><tr>{["级别", "分类", "异常", "Request ID", "次数", "最后出现", "关联业务", "状态", "操作"].map((heading) => <th key={heading} scope="col" className="px-3 py-3">{heading}</th>)}</tr></thead><tbody className="divide-y divide-[var(--admin-v2-border)]">{rows.map((row) => <tr key={row.id} className={adminListRowClass}><td className="px-3 py-2 font-medium">{levels[row.level] ?? row.level}</td><td className="px-3 py-2">{categories[row.category] ?? row.category}</td><td className="max-w-[300px] px-3 py-2"><div className="truncate font-medium" title={row.title}>{row.title}</div><div className="truncate text-xs text-[var(--admin-v2-text-muted)]" title={row.message}>{row.message}</div></td><td className="max-w-[180px] truncate px-3 py-2 font-mono text-xs">{row.request_id ?? "—"}</td><td className="px-3 py-2 tabular-nums">{row.occurrences}</td><td className="whitespace-nowrap px-3 py-2 text-xs">{formatDate(row.last_seen_at)}</td><td className="px-3 py-2">{businessLink(row)}</td><td className="px-3 py-2"><AdminStatusBadge tone={statusTone(row.status)}>{statuses[row.status] ?? adminUnknownStatusLabel(row.status)}</AdminStatusBadge></td><td className="px-3 py-2"><Button className="h-11 sm:h-9" size="sm" variant="outline" onClick={() => onSelect(row)}><Eye className="mr-1 h-3.5 w-3.5" />查看</Button></td></tr>)}</tbody></table>;
+  return <table className="w-full min-w-[980px] text-sm"><thead className={adminListTableHeadClass}><tr>{["级别", "分类", "异常", "Request ID", "次数", "最后出现", "关联业务", "状态"].map((heading) => <th key={heading} scope="col" className="whitespace-nowrap px-3 py-3">{heading}</th>)}<th scope="col" className="sticky right-0 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-3 py-3 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</th></tr></thead><tbody className="divide-y divide-[var(--admin-v2-border)]">{rows.map((row) => <tr key={row.id} className={adminListRowClass}><td className="whitespace-nowrap px-3 py-2 font-medium">{levels[row.level] ?? row.level}</td><td className="whitespace-nowrap px-3 py-2">{categories[row.category] ?? row.category}</td><td className="max-w-[260px] px-3 py-2"><div className="truncate font-medium" title={row.title}>{row.title}</div><div className="truncate text-xs text-[var(--admin-v2-text-muted)]" title={row.message}>{row.message}</div></td><td className="max-w-[160px] truncate px-3 py-2 font-mono text-xs">{row.request_id ?? "—"}</td><td className="whitespace-nowrap px-3 py-2 tabular-nums">{row.occurrences}</td><td className="whitespace-nowrap px-3 py-2 text-xs">{formatDate(row.last_seen_at)}</td><td className="whitespace-nowrap px-3 py-2">{businessLink(row)}</td><td className="whitespace-nowrap px-3 py-2"><AdminStatusBadge tone={statusTone(row.status)}>{statuses[row.status] ?? adminUnknownStatusLabel(row.status)}</AdminStatusBadge></td><td className="sticky right-0 whitespace-nowrap bg-white px-3 py-2 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]"><Button className="h-11 sm:h-9" size="sm" variant="outline" onClick={() => onSelect(row)}><Eye className="mr-1 h-3.5 w-3.5" />查看</Button></td></tr>)}</tbody></table>;
 }
 
 function ErrorDetail({ event, note, saving, onNote, onClose, onStatus }: { event: EventRow; note: string; saving: boolean; onNote: (value: string) => void; onClose: () => void; onStatus: (status: EventStatus) => void }) {
@@ -131,6 +141,6 @@ const controlClass = "h-11 min-w-0 rounded-[var(--admin-v2-control-radius)] bord
 function FilterSelect({ value, onChange, label, options }: { value: string; onChange: (value: string) => void; label: string; options: Record<string, string> }) { return <select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className={controlClass}><option value="">{label}</option>{Object.entries(options).map(([option, text]) => <option key={option} value={option}>{text}</option>)}</select>; }
 function errorMessage(error: ApiError | undefined, response: Response) { const message = error?.message || "请求失败，请稍后重试。"; const id = error?.request_id || response.headers.get("X-Request-ID"); return id ? `${message}（参考编号：${id.slice(0, 12)}）` : message; }
 function formatDate(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false }); }
-function businessLink(row: EventRow) { if (row.order_id) return <Link className="text-[var(--admin-v2-primary)]" href={`/admin/orders?orderId=${row.order_id}`}>订单</Link>; if (row.payment_id) return <Link className="text-[var(--admin-v2-primary)]" href={`/admin/payments?paymentId=${row.payment_id}`}>支付</Link>; if (row.product_id) return <Link className="text-[var(--admin-v2-primary)]" href={`/admin/products?productId=${row.product_id}`}>商品</Link>; return "—"; }
+function businessLink(row: EventRow) { if (row.order_id) return <Link className="text-[var(--admin-v2-primary)]" href={`/admin/orders?search=${encodeURIComponent(row.order_id)}`}>订单</Link>; if (row.payment_id) return <Link className="text-[var(--admin-v2-primary)]" href={`/admin/payments?search=${encodeURIComponent(row.payment_id)}`}>支付</Link>; if (row.product_id) return <Link className="text-[var(--admin-v2-primary)]" href={`/admin/products?search=${encodeURIComponent(row.product_id)}`}>商品</Link>; return "—"; }
 function queryHasFilters(query: string) { const params = new URLSearchParams(query); return ["level", "category", "status", "requestId", "orderId", "startAt", "endAt"].some((key) => params.has(key)); }
 function statusTone(status: EventStatus): AdminStatusTone { return status === "resolved" ? "success" : status === "ignored" ? "neutral" : status === "investigating" ? "info" : "warning"; }

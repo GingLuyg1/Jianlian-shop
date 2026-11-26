@@ -139,8 +139,8 @@ export default function AdminSidebar() {
   }, [pathname, productView, agentTab, openSections]);
 
   const getGroupBadgeCount = (key: AdminNavigationGroupKey) => {
-    if (key === "agents") return pendingBadges.apiApplications;
-    if (key === "users") return pendingBadges.tickets;
+    if (key === "trade") return pendingBadges.tickets;
+    if (key === "users") return pendingBadges.apiApplications;
     return 0;
   };
 

@@ -212,7 +212,7 @@ export function filterPaymentRecords(rows: AdminPaymentRecord[], filters: Paymen
     if (start !== null && new Date(row.created_at).getTime() < start) return false;
     if (end !== null && new Date(row.created_at).getTime() > end) return false;
     if (!search) return true;
-    return [row.payment_no, row.business_no, row.user_email, row.provider_trade_no]
+    return [row.id, row.payment_no, row.business_no, row.user_email, row.provider_trade_no, row.payment_session_no, row.transaction_reference]
       .filter(Boolean)
       .some((value) => String(value).toLowerCase().includes(search));
   });

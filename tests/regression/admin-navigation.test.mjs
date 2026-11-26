@@ -26,7 +26,8 @@ test("desktop and mobile admin navigation use one production menu contract", () 
   assert.doesNotMatch(topBar, /const adminMenuItems\s*=/);
 
   assert.doesNotMatch(navigation, /\/admin\/system\/project-status/);
-  assert.match(navigation, /label: "生产看板", href: "\/admin\/system\/production-readiness"/);
+  assert.match(navigation, /label: "运维排障工具箱", href: "\/admin\/system\/toolbox"/);
+  assert.match(navigation, /label: "操作日志", href: "\/admin\/audit-logs"/);
   assert.match(navigation, /label: "商品列表", href: "\/admin\/products"/);
   assert.match(navigation, /label: "分类管理", href: "\/admin\/categories"/);
   assert.match(navigationState, /if \(href === "\/admin"\) return pathname === href/);
@@ -36,7 +37,7 @@ test("desktop and mobile admin navigation use one production menu contract", () 
 
   assert.match(navigation, /key: "products"/);
   assert.match(navigation, /key: "system"/);
-  assert.match(navigation, /routePrefixes: \["\/admin\/system"\]/);
+  assert.match(navigation, /routePrefixes: \["\/admin\/system", "\/admin\/system-errors", "\/admin\/risk", "\/admin\/audit-logs"\]/);
   assert.match(sidebar, /openSection === item\.key/);
   assert.match(topBar, /openSection === item\.key/);
   assert.match(sidebar, /toggleNavigationGroup\(current, item\.key\)/);

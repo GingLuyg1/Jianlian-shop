@@ -103,7 +103,7 @@ export function normalizeReportRange(start?: string | null, end?: string | null)
 
 export async function loadBusinessReport(supabase: SupabaseClient, range: ReportRange) {
   const errors: ReportErrorMap = {};
-  const [orders, payments, recharges, refunds, profiles, products, skus, inventory, deliveries, balanceTransactions] = await Promise.all([
+  const [orders, payments, recharges, refunds, profiles, products, skus, inventory, deliveries, balanceTransactions, visits] = await Promise.all([
     safeSelectAll(
       "订单",
       (from, to) =>
@@ -226,6 +226,19 @@ export async function loadBusinessReport(supabase: SupabaseClient, range: Report
       errors,
       10000
     ),
+    safeSelectAll(
+      "访问统计",
+      (from, to) =>
+        supabase
+          .from("page_visit_events")
+          .select("visit_date,visitor_key,page_path")
+          .gte("visit_date", range.start)
+          .lte("visit_date", range.end)
+          .not("page_path", "like", "/admin%")
+          .range(from, to),
+      errors,
+      20000
+    ),
   ]);
 
   const paidOrders = orders.filter((order) => order.payment_status === "paid" || PAID_ORDER_STATUSES.has(String(order.status ?? "")));
@@ -332,8 +345,8 @@ export async function loadBusinessReport(supabase: SupabaseClient, range: Report
     newUsers: profiles.filter((profile) => inRange(profile.created_at, range)).length,
     payingUsers: paidUserIds.size,
     repeatUsers: Array.from(successfulOrdersByUser.values()).filter((count) => count >= 2).length,
-    visitors: null as number | null,
-    pageViews: null as number | null,
+    visitors: errors["访问统计"] ? null : new Set(visits.map((v) => v.visitor_key).filter(Boolean)).size,
+    pageViews: errors["访问统计"] ? null : visits.length,
     autoDeliverySuccessRate: autoDeliveries.length ? successfulAutoDeliveries.length / autoDeliveries.length : null,
     manualDeliveryCount: manualDeliveries.length,
   };

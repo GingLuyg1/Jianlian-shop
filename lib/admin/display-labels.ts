@@ -16,7 +16,8 @@ const statusLabels: Record<string, string> = {
   matched: '核对一致', mismatched: '核对不一致', query_failed: '查询失败', not_found: '未找到',
   success: '成功', valid: '验证通过', invalid: '验证失败', skipped: '已跳过', duplicate: '重复记录',
   available: '可用', reserved: '已预留', sold: '已售出', void: '已作废', imported: '已导入',
-  open: '待处理', resolved: '已解决', running: '正在运行', ready: '已就绪', not_configured: '未配置',
+  open: '待处理', resolved: '已解决', running: '正在运行', ready: '已就绪', configured: '已配置', not_configured: '未配置',
+  superseded: '已替代',
   connected: '已连接', disconnected: '未连接', partial: '部分可用', unavailable: '暂不可用',
   queued: '等待执行', sent: '已发送', delivered: '已送达', bounced: '投递退回', suppressed: '已停止发送',
   normal: '正常', watch: '需要关注', high_risk: '高风险', blocked: '已拦截', restricted: '受限', suspended: '已暂停',
@@ -155,4 +156,4 @@ export function beijingDateTime(value: unknown): string {
 }
 export const ledgerBusinessOptions = Object.entries(businessLabels).filter(([value]) => !['recharge', 'order', 'delivery'].includes(value)).map(([value, label]) => ({value, label}));
 export const workerHelpText = '这里只显示系统采集到的运行状态。如果定时任务状态显示“暂未获取”，不代表任务已经停止。此页面不能启动、停止或修改服务器任务。';
-export const operationsDateFilterHelp = '筛选范围为北京时间当天08:00至次日08:00（结束日期含次日08:00前的记录）。记录时间显示为北京时间。搜索匹配过多时，请缩小范围。';
+export const operationsDateFilterHelp = '筛选范围为北京时间当天 00:00 至 23:59。记录时间显示为北京时间。搜索匹配过多时，请缩小范围。';

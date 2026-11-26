@@ -46,12 +46,12 @@ test('unknown status/type remains diagnosable and null renders safely', () => {
   assert.equal(labels.statusLabel(null), '—');
   assert.equal(labels.supplierStatusLabel('NEW_PROVIDER_STATE'), 'NEW_PROVIDER_STATE（未识别状态）');
 });
-test('record dates use Beijing time while existing date filter contract stays unchanged', () => {
+test('record dates and date filters both use Beijing time consistently', () => {
   assert.match(labels.beijingDateTime('2026-10-10T00:00:00.000Z'), /08:00:00.*北京时间/);
   assert.equal(labels.beijingDateTime(null), '—');
   assert.equal(labels.beijingDateTime('invalid-date'), 'invalid-date');
-  assert.match(labels.operationsDateFilterHelp, /当天08:00至次日08:00/);
-  assert.equal(operationsFilters(new URLSearchParams('start=2026-10-10')).start, '2026-10-10T00:00:00.000Z');
+  assert.match(labels.operationsDateFilterHelp, /当天 00:00 至 23:59/);
+  assert.equal(operationsFilters(new URLSearchParams('start=2026-10-10')).start, '2026-10-10T00:00:00.000+08:00');
 });
 test('workspaces render explicit raw option values and Chinese display helpers, without write controls', () => {
   const ui = source('components/admin/OperationsReadonlyWorkspace.tsx');

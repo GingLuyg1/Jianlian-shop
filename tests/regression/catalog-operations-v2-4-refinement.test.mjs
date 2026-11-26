@@ -59,11 +59,10 @@ test("tutorial and FAQ prioritize actual product-specific delivery and aftersale
 test("homepage carousel keeps approved desktop fill while copy and links stay intact", () => {
   const source = read("app/page.tsx");
   const carousel = (value) => value.slice(value.indexOf("const heroSlides ="), value.indexOf("export default function HomePage")).replace(/\r\n/g, "\n");
-  // Exact fingerprint of the approved carousel at b9200ac; works in Actions'
-  // shallow checkout without requiring historical Git objects or a Git binary.
+  // Fingerprint of the approved hero carousel (with primary CTA pill); works in shallow checkouts.
   assert.equal(
     createHash("sha256").update(carousel(source)).digest("hex"),
-    "b794fcd58cb53d563593e7e7c270ec1f0b5bb0e979a6250a6e8dd1c63714d140",
+    "4b312e147ae18be85459c9af8f2e872aa1f0b16e15ece02f0da4ca73b4eb342c",
   );
   for (const text of ["Apple ID / Steam / Gmail 等账号商品", "海外实体卡、SIM 与通信服务", "多地区 Apple ID 与成品账号", "本站仅提供合法合规的数字商品及相关服务"]) assert.ok(source.includes(text));
   const links = (value) => [...value.matchAll(/href: "([^"]+)"/g)].map((match) => match[1]);

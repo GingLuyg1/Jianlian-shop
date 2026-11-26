@@ -133,11 +133,42 @@ export async function GET(request: Request) {
       ? PRODUCT_FIELDS
       : PRODUCT_FIELDS.replace(",metadata,", ",")
   ) as typeof PRODUCT_FIELDS;
+
+  let skuMatchedProductIds: string[] = [];
+  if (search) {
+    const escapedSkuSearch = search.replace(/[%,()\\]/g, "").trim();
+    if (escapedSkuSearch) {
+      const skuMatchRes = await service
+        .from("product_skus")
+        .select("product_id")
+        .or(`sku_code.ilike.%${escapedSkuSearch}%,sku_title.ilike.%${escapedSkuSearch}%`)
+        .limit(50);
+      if (!skuMatchRes.error && Array.isArray(skuMatchRes.data)) {
+        skuMatchedProductIds = Array.from(
+          new Set(
+            skuMatchRes.data
+              .map((row: { product_id?: string | null }) => row.product_id)
+              .filter((id): id is string => Boolean(id && /^[0-9a-f-]{36}$/i.test(id)))
+          )
+        );
+      }
+    }
+  }
+
   const buildProductsQuery = () => {
     let q = service.from("products").select(selectFields, { count: "exact" });
     if (search) {
       const escaped = search.replace(/[%,()\\]/g, "").trim();
-      if (escaped) q = q.or(`name.ilike.%${escaped}%,slug.ilike.%${escaped}%`);
+      if (escaped) {
+        const terms = [`name.ilike.%${escaped}%`, `slug.ilike.%${escaped}%`];
+        if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(escaped)) {
+          terms.push(`id.eq.${escaped}`);
+        }
+        if (skuMatchedProductIds.length > 0) {
+          terms.push(`id.in.(${skuMatchedProductIds.join(",")})`);
+        }
+        q = q.or(terms.join(","));
+      }
     }
     if (categoryId && categoryId !== "all") {
       q = q.eq("category_id", categoryId);

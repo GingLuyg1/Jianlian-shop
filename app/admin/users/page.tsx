@@ -128,7 +128,25 @@ export default function AdminUsersPage() {
   const resetFilters = () => { setSearch(""); setStatus("all"); setRole("all"); setRisk("all"); setRegisteredFrom(""); setRegisteredTo(""); setSort("newest"); setPage(1); };
 
   return (
-    <AdminPageShell variant="v2" title="用户管理" description="只读查询用户资料、账户摘要、关联业务、风险记录和后台审计历史。" actions={<Button className="h-11 sm:h-9" variant="outline" onClick={() => void loadUsers()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}>
+    <AdminPageShell
+      variant="v2"
+      title="用户管理"
+      description="只读查询用户资料、账户摘要、关联业务、风险记录和后台审计历史。"
+      actions={(
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-[var(--admin-v2-border)] bg-[var(--admin-v2-surface-muted)] p-0.5 text-xs">
+            <span className="rounded-md bg-white px-2.5 py-1.5 font-medium text-slate-900 shadow-sm">用户列表</span>
+            <Link href="/admin/privacy-requests" className="rounded-md px-2.5 py-1.5 font-medium text-slate-600 transition-colors hover:text-slate-900">
+              隐私请求
+            </Link>
+          </div>
+          <Button className="h-11 sm:h-9" variant="outline" onClick={() => void loadUsers()} disabled={loading}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />
+            {loading ? "刷新中..." : "刷新"}
+          </Button>
+        </div>
+      )}
+    >
       <AdminListStats>
         <AdminListStat label="当前结果" value={count} />
         <AdminListStat label="本页正常账户" value={pageSummary.active} />
@@ -161,14 +179,14 @@ export default function AdminUsersPage() {
               <colgroup><col className="w-[190px]" /><col className="w-[210px]" /><col className="w-[90px]" /><col className="w-[100px]" /><col className="w-[110px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[105px]" /><col className="w-[78px]" /></colgroup>
               <thead className={adminListTableHeadClass}><tr className="border-b">{[
                 ["用户", "text-left"], ["邮箱", "text-left"], ["角色", "text-center"], ["账户状态", "text-center"],
-                ["当前余额", "text-center"], ["注册时间", "text-center"], ["最近活动", "text-center"], ["风险状态", "text-center"], ["操作", "text-center"],
-              ].map(([heading, align]) => <th scope="col" key={heading} className={`h-10 whitespace-nowrap px-3 font-medium ${align}`}>{heading}</th>)}</tr></thead>
+                ["当前余额", "text-center"], ["注册时间", "text-center"], ["最近活动", "text-center"], ["风险状态", "text-center"],
+              ].map(([heading, align]) => <th scope="col" key={heading} className={`h-10 whitespace-nowrap px-3 font-medium ${align}`}>{heading}</th>)}<th scope="col" className="sticky right-0 h-10 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-3 text-center font-medium shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</th></tr></thead>
               <tbody>{users.map((user) => <tr key={user.id} className={adminListRowClass}>
                 <td className="px-3 py-2"><div className="truncate font-medium text-slate-900">{user.displayName || "未命名用户"}</div><div className="truncate font-mono text-[11px] text-slate-400" title={user.id}>{user.id}</div></td>
                 <td className="truncate px-3 py-2" title={user.email ?? ""}>{user.email || "—"}</td><td className="px-3 py-2 text-center">{ROLE_LABELS[user.role] ?? user.role}</td>
                 <td className="px-3 py-2 text-center"><StatusBadge value={user.accountStatus} labels={ACCOUNT_LABELS} kind="account" /></td><td className="px-3 py-2 text-center font-semibold tabular-nums">{money(user.balance)}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(user.createdAt)}</td><td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(user.lastLoginAt)}</td><td className="px-3 py-2 text-center"><StatusBadge value={user.riskStatus} labels={RISK_LABELS} kind="risk" /></td>
-                <td className="px-3 py-2 text-center whitespace-nowrap"><Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9"><Link href={`/admin/users/${user.id}`}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
+                <td className="sticky right-0 bg-white px-3 py-2 text-center whitespace-nowrap shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]"><Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9"><Link href={`/admin/users/${user.id}`}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
               </tr>)}</tbody>
             </table>
           )}

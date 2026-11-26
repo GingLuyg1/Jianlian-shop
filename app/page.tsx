@@ -63,10 +63,10 @@ const categoryCards = [
 ];
 
 const hotLinks = [
-  { title: "Apple ID", desc: "多地区 Apple ID 与成品账号", href: "/products/digital-accounts?category=apple-id" },
-  { title: "Steam 账号", desc: "Steam 成品号与游戏账号", href: "/products/digital-accounts?category=steam" },
-  { title: "ChatGPT Plus", desc: "Plus / Pro 等会员服务", href: "/products/ai-membership?search=ChatGPT" },
-  { title: "Grok Super", desc: "Grok 高阶会员服务", href: "/products/ai-membership?search=Grok" },
+  { key: "apple-id", title: "Apple ID", desc: "多地区 Apple ID 与成品账号", tag: "自动发货", match: /apple\s*id|苹果\s*id/i, href: "/products/digital-accounts?category=apple-id" },
+  { key: "steam", title: "Steam 账号", desc: "Steam 成品号与游戏账号", tag: "自动发货", match: /steam/i, href: "/products/digital-accounts?category=steam" },
+  { key: "chatgpt", title: "ChatGPT Plus", desc: "Plus / Pro 等会员服务", tag: "自动发货", match: /chatgpt|openai/i, href: "/products/ai-membership?search=ChatGPT" },
+  { key: "grok", title: "Grok Super", desc: "Grok 高阶会员服务", tag: "自动发货", match: /grok/i, href: "/products/ai-membership?search=Grok" },
 ];
 
 const highlights = [
@@ -269,7 +269,14 @@ function HeroCarousel() {
                 <p className="mt-2 max-w-2xl text-xs leading-5 text-muted-foreground sm:mt-2.5 sm:text-sm sm:leading-6 2xl:text-base">
                   {slide.desc}
                 </p>
-                <div className="mt-3 2xl:mt-5 flex flex-wrap gap-2 text-xs 2xl:text-sm font-medium text-primary">
+                <div className="mt-3 2xl:mt-5 flex flex-wrap items-center gap-2 text-xs 2xl:text-sm font-medium text-primary">
+                  <Link
+                    href="/products/all"
+                    className="inline-flex items-center gap-1 rounded-full bg-primary px-3.5 py-1 2xl:px-4 2xl:py-1.5 font-semibold text-white shadow-sm transition-colors hover:bg-primary/90"
+                  >
+                    浏览全部商品
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
                   <span className="rounded-full bg-white px-3 py-1 2xl:px-4 2xl:py-1.5 shadow-sm">
                     安全合规
                   </span>
@@ -446,6 +453,31 @@ export default function HomePage() {
     const categoryHref = item.href.split("?")[0];
     return !isCatalogCategoryHref(categoryHref) || visibleCategoryHrefs.has(categoryHref);
   });
+  const [hotMinPrices, setHotMinPrices] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/catalog/products?page=1&pageSize=200&sort=price_asc&inStockOnly=1")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((payload: { items?: Array<{ name?: string | null; min_price?: number | string | null; price?: number | string | null }> } | null) => {
+        if (cancelled || !payload?.items?.length) return;
+        const mins: Record<string, number> = {};
+        for (const p of payload.items) {
+          const name = String(p.name ?? "");
+          const price = Number(p.min_price ?? p.price ?? 0);
+          if (!Number.isFinite(price) || price <= 0) continue;
+          for (const hot of hotLinks) {
+            if (hot.match.test(name) && (mins[hot.key] === undefined || price < mins[hot.key])) {
+              mins[hot.key] = price;
+            }
+          }
+        }
+        if (Object.keys(mins).length > 0) setHotMinPrices(mins);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [activeMobilePrimaryIndex, setActiveMobilePrimaryIndex] = useState(0);
 
   const mobileCategoryTree = useMemo(() => {
@@ -615,19 +647,34 @@ export default function HomePage() {
               <Sparkles className="h-5 w-5 text-primary" />
             </div>
             <div className={cn("grid grid-cols-2 gap-2.5 xl:grid-cols-1 xl:gap-0 xl:space-y-2.5", isMobile && "!grid-cols-2 !gap-2")}>
-              {visibleHotLinks.map((item) => (
-                <Link
-                  key={item.title}
-                  href={item.href}
-                  className={cn("flex items-center justify-between gap-2 rounded-xl border border-border bg-slate-50/70 px-3 py-2 font-semibold text-slate-950 transition-colors hover:border-primary/30 hover:bg-white md:px-3.5 md:py-2.5", isMobile && "!px-2.5 !py-2")}
-                >
-                  <span className="min-w-0 text-sm md:text-base">
-                    <span className={cn("block truncate", isMobile && "text-[13px]")}>{item.title}</span>
-                    <span className="mt-0.5 block truncate text-xs font-normal text-muted-foreground md:mt-1">{item.desc}</span>
-                  </span>
-                  <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
-                </Link>
-              ))}
+              {visibleHotLinks.map((item) => {
+                const minPrice = hotMinPrices[item.key];
+                return (
+                  <Link
+                    key={item.title}
+                    href={item.href}
+                    className={cn("flex items-center justify-between gap-2 rounded-xl border border-border bg-slate-50/70 px-3 py-2 font-semibold text-slate-950 transition-colors hover:border-primary/30 hover:bg-white md:px-3.5 md:py-2.5", isMobile && "!px-2.5 !py-2")}
+                  >
+                    <span className="min-w-0 text-sm md:text-base">
+                      <span className="flex items-center gap-1.5">
+                        <span className={cn("truncate", isMobile && "text-[13px]")}>{item.title}</span>
+                        <span className="shrink-0 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200/70">
+                          {item.tag}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 flex items-center gap-1.5 text-xs font-normal text-muted-foreground md:mt-1">
+                        {minPrice !== undefined ? (
+                          <span className="shrink-0 font-semibold text-primary">
+                            ¥{minPrice % 1 === 0 ? minPrice.toFixed(0) : minPrice.toFixed(2)} 起
+                          </span>
+                        ) : null}
+                        <span className="truncate">{item.desc}</span>
+                      </span>
+                    </span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-primary" />
+                  </Link>
+                );
+              })}
             </div>
           </div>
         </section>

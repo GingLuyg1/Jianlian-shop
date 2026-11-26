@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Clipboard, Eye, EyeOff, Headphones, Loader2, RefreshCw } from "lucide-react";
+import { BookOpen, Clipboard, Eye, EyeOff, Headphones, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,43 @@ function formatDate(value?: string | null) {
   return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
 
+function getMatchedTutorialForProduct(productName?: string | null): { href: string; label: string } {
+  const normalized = String(productName ?? "").toLowerCase();
+  if (/gemini|google\s*ai|学生认证|sheerid/.test(normalized)) {
+    return /学生|sheerid|认证/.test(normalized)
+      ? { href: "/tutorials?topic=google-region&guide=student-discount", label: "查看学生认证教程" }
+      : { href: "/tutorials?topic=gemini", label: "查看 Gemini 使用教程" };
+  }
+  if (/apple\s*id|苹果\s*id|美区\s*id|日区\s*id/.test(normalized)) {
+    return { href: "/tutorials?topic=apple-id", label: "查看 Apple ID 教程" };
+  }
+  if (/chatgpt|openai|codex|\bplus\b|\bpro\b/.test(normalized) && !/grok|gemini|claude/.test(normalized)) {
+    return { href: "/tutorials?topic=chatgpt-guide", label: "查看 ChatGPT 保号教程" };
+  }
+  if (/giffgaff/.test(normalized)) {
+    return { href: "/tutorials?topic=giffgaff", label: "查看 Giffgaff 激活教程" };
+  }
+  if (/haha\s*sim|haha\s*travel/.test(normalized)) {
+    return { href: "/tutorials?topic=haha-sim", label: "查看 Haha SIM 教程" };
+  }
+  if (/one\s*nz|onenz|新西兰/.test(normalized)) {
+    return { href: "/tutorials?topic=one-nz", label: "查看 One NZ 教程" };
+  }
+  if (/rakuten|乐天/.test(normalized)) {
+    return { href: "/tutorials?topic=rakuten-mobile", label: "查看日本乐天 SIM 教程" };
+  }
+  if (/gmail|google|谷歌/.test(normalized)) {
+    return { href: "/tutorials?topic=google-region", label: "查看 Google 改区教程" };
+  }
+  if (/facebook|\bfb\b|脸书/.test(normalized)) {
+    return { href: "/tutorials?topic=facebook", label: "查看 Facebook 登录教程" };
+  }
+  if (/twitter|推特|supergrok|\bgrok\b|\bx\s*账号|\bx账号/.test(normalized)) {
+    return { href: "/tutorials?topic=twitter", label: "查看 X (Twitter) 教程" };
+  }
+  return { href: "/tutorials?topic=required", label: "查看使用与核验指南" };
+}
+
 export function SecureOrderDelivery({
   orderNo,
   paymentStatus,
@@ -42,6 +79,7 @@ export function SecureOrderDelivery({
   fulfillmentStatus,
   deliveryStatus,
   deliveryType,
+  fallbackProductName,
   pollUntilDelivered = false,
   onDelivered,
   className,
@@ -52,6 +90,7 @@ export function SecureOrderDelivery({
   fulfillmentStatus?: string | null;
   deliveryStatus?: string | null;
   deliveryType?: string | null;
+  fallbackProductName?: string | null;
   pollUntilDelivered?: boolean;
   onDelivered?: () => void | Promise<void>;
   className?: string;
@@ -195,6 +234,7 @@ export function SecureOrderDelivery({
         <div data-testid="card-secret-content" className="divide-y divide-slate-200/70 overflow-hidden rounded-lg bg-slate-50 px-3">
           {deliveredRows.map((delivery) => {
             const visible = Boolean(visibleIds[delivery.id]);
+            const tutorialAction = getMatchedTutorialForProduct(delivery.product_name ?? fallbackProductName);
             return (
               <div key={delivery.id} data-testid="card-secret-row" className="min-w-0 py-3">
                 {delivery.product_name ? <div className="mb-2 font-medium text-slate-900">{delivery.product_name}</div> : null}
@@ -203,7 +243,7 @@ export function SecureOrderDelivery({
                 </div>
                 <div className="mt-2 text-xs text-muted-foreground">交付时间：{formatDate(delivery.delivered_at)}</div>
                 {delivery.delivery_note ? <div className="mt-2 text-xs text-muted-foreground">{delivery.delivery_note}</div> : null}
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <Button
                     type="button"
                     size="sm"
@@ -216,6 +256,12 @@ export function SecureOrderDelivery({
                   <Button type="button" size="sm" variant="outline" onClick={() => void copyContent(delivery.content)} disabled={!delivery.content}>
                     <Clipboard className="mr-2 h-4 w-4" />
                     复制
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" className="text-primary hover:bg-orange-50 hover:text-primary" asChild>
+                    <Link href={tutorialAction.href}>
+                      <BookOpen className="mr-1.5 h-4 w-4" />
+                      {tutorialAction.label} →
+                    </Link>
                   </Button>
                 </div>
               </div>

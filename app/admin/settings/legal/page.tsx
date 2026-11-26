@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { statusLabel } from '@/lib/admin/display-labels';
-import { Loader2, RefreshCcw } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Loader2, RefreshCcw } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -168,8 +169,13 @@ export default function AdminLegalSettingsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-4 lg:p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-950">协议版本管理</h1>
+        <div className="flex items-start gap-3">
+          <Button asChild size="icon" variant="outline" aria-label="返回系统设置">
+            <Link href="/admin/settings"><ArrowLeft className="h-4 w-4" /></Link>
+          </Button>
+          <div>
+            <h1 className="text-xl font-semibold text-slate-950">协议版本管理</h1>
+          </div>
         </div>
         <Button variant="outline" onClick={() => void loadDocuments()} disabled={loading}>
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}

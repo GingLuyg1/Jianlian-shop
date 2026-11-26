@@ -22,7 +22,7 @@ import {
   isAdminPathActive,
 } from "./admin-navigation-state.mjs";
 
-export type AdminNavigationGroupKey = "products" | "suppliers" | "trade" | "finance" | "users" | "agents" | "system";
+export type AdminNavigationGroupKey = "products" | "suppliers" | "trade" | "finance" | "users" | "system";
 
 type AdminNavigationLink = {
   type: "link";
@@ -62,6 +62,32 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
   },
   {
     type: "group",
+    key: "trade",
+    label: "订单与售后",
+    icon: ClipboardList,
+    routePrefixes: ["/admin/orders", "/admin/coupons", "/admin/refunds", "/admin/tickets"],
+    children: [
+      { label: "订单管理", href: "/admin/orders" },
+      { label: "优惠券管理", href: "/admin/coupons" },
+      { label: "售后退款", href: "/admin/refunds" },
+      { label: "工单处理", href: "/admin/tickets" },
+    ],
+  },
+  {
+    type: "group",
+    key: "finance",
+    label: "财务与报表",
+    icon: Landmark,
+    routePrefixes: ["/admin/finance", "/admin/reports", "/admin/payments", "/admin/recharges", "/admin/balance-ledger"],
+    children: [
+      { label: "财务与报表", href: "/admin/finance" },
+      { label: "支付管理", href: "/admin/payments" },
+      { label: "充值管理", href: "/admin/recharges" },
+      { label: "余额流水", href: "/admin/balance-ledger" },
+    ],
+  },
+  {
+    type: "group",
     key: "suppliers",
     label: "供应链管理",
     icon: Factory,
@@ -73,73 +99,26 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
   },
   {
     type: "group",
-    key: "trade",
-    label: "订单与交易",
-    icon: ClipboardList,
-    routePrefixes: ["/admin/orders", "/admin/refunds", "/admin/risk", "/admin/coupons"],
-    children: [
-      { label: "订单管理", href: "/admin/orders" },
-      { label: "优惠券管理", href: "/admin/coupons" },
-      { label: "售后退款", href: "/admin/refunds" },
-      { label: "风险审核", href: "/admin/risk" },
-    ],
-  },
-  {
-    type: "group",
-    key: "finance",
-    label: "财务管理",
-    icon: Landmark,
-    routePrefixes: ["/admin/finance", "/admin/reports", "/admin/payments", "/admin/recharges", "/admin/balance-ledger"],
-    children: [
-      { label: "财务看板", href: "/admin/finance" },
-      { label: "经营报表", href: "/admin/reports" },
-      { label: "支付管理", href: "/admin/payments" },
-      { label: "充值管理", href: "/admin/recharges" },
-      { label: "余额流水", href: "/admin/balance-ledger" },
-    ],
-  },
-  {
-    type: "group",
     key: "users",
-    label: "用户与通信",
+    label: "用户与分销",
     icon: Users,
-    routePrefixes: ["/admin/users", "/admin/tickets", "/admin/privacy-requests", "/admin/notifications"],
+    routePrefixes: ["/admin/users", "/admin/privacy-requests", "/admin/agents", "/admin/notifications"],
     children: [
       { label: "用户管理", href: "/admin/users" },
-      { label: "工单处理", href: "/admin/tickets" },
-      { label: "隐私请求", href: "/admin/privacy-requests" },
+      { label: "代理与分销", href: "/admin/agents" },
       { label: "邮件通知", href: "/admin/notifications/email-deliveries" },
-    ],
-  },
-  {
-    type: "group",
-    key: "agents",
-    label: "代理与分销",
-    icon: Share2,
-    routePrefixes: ["/admin/agents"],
-    children: [
-      { label: "API申请记录", href: "/admin/agents" },
-      { label: "API管理", href: "/admin/agents?tab=management" },
-      { label: "IP加白管理", href: "/admin/agents?tab=whitelist" },
-      { label: "分销代理订单", href: "/admin/agents?tab=orders" },
     ],
   },
   { type: "link", label: "系统设置", href: "/admin/settings", icon: Settings },
   {
     type: "group",
     key: "system",
-    label: "系统运营",
+    label: "系统运维",
     icon: AlertTriangle,
-    routePrefixes: ["/admin/system"],
+    routePrefixes: ["/admin/system", "/admin/system-errors", "/admin/risk", "/admin/audit-logs"],
     children: [
-      { label: "生产看板", href: "/admin/system/production-readiness" },
-      { label: "自动任务运行状态", href: "/admin/system/workers" },
-      { label: "数据一致性巡检", href: "/admin/system/data-consistency" },
-      { label: "异常中心", href: "/admin/system-errors" },
-      { label: "请求追踪", href: "/admin/system/request-traces" },
-      { label: "事务补偿", href: "/admin/system/compensations" },
-      { label: "数据库状态", href: "/admin/system/database" },
       { label: "操作日志", href: "/admin/audit-logs" },
+      { label: "运维排障工具箱", href: "/admin/system/toolbox" },
     ],
   },
 ];
@@ -160,13 +139,22 @@ export function isAdminNavigationLinkActive(
   if (href === "/admin/products") {
     return isPathActive(pathname, href) && productView !== "categories";
   }
-  if (pathname === "/admin/agents" && href.startsWith("/admin/agents")) {
-    const tabInHref = href.includes("?tab=") ? href.split("?tab=")[1] : null;
-    const currentTab =
-      agentTab === "management" || agentTab === "whitelist" || agentTab === "orders"
-        ? agentTab
-        : null;
-    return tabInHref === currentTab;
+  if (href === "/admin/finance") {
+    return isPathActive(pathname, "/admin/finance") || isPathActive(pathname, "/admin/reports");
+  }
+  if (href === "/admin/users") {
+    return isPathActive(pathname, "/admin/users") || isPathActive(pathname, "/admin/privacy-requests");
+  }
+  if (href === "/admin/system/toolbox") {
+    return (
+      isPathActive(pathname, "/admin/system") ||
+      isPathActive(pathname, "/admin/system-errors") ||
+      isPathActive(pathname, "/admin/risk")
+    );
+  }
+  if (href === "/admin/agents") {
+    void agentTab;
+    return isPathActive(pathname, "/admin/agents");
   }
   return isPathActive(pathname, href);
 }

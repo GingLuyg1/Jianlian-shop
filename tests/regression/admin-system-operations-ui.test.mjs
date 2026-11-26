@@ -58,11 +58,9 @@ test("system operations workspaces use real admin contracts and shared UI states
     assert.match(auditPage, new RegExp(`params\\.set\\("${parameter}"`));
   }
 
-  assert.match(navigation, /label: "系统运营"/);
-  assert.match(navigation, /label: "生产看板", href: "\/admin\/system\/production-readiness"/);
-  assert.match(navigation, /label: "异常中心", href: "\/admin\/system-errors"/);
-  assert.match(navigation, /label: "请求追踪", href: "\/admin\/system\/request-traces"/);
+  assert.match(navigation, /label: "系统运维"/);
   assert.match(navigation, /label: "操作日志", href: "\/admin\/audit-logs"/);
+  assert.match(navigation, /label: "运维排障工具箱", href: "\/admin\/system\/toolbox"/);
 
   for (const source of [dashboard, errorsPage, traceSearch, traceDetail, auditPage]) {
     assert.doesNotMatch(source, /(?:const|let)\s+(?:mock|fake)[A-Za-z0-9_]*/i);
