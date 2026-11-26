@@ -26,19 +26,14 @@ const ledgerColumns = [
 const queueColumns = [
   ['order_no','订单号'],
   ['supplier','供应商'],
-  ['supplier_product_id','供应商商品ID'],
-  ['supplier_sku','规格'],
+  ['supplier_product_id','上游商品 / 规格'],
   ['status','状态'],
   ['provider_order_code','上游平台订单号'],
   ['request_id','采购任务号'],
-  ['order_item_id','商品项ID'],
-  ['retryable','可重试'],
-  ['attempt_count','尝试次数'],
+  ['attempt_count','尝试 / 重试'],
   ['last_error_code','失败原因'],
-  ['last_attempt_at','最近处理时间'],
-  ['completed_at','完成时间'],
   ['created_at','创建时间'],
-  ['updated_at','更新时间'],
+  ['completed_at','完成时间'],
 ];
 const workerLabels: Record<string, string> = {
   timer_enabled:'定时任务是否启用',timer_active:'定时任务是否正在运行',snapshot_observed_at:'服务器任务状态更新时间',snapshot_fresh:'服务器任务状态是否有效',
@@ -57,8 +52,7 @@ function formatTimestamp(v: unknown) {
   if (v == null || v === '') return '—';
   const date = new Date(String(v));
   if (Number.isNaN(date.getTime())) return String(v);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
 }
 
 function CopyableCodeCell({ text, maxWidthClass = 'max-w-[168px]' }: { text: string; maxWidthClass?: string }) {
@@ -110,17 +104,32 @@ function displayValue(kind: Kind, key: string, row: Row) {
       if (!s) return '—';
       const badgeCls = SUPPLIER_BADGE_CLASS[s.toLowerCase()] ?? 'bg-slate-100 text-slate-700 border-slate-200';
       return (
-        <span className={`inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 font-mono text-[11px] font-semibold ${badgeCls}`}>
-          {s}
+        <span className={`inline-flex items-center whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold ${badgeCls}`} title={s}>
+          {statusLabel(s.toLowerCase())}
         </span>
       );
     }
-    if (key === 'supplier_sku') {
-      const s = String(v ?? '').trim();
-      if (!s) return '—';
+    if (key === 'supplier_product_id') {
+      const pid = String(v ?? '').trim();
+      const sku = String(row.supplier_sku ?? '').trim();
+      if (!pid && !sku) return <span className="text-slate-400">—</span>;
       return (
-        <span className="inline-flex items-center whitespace-nowrap rounded bg-orange-50 px-2 py-0.5 font-mono text-xs font-semibold text-orange-700 ring-1 ring-inset ring-orange-200/80">
-          {s}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {pid ? <CopyableCodeCell text={pid} maxWidthClass="max-w-[120px]" /> : null}
+          {sku ? (
+            <span className="inline-flex items-center whitespace-nowrap rounded bg-orange-50 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-orange-700 ring-1 ring-inset ring-orange-200/80">
+              {sku}
+            </span>
+          ) : null}
+        </div>
+      );
+    }
+    if (key === 'attempt_count') {
+      const count = v == null ? 0 : Number(v);
+      const retryable = row.retryable === true;
+      return (
+        <span className="whitespace-nowrap text-xs tabular-nums text-slate-700">
+          {count} 次{retryable ? ' · 可重试' : ''}
         </span>
       );
     }
@@ -286,7 +295,7 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
         {kind === 'supplier-queue' ? (
           <>
             <div className="flex flex-wrap items-center gap-2">
-              <Input aria-label="搜索" className="h-8 w-52 sm:w-64 text-xs" placeholder="订单号 / 采购任务号 / 上游平台订单号" value={filters.q ?? ''} onChange={e => change('q', e.target.value)} />
+              <Input aria-label="搜索" className="h-8 w-72 sm:w-80 text-xs" placeholder="订单号 / 采购任务号 / 上游平台订单号" value={filters.q ?? ''} onChange={e => change('q', e.target.value)} />
               <select aria-label="状态" className="h-8 w-36 rounded-md border bg-white px-2.5 text-xs" value={filters.status ?? ''} onChange={e => change('status', e.target.value)}>
                 <option value="">全部状态</option>{['pending','processing','retryable_failed','permanent_failed','completed','uncertain','needs_input'].map(s => <option key={s} value={s}>{supplierStatusLabel(s)}</option>)}
               </select>
@@ -308,8 +317,14 @@ export default function OperationsReadonlyWorkspace({ kind }: { kind: Kind }) {
             <select aria-label="状态" className="min-h-11 rounded-md border px-3" value={filters.status ?? ''} onChange={e => change('status', e.target.value)}>
               <option value="">全部状态</option>{['pending','completed','failed','cancelled'].map(s => <option key={s} value={s}>{statusLabel(s)}</option>)}
             </select>
-            <Input aria-label="开始日期（范围见说明）" type="date" value={filters.start ?? ''} onChange={e => change('start', e.target.value)} />
-            <Input aria-label="结束日期（范围见说明）" type="date" value={filters.end ?? ''} onChange={e => change('end', e.target.value)} />
+            <label className="flex items-center gap-1.5 rounded-md border bg-white px-2.5 text-xs text-slate-500">
+              <span className="shrink-0">起</span>
+              <input aria-label="开始日期（范围见说明）" title="开始日期" type="date" className="h-10 min-w-0 flex-1 bg-transparent text-sm text-slate-800 focus:outline-none" value={filters.start ?? ''} onChange={e => change('start', e.target.value)} />
+            </label>
+            <label className="flex items-center gap-1.5 rounded-md border bg-white px-2.5 text-xs text-slate-500">
+              <span className="shrink-0">止</span>
+              <input aria-label="结束日期（范围见说明）" title="结束日期" type="date" className="h-10 min-w-0 flex-1 bg-transparent text-sm text-slate-800 focus:outline-none" value={filters.end ?? ''} onChange={e => change('end', e.target.value)} />
+            </label>
           </>
         )}
         {kind === 'ledger' && <>

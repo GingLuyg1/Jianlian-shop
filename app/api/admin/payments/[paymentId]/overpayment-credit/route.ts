@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { getAuditRequestId, writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,8 @@ export async function POST(request: Request, props: RouteContext) {
   const requestId = getAuditRequestId(request, randomUUID());
   const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "overpayment_credit"));
+  if (!limit.allowed) return limit.response!;
 
   // Authentication and super-admin authorization must complete with the
   // cookie client before any service-role capability is acquired.

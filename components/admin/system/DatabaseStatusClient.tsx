@@ -102,6 +102,7 @@ export default function DatabaseStatusClient() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="数据库状态"
       description="只读检查数据库连通、关键结构、数据库事务处理 和 数据库结构升级 登记；不会执行 SQL 或修改数据。"
       actions={

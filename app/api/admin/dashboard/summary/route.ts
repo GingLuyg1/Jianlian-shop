@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { requireApiAdmin } from "@/lib/admin/api-auth";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { requiresRechargeAdminAttention } from "@/lib/recharges/admin-attention";
+import { getAdminTicketCountsFast } from "@/lib/tickets/server";
+import { POSTGREST_PAGE_SIZE, selectAllPaginated } from "@/lib/supabase/paginated-select";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +39,7 @@ type DashboardFastSummaryPayload = {
     reconciliationFailed: number;
     pendingRecharges: number;
     lowStockProducts: number;
+    activeProducts: number;
     pendingTickets: number;
     resolvedTickets: number;
   };
@@ -95,65 +98,115 @@ export async function GET(request: Request) {
     reconciliationsRes,
     pendingRechargesRes,
     lowStockSingleRes,
-    ticketsRes,
+    activeProductsRes,
+    ticketCounts,
   ] = await Promise.all([
-    service
-      .from("orders")
-      .select("id,customer_email,total_amount,status,payment_status,created_at,paid_at")
-      .gte("created_at", yesterdayIso)
-      .lt("created_at", tomorrowIso),
-    service
-      .from("account_recharges")
-      .select("id,amount,requested_amount,credited_amount,status,created_at,paid_at")
-      .gte("created_at", yesterdayIso)
-      .lt("created_at", tomorrowIso),
-    service
-      .from("page_visit_events")
-      .select("visit_date,visitor_key")
-      .gte("visit_date", yesterdayIso)
-      .lt("visit_date", tomorrowIso)
-      .not("page_path", "like", "/admin%"),
-    service
-      .from("profiles")
-      .select("id,created_at")
-      .gte("created_at", yesterdayIso)
-      .lt("created_at", tomorrowIso),
+    selectAllPaginated<Record<string, unknown>>(
+      (from, to) =>
+        service
+          .from("orders")
+          .select("id,customer_email,total_amount,status,payment_status,created_at,paid_at")
+          .gte("created_at", yesterdayIso)
+          .lt("created_at", tomorrowIso)
+          .order("created_at", { ascending: false })
+          .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>,
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 10000 }
+    ),
+    selectAllPaginated<Record<string, unknown>>(
+      (from, to) =>
+        service
+          .from("account_recharges")
+          .select("id,amount,requested_amount,credited_amount,status,created_at,paid_at")
+          .gte("created_at", yesterdayIso)
+          .lt("created_at", tomorrowIso)
+          .order("created_at", { ascending: false })
+          .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>,
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 10000 }
+    ),
+    selectAllPaginated<Record<string, unknown>>(
+      (from, to) =>
+        service
+          .from("page_visit_events")
+          .select("visit_date,visitor_key")
+          .gte("visit_date", yesterdayIso)
+          .lt("visit_date", tomorrowIso)
+          .not("page_path", "like", "/admin%")
+          .order("visit_date", { ascending: false })
+          .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>,
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 20000 }
+    ),
+    selectAllPaginated<Record<string, unknown>>(
+      (from, to) =>
+        service
+          .from("profiles")
+          .select("id,created_at")
+          .gte("created_at", yesterdayIso)
+          .lt("created_at", tomorrowIso)
+          .order("created_at", { ascending: false })
+          .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>,
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 10000 }
+    ),
     service
       .from("orders")
       .select("id", { count: "exact", head: true })
       .in("status", ["paid", "processing"])
       .gte("created_at", thirtyDaysAgoIso),
-    service
-      .from("order_deliveries")
-      .select("delivery_status,delivery_type,failure_reason")
-      .gte("created_at", thirtyDaysAgoIso)
-      .in("delivery_status", ["pending", "failed"]),
+    selectAllPaginated<Record<string, unknown>>(
+      (from, to) =>
+        service
+          .from("order_deliveries")
+          .select("delivery_status,delivery_type,failure_reason")
+          .gte("created_at", thirtyDaysAgoIso)
+          .in("delivery_status", ["pending", "failed"])
+          .order("created_at", { ascending: false })
+          .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>,
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 10000 }
+    ),
     service
       .from("payment_sessions")
       .select("id", { count: "exact", head: true })
       .in("status", ["failed", "expired"])
       .gte("created_at", thirtyDaysAgoIso),
-    service
-      .from("payment_callback_logs")
-      .select("signature_result,process_result")
-      .gte("received_at", thirtyDaysAgoIso),
-    service
-      .from("payment_reconciliations")
-      .select("result,recovery_status")
-      .gte("created_at", thirtyDaysAgoIso),
-    service
-      .from("account_recharges")
-      .select("status,review_mode,exception_type,error_summary")
-      .gte("created_at", thirtyDaysAgoIso),
+    selectAllPaginated<Record<string, unknown>>(
+      (from, to) =>
+        service
+          .from("payment_callback_logs")
+          .select("signature_result,process_result")
+          .gte("received_at", thirtyDaysAgoIso)
+          .order("received_at", { ascending: false })
+          .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>,
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 10000 }
+    ),
+    selectAllPaginated<Record<string, unknown>>(
+      (from, to) =>
+        service
+          .from("payment_reconciliations")
+          .select("result,recovery_status")
+          .gte("created_at", thirtyDaysAgoIso)
+          .order("created_at", { ascending: false })
+          .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>,
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 10000 }
+    ),
+    selectAllPaginated<Record<string, unknown>>(
+      (from, to) =>
+        service
+          .from("account_recharges")
+          .select("status,review_mode,exception_type,error_summary")
+          .gte("created_at", thirtyDaysAgoIso)
+          .order("created_at", { ascending: false })
+          .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message?: string } | null }>,
+      { pageSize: POSTGREST_PAGE_SIZE, maxRows: 10000 }
+    ),
     service
       .from("products")
       .select("id", { count: "exact", head: true })
       .gt("stock", 0)
       .lte("stock", 5),
     service
-      .from("support_tickets")
-      .select("status")
-      .limit(500),
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "active"),
+    getAdminTicketCountsFast().catch(() => ({ total: 0, processing: 0, completed: 0, flagged: 0, unread: 0 })),
   ]);
 
   const todayMs = Date.parse(todayIso);
@@ -167,7 +220,7 @@ export async function GET(request: Request) {
   let yesterdayPaidOrderCount = 0;
   const todayBuyers = new Set<string>();
 
-  for (const row of (recentOrdersRes.data ?? []) as Array<Record<string, unknown>>) {
+  for (const row of recentOrdersRes.rows) {
     const createdMs = Date.parse(String(row.created_at ?? ""));
     const isToday = Number.isFinite(createdMs) && createdMs >= todayMs;
     const isYesterday = Number.isFinite(createdMs) && createdMs >= yesterdayMs && createdMs < todayMs;
@@ -190,7 +243,7 @@ export async function GET(request: Request) {
 
   let rechargeAmount = 0;
   let yesterdayRechargeAmount = 0;
-  for (const row of (recentRechargesRes.data ?? []) as Array<Record<string, unknown>>) {
+  for (const row of recentRechargesRes.rows) {
     if (!isRechargeSucceeded(row.status)) continue;
     const createdMs = Date.parse(String(row.created_at ?? ""));
     const amt = safeNum(row.credited_amount ?? row.amount ?? row.requested_amount);
@@ -202,7 +255,7 @@ export async function GET(request: Request) {
   let yesterdayPv = 0;
   const todayUvSet = new Set<string>();
   const yesterdayUvSet = new Set<string>();
-  for (const row of (recentVisitsRes.data ?? []) as Array<Record<string, unknown>>) {
+  for (const row of recentVisitsRes.rows) {
     const visitMs = Date.parse(String(row.visit_date ?? ""));
     const key = typeof row.visitor_key === "string" ? row.visitor_key : "";
     if (Number.isFinite(visitMs) && visitMs >= todayMs) {
@@ -216,36 +269,35 @@ export async function GET(request: Request) {
 
   let newUsers = 0;
   let yesterdayNewUsers = 0;
-  for (const row of (newUsersRes.data ?? []) as Array<Record<string, unknown>>) {
+  for (const row of newUsersRes.rows) {
     const ms = Date.parse(String(row.created_at ?? ""));
     if (Number.isFinite(ms) && ms >= todayMs) newUsers += 1;
     else if (Number.isFinite(ms) && ms >= yesterdayMs && ms < todayMs) yesterdayNewUsers += 1;
   }
 
-  const deliveries = (deliveriesRes.data ?? []) as Array<Record<string, unknown>>;
+  const deliveries = deliveriesRes.rows;
   const manualDelivery = deliveries.filter((r) => r.delivery_status === "pending" && r.delivery_type !== "automatic").length;
   const autoDeliveryFailed = deliveries.filter((r) => r.delivery_status === "failed" && r.delivery_type === "automatic").length;
   const inventoryShortage = deliveries.filter((r) => String(r.failure_reason ?? "").includes("库存")).length;
 
-  const callbackFailed = ((callbacksRes.data ?? []) as Array<Record<string, unknown>>).filter((r) => {
+  const callbackFailed = callbacksRes.rows.filter((r) => {
     const sig = String(r.signature_result ?? "").toLowerCase();
     const proc = String(r.process_result ?? "").toLowerCase();
     return sig === "invalid" || sig === "failed" || proc === "failed" || proc === "error";
   }).length;
 
-  const reconciliationFailed = ((reconciliationsRes.data ?? []) as Array<Record<string, unknown>>).filter((r) => {
+  const reconciliationFailed = reconciliationsRes.rows.filter((r) => {
     const res = String(r.result ?? "").toLowerCase();
     const rec = String(r.recovery_status ?? "").toLowerCase();
     return res === "mismatched" || res === "query_failed" || rec === "failed";
   }).length;
 
-  const pendingRecharges = ((pendingRechargesRes.data ?? []) as Array<Record<string, unknown>>).filter((r) =>
+  const pendingRecharges = pendingRechargesRes.rows.filter((r) =>
     requiresRechargeAdminAttention(r)
   ).length;
 
-  const ticketRows = (ticketsRes.data ?? []) as Array<{ status?: string | null }>;
-  const pendingTickets = ticketRows.filter((t) => t.status !== "completed" && t.status !== "resolved" && t.status !== "closed").length;
-  const resolvedTickets = ticketRows.length - pendingTickets;
+  const pendingTickets = ticketCounts.processing;
+  const resolvedTickets = ticketCounts.completed;
 
   const payload: DashboardFastSummaryPayload = {
     cachedAt: new Date().toISOString(),
@@ -276,6 +328,7 @@ export async function GET(request: Request) {
       reconciliationFailed,
       pendingRecharges,
       lowStockProducts: lowStockSingleRes.count ?? 0,
+      activeProducts: activeProductsRes.count ?? 0,
       pendingTickets,
       resolvedTickets,
     },

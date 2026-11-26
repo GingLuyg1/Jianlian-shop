@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,8 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { userId } = await context.params;
   const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "admin_users_patch"));
+  if (!limit.allowed) return limit.response!;
   const body = (await request.json().catch(() => null)) as PatchBody | null;
   const reason = String(body?.reason ?? "").trim();
   const requestId = randomUUID();

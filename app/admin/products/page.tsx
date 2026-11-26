@@ -1061,6 +1061,7 @@ export default function AdminProductsPage() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title={activeView === "products" ? "商品管理" : "分类管理"}
       className={activeView === "products" ? glass.workspace : undefined}
       description={

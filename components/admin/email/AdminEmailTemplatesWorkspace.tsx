@@ -61,18 +61,18 @@ function parseVariablesSchema(value: string) {
   try {
     const parsed = JSON.parse(value);
     if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
-      return { ok: false as const, error: "变量 数据库结构 必须是 JSON 对象。" };
+      return { ok: false as const, error: "变量结构必须是 JSON 对象。" };
     }
     return { ok: true as const, value: parsed as Record<string, unknown> };
   } catch (error) {
-    return { ok: false as const, error: `变量 数据库结构 JSON 格式错误：${error instanceof Error ? error.message : "无法解析"}` };
+    return { ok: false as const, error: `变量结构 JSON 格式错误：${error instanceof Error ? error.message : "无法解析"}` };
   }
 }
 
 function formatTime(value: string | null | undefined) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false });
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
 }
 
 function TemplateStatusBadge({ status }: { status: string }) {
@@ -344,7 +344,7 @@ export default function AdminEmailTemplatesWorkspace() {
               <div className="space-y-2"><Label htmlFor="email-subject">邮件主题</Label><Input id="email-subject" value={editor.subjectTemplate} disabled={!editable} onChange={(event) => setEditor((current) => ({ ...current, subjectTemplate: event.target.value }))} /></div>
               <div className="space-y-2"><Label htmlFor="email-html">HTML 模板</Label><Textarea id="email-html" rows={12} className="font-mono text-xs" value={editor.htmlTemplate} disabled={!editable} onChange={(event) => setEditor((current) => ({ ...current, htmlTemplate: event.target.value }))} /><p className="text-xs text-slate-500">仅作为文本编辑；页面不会执行或预览 HTML，保存时仍由服务端安全校验。</p></div>
               <div className="space-y-2"><Label htmlFor="email-text">纯文本模板</Label><Textarea id="email-text" rows={7} className="font-mono text-xs" value={editor.textTemplate} disabled={!editable} onChange={(event) => setEditor((current) => ({ ...current, textTemplate: event.target.value }))} /></div>
-              <div className="space-y-2"><Label htmlFor="email-variables">变量 数据库结构（JSON 对象）</Label><Textarea id="email-variables" rows={8} className="font-mono text-xs" value={editor.variablesSchema} disabled={!editable} onChange={(event) => setEditor((current) => ({ ...current, variablesSchema: event.target.value }))} /></div>
+              <div className="space-y-2"><Label htmlFor="email-variables">变量结构（JSON 对象）</Label><Textarea id="email-variables" rows={8} className="font-mono text-xs" value={editor.variablesSchema} disabled={!editable} onChange={(event) => setEditor((current) => ({ ...current, variablesSchema: event.target.value }))} /></div>
 
               {mode === "detail" && selected?.status !== "archived" ? (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">

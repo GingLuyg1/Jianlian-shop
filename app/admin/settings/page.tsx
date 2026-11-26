@@ -28,6 +28,7 @@ import { toast } from "sonner";
 
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import { statusLabel } from "@/lib/admin/display-labels";
 import PaymentSettingsPanel from "@/components/admin/payments/PaymentSettingsPanel";
 import RechargeRateSettings from "@/components/admin/payments/RechargeRateSettings";
 import AdminAnnouncementsManager from "@/components/admin/settings/AdminAnnouncementsManager";
@@ -801,9 +802,8 @@ function SecuritySettings({ logs }: { logs: SiteSettingLog[] }) {
               return (
                 <div key={log.id} className="space-y-1 px-3.5 py-2.5 text-xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <span className="font-medium text-slate-900">{def?.description ?? log.setting_key}</span>
-                      <span className="ml-2 font-mono text-[11px] text-slate-400">{log.setting_key}</span>
+                    <div className="min-w-0" title={log.setting_key}>
+                      <span className="font-medium text-slate-900">{def?.description ?? statusLabel(log.setting_key)}</span>
                     </div>
                     <span className="shrink-0 tabular-nums text-slate-500">
                       {new Date(log.updated_at).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false })}

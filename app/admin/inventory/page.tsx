@@ -33,6 +33,9 @@ type InventorySummary = {
   product_id: string;
   product_name: string;
   product_slug: string;
+  batch_no?: string | null;
+  batch_name?: string | null;
+  batch_sku_label?: string | null;
   sku_labels?: string[];
   total_count: number;
   available_count: number;
@@ -131,7 +134,7 @@ function formatDate(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  return date.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
 }
 
 async function readJson<T>(response: Response, fallback: string): Promise<T> {
@@ -253,6 +256,7 @@ export default function AdminInventoryPage() {
     setItemRows([]);
     try {
       const params = new URLSearchParams({ mode: "items", productId: row.product_id, status: itemStatus, page: "1", pageSize: "50" });
+      if (row.batch_no) params.set("batchNo", row.batch_no);
       const response = await fetch(`/api/admin/inventory?${params.toString()}`, { cache: "no-store" });
       const payload = await readJson<{ data: InventoryItem[] }>(response, "库存明细加载失败");
       setItemRows(payload.data ?? []);
@@ -377,6 +381,7 @@ export default function AdminInventoryPage() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="数字库存"
       description="批量导入卡密、兑换码、账号密码和纯文本交付内容，库存内容默认脱敏展示。"
       actions={(
@@ -442,7 +447,7 @@ export default function AdminInventoryPage() {
                     {summaryRows.length === 0 ? (
                       <TableRow><TableCell colSpan={7} className="h-72"><AdminEmptyState title="暂无库存" description="导入数字库存后会显示在这里。" /></TableCell></TableRow>
                     ) : summaryRows.map((row) => (
-                      <TableRow key={row.product_id}>
+                      <TableRow key={`${row.product_id}:${row.batch_no || "default"}`}>
                         <TableCell>
                           <div className="font-medium text-slate-900">{row.product_name}</div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
@@ -450,7 +455,16 @@ export default function AdminInventoryPage() {
                             <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-500" title={`商品 ID: ${row.product_id}`}>
                               ID:{row.product_id.slice(0, 8)}
                             </span>
-                            {row.sku_labels && row.sku_labels.length > 0 ? (
+                            {row.batch_no ? (
+                              <span className="rounded bg-amber-50 px-1.5 py-0.5 font-mono text-[10px] text-amber-800" title={`批次号: ${row.batch_no}`}>
+                                批次：{row.batch_name || row.batch_no}
+                              </span>
+                            ) : null}
+                            {row.batch_sku_label ? (
+                              <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700">
+                                规格：{row.batch_sku_label}
+                              </span>
+                            ) : row.sku_labels && row.sku_labels.length > 0 ? (
                               <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700" title={row.sku_labels.join(" / ")}>
                                 规格：{row.sku_labels.slice(0, 2).join("、")}{row.sku_labels.length > 2 ? ` 等 ${row.sku_labels.length} 项` : ""}
                               </span>
@@ -475,7 +489,7 @@ export default function AdminInventoryPage() {
           ) : (
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-auto">
-                <Table className="min-w-[1180px]">
+                <Table className="min-w-[960px]">
                   <TableHeader className="sticky top-0 z-10 bg-slate-50">
                     <TableRow>
                       <TableHead>批次</TableHead>

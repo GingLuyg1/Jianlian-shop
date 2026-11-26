@@ -2,8 +2,9 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { handleSnpayLatePaymentApproval } from "@/lib/recharges/snpay-late-payment-admin";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import {
   classifyRechargeReviewError,
   processRechargeReview,
@@ -22,14 +23,14 @@ const ACTIONS = new Set<RechargeReviewAction>([
 
 export async function POST(request: Request, props: { params: Promise<{ rechargeId: string }> }) {
   const params = await props.params;
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) {
     const attempted = await request.clone().json().catch(() => null);
     if (attempted?.action === "approve_late_payment") {
       await writeAdminAuditLog({
         request, action: "recharge_approve_late_payment", module: "recharges",
         targetType: "account_recharge", targetId: params.rechargeId, result: "denied",
-        errorMessage: "过期付款人工入账需要已认证管理员。",
+        errorMessage: "过期付款人工入账需要超级管理员权限。",
       }).catch(() => undefined);
     }
     return NextResponse.json(
@@ -37,6 +38,8 @@ export async function POST(request: Request, props: { params: Promise<{ recharge
       { status: admin.status },
     );
   }
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "recharge_actions"));
+  if (!limit.allowed) return limit.response!;
 
   const body = (await request.json().catch(() => null)) as
     | { action?: unknown; reason?: unknown }

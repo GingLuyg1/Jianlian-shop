@@ -5,6 +5,7 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { auditEmailAdminAction, summarizeEmailError } from "@/lib/email/jobs";
 import { getAllowedTemplateVariables, validateSafeEmailHtml, validateTemplateVariables } from "@/lib/email/templates";
 import type { EmailTemplateRecord } from "@/lib/email/types";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 
 function json(data: unknown, init?: ResponseInit) {
   return NextResponse.json(data, init);
@@ -51,6 +52,8 @@ export async function PATCH(request: NextRequest, props: { params: Promise<{ tem
   const params = await props.params;
   const ctx = await requireSuperAdmin(request);
   if (!ctx.ok) return ctx.response;
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(ctx.admin.user.id, "email_template_patch"));
+  if (!limit.allowed) return limit.response!;
   try {
     const body = await request.json();
     const action = String(body.action ?? "update").trim();

@@ -5,7 +5,8 @@ import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labe
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Eye, RefreshCw, Search } from "lucide-react";
+import { Copy, Eye, RefreshCw, Search } from "lucide-react";
+import { copyAdminText } from "@/lib/admin/clipboard";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
@@ -158,7 +159,7 @@ export default function AdminUsersPage() {
 
       <AdminListSurface>
         <AdminFilterBar
-          className="sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-[minmax(220px,1fr)_138px_120px_138px_150px_150px_180px_76px]"
+          className="sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5"
           primary={<>
             <label className="relative sm:col-span-2 lg:col-span-2 2xl:col-span-1"><span className="sr-only">搜索用户</span><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="邮箱、昵称或用户 ID" className={cn(adminListControlClass, "pl-9")} /></label>
             <Select label="账户状态" value={status} onChange={setStatus}><option value="all">全部账户状态</option>{Object.entries(ACCOUNT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
@@ -166,8 +167,14 @@ export default function AdminUsersPage() {
           </>}
           advanced={<>
             <Select label="风险状态" value={risk} onChange={setRisk}><option value="all">全部风险状态</option>{Object.entries(RISK_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select>
-            <Input aria-label="注册开始日期" type="date" value={registeredFrom} onChange={(event) => setRegisteredFrom(event.target.value)} className={adminListControlClass} />
-            <Input aria-label="注册结束日期" type="date" value={registeredTo} onChange={(event) => setRegisteredTo(event.target.value)} className={adminListControlClass} />
+            <label className="flex items-center gap-1.5 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white px-2.5 text-xs text-slate-500">
+              <span className="shrink-0">起</span>
+              <input aria-label="注册开始日期" title="注册开始日期" type="date" value={registeredFrom} onChange={(event) => setRegisteredFrom(event.target.value)} className="h-10 min-w-0 flex-1 bg-transparent text-sm text-slate-800 focus:outline-none sm:h-8" />
+            </label>
+            <label className="flex items-center gap-1.5 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white px-2.5 text-xs text-slate-500">
+              <span className="shrink-0">止</span>
+              <input aria-label="注册结束日期" title="注册结束日期" type="date" value={registeredTo} onChange={(event) => setRegisteredTo(event.target.value)} className="h-10 min-w-0 flex-1 bg-transparent text-sm text-slate-800 focus:outline-none sm:h-8" />
+            </label>
             <Select label="排序" value={sort} onChange={setSort}><option value="newest">最新注册</option><option value="oldest">最早注册</option><option value="recent_activity">最近登录</option><option value="balance_desc">余额从高到低</option><option value="balance_asc">余额从低到高</option></Select>
             <Button variant="outline" className="h-11 sm:h-9" onClick={resetFilters}>重置</Button>
           </>}
@@ -175,18 +182,31 @@ export default function AdminUsersPage() {
 
         <AdminTableViewport>
           {error ? <AdminErrorState title="用户列表加载失败" description={error} onRetry={() => void loadUsers()} /> : loading ? <AdminTableSkeleton rows={10} /> : users.length === 0 ? <AdminEmptyState title={hasFilters ? "没有符合条件的用户" : "暂无用户"} description={hasFilters ? "请调整筛选条件后再试。" : "新用户注册后会显示在这里。"} /> : (
-            <table className="w-full min-w-[1060px] table-fixed text-sm">
-              <colgroup><col className="w-[190px]" /><col className="w-[210px]" /><col className="w-[90px]" /><col className="w-[100px]" /><col className="w-[110px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[105px]" /><col className="w-[78px]" /></colgroup>
+            <table className="w-full min-w-[980px] table-fixed text-sm">
+              <colgroup><col className="w-[155px]" /><col className="w-[190px]" /><col className="w-[74px]" /><col className="w-[86px]" /><col className="w-[92px]" /><col className="w-[132px]" /><col className="w-[132px]" /><col className="w-[82px]" /><col className="w-[72px]" /></colgroup>
               <thead className={adminListTableHeadClass}><tr className="border-b">{[
                 ["用户", "text-left"], ["邮箱", "text-left"], ["角色", "text-center"], ["账户状态", "text-center"],
                 ["当前余额", "text-center"], ["注册时间", "text-center"], ["最近活动", "text-center"], ["风险状态", "text-center"],
-              ].map(([heading, align]) => <th scope="col" key={heading} className={`h-10 whitespace-nowrap px-3 font-medium ${align}`}>{heading}</th>)}<th scope="col" className="sticky right-0 h-10 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-3 text-center font-medium shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</th></tr></thead>
+              ].map(([heading, align]) => <th scope="col" key={heading} className={`h-10 whitespace-nowrap px-2.5 font-medium ${align}`}>{heading}</th>)}<th scope="col" className="sticky right-0 h-10 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-2.5 text-center font-medium shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</th></tr></thead>
               <tbody>{users.map((user) => <tr key={user.id} className={adminListRowClass}>
-                <td className="px-3 py-2"><div className="truncate font-medium text-slate-900">{user.displayName || "未命名用户"}</div><div className="truncate font-mono text-[11px] text-slate-400" title={user.id}>{user.id}</div></td>
-                <td className="truncate px-3 py-2" title={user.email ?? ""}>{user.email || "—"}</td><td className="px-3 py-2 text-center">{ROLE_LABELS[user.role] ?? user.role}</td>
-                <td className="px-3 py-2 text-center"><StatusBadge value={user.accountStatus} labels={ACCOUNT_LABELS} kind="account" /></td><td className="px-3 py-2 text-center font-semibold tabular-nums">{money(user.balance)}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(user.createdAt)}</td><td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(user.lastLoginAt)}</td><td className="px-3 py-2 text-center"><StatusBadge value={user.riskStatus} labels={RISK_LABELS} kind="risk" /></td>
-                <td className="sticky right-0 bg-white px-3 py-2 text-center whitespace-nowrap shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]"><Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9"><Link href={`/admin/users/${user.id}`}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
+                <td className="px-2.5 py-2">
+                  <div className="truncate font-medium text-slate-900">{user.displayName || "未命名用户"}</div>
+                  <div className="flex items-center gap-1">
+                    <span className="min-w-0 truncate font-mono text-[11px] text-slate-400" title={user.id}>{user.id}</span>
+                    <button type="button" onClick={() => void copyAdminText(user.id, "用户 ID")} title="复制用户 ID" className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><Copy className="h-3 w-3" /></button>
+                  </div>
+                </td>
+                <td className="px-2.5 py-2">
+                  {user.email ? (
+                    <div className="flex items-center gap-1">
+                      <span className="min-w-0 truncate" title={user.email}>{user.email}</span>
+                      <button type="button" onClick={() => void copyAdminText(user.email, "邮箱")} title="复制邮箱" className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"><Copy className="h-3 w-3" /></button>
+                    </div>
+                  ) : "—"}
+                </td><td className="px-2.5 py-2 text-center">{ROLE_LABELS[user.role] ?? user.role}</td>
+                <td className="px-2.5 py-2 text-center"><StatusBadge value={user.accountStatus} labels={ACCOUNT_LABELS} kind="account" /></td><td className="px-2.5 py-2 text-center font-semibold tabular-nums">{money(user.balance)}</td>
+                <td className="whitespace-nowrap px-2.5 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(user.createdAt)}</td><td className="whitespace-nowrap px-2.5 py-2 text-center text-xs tabular-nums text-slate-500">{formatDate(user.lastLoginAt)}</td><td className="px-2.5 py-2 text-center"><StatusBadge value={user.riskStatus} labels={RISK_LABELS} kind="risk" /></td>
+                <td className="sticky right-0 bg-white px-2.5 py-2 text-center whitespace-nowrap shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]"><Button asChild variant="ghost" size="sm" className="min-h-11 sm:min-h-9"><Link href={`/admin/users/${user.id}`}><Eye className="mr-1 h-4 w-4" />查看</Link></Button></td>
               </tr>)}</tbody>
             </table>
           )}
@@ -201,5 +221,5 @@ function Select({ children, label, value, onChange }: { children: React.ReactNod
 function Notice({ children }: { children: React.ReactNode }) { return <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{children}</div>; }
 function StatusBadge({ value, labels, kind }: { value: string; labels: Record<string, string>; kind: "account" | "risk" }) { const good = kind === "account" ? value === "active" : value === "normal"; const warn = kind === "account" ? value === "restricted" : value === "watch"; const tone: AdminStatusTone = good ? "success" : warn ? "warning" : "danger"; return <AdminStatusBadge tone={tone}>{labels[value] ?? adminUnknownStatusLabel(value)}</AdminStatusBadge>; }
 function money(value: unknown) { const parsed = Number(value); return `¥${Number.isFinite(parsed) ? parsed.toFixed(2) : "0.00"}`; }
-function formatDate(value: string | null) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false }); }
+function formatDate(value: string | null) { if (!value) return "—"; const date = new Date(value); return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false }); }
 function normalizeFilter(value: string | null, labels: Record<string, string>) { return value && Object.hasOwn(labels, value) ? value : "all"; }

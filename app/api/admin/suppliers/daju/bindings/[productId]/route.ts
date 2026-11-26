@@ -2,12 +2,13 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { createDajuClient } from "@/lib/providers/daju/client";
 import { getSafeDajuError } from "@/lib/providers/daju/errors";
 import { compareDajuDecimal, parseDajuProductBinding, validateDajuBindingAgainstProductDetail } from "@/lib/providers/daju/mapper.mjs";
 import { resolveDajuEffectiveStock } from "@/lib/providers/daju/stock.mjs";
 import type { DajuProductDetail } from "@/lib/providers/daju/types";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { prepareDajuBindingMetadata } from "@/lib/providers/core/admin-sku-binding.mjs";
 
@@ -24,8 +25,10 @@ function json(body: unknown, status = 200) {
 export async function POST(request: Request, context: Context) {
   const { productId } = await context.params;
   const requestId = randomUUID();
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return json({ error: admin.message, code: "DAJU_ADMIN_REQUIRED", requestId }, admin.status);
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "daju_binding_write"));
+  if (!limit.allowed) return limit.response!;
   const service = getSupabaseServiceRoleClient();
   if (!service) return json({ error: "服务端商品配置权限不可用", code: "SERVICE_ROLE_UNAVAILABLE", requestId }, 503);
 
@@ -158,8 +161,10 @@ export async function POST(request: Request, context: Context) {
 export async function DELETE(request: Request, context: Context) {
   const { productId } = await context.params;
   const requestId = randomUUID();
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return json({ error: admin.message, code: "DAJU_ADMIN_REQUIRED", requestId }, admin.status);
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "daju_binding_write"));
+  if (!limit.allowed) return limit.response!;
   const service = getSupabaseServiceRoleClient();
   if (!service) return json({ error: "服务端商品配置权限不可用", code: "SERVICE_ROLE_UNAVAILABLE", requestId }, 503);
 

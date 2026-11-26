@@ -121,8 +121,16 @@ async function harness(scenario = {}, work = async h => h.call()) {
   const route = load("app/api/admin/recharges/[rechargeId]/actions/route.ts", {
     crypto: { randomUUID: () => "request-test" },
     "next/server": { NextResponse: { json: (body, init) => Response.json(body, init) } },
-    "@/lib/auth/require-admin": { getServerAdminContext: async () => scenario.nonAdmin
-      ? { ok: false, message: "unauthorized", status: 403 } : { ok: true, user: { id: "admin-test" } } },
+    "@/lib/auth/require-admin": {
+      getServerAdminContext: async () => scenario.nonAdmin
+        ? { ok: false, message: "unauthorized", status: 403 } : { ok: true, user: { id: "admin-test" } },
+      getServerSuperAdminContext: async () => scenario.nonAdmin
+        ? { ok: false, message: "unauthorized", status: 403 } : { ok: true, user: { id: "admin-test" } },
+    },
+    "@/lib/security/rate-limit": {
+      checkRateLimit: () => ({ allowed: true }),
+      getAdminRateLimitKey: () => "test-key",
+    },
     "@/lib/recharges/snpay-late-payment-admin": adminHandler,
     "@/lib/admin/audit-log-service": { writeAdminAuditLog: auditWriter },
     "@/lib/recharges/review-service": {},

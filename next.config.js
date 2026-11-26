@@ -40,6 +40,14 @@ const nextConfig = {
     optimizePackageImports: ["lucide-react", "date-fns"],
   },
   images: { unoptimized: true },
+  async rewrites() {
+    return [
+      {
+        source: "/assets/digital-steam.jpg",
+        destination: "/assets/digital-steam.png",
+      },
+    ];
+  },
   async headers() {
     return [
       {

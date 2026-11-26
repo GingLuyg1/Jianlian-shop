@@ -256,7 +256,7 @@ export default function AdminAuditLogsPage() {
             {copied ? <span className="text-xs text-[var(--admin-v2-primary)]" role="status">{copied}</span> : null}
           </div>
         </div>
-        <AdminFilterBar className="grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(160px,1fr)_150px_150px_130px_150px_150px_150px_150px_76px]">
+        <AdminFilterBar className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5">
             <label className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -314,51 +314,62 @@ export default function AdminAuditLogsPage() {
               aria-label="请求编号"
               className={`${adminListControlClass} px-3`}
             />
-            <input
-              type="datetime-local"
-              value={startAt}
-              onChange={(event) => setStartAt(event.target.value)}
-              aria-label="开始时间"
-              className={`${adminListControlClass} px-3`}
-            />
-            <input
-              type="datetime-local"
-              value={endAt}
-              onChange={(event) => setEndAt(event.target.value)}
-              aria-label="结束时间"
-              className={`${adminListControlClass} px-3`}
-            />
+            <label className="flex items-center gap-1.5 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white px-2.5 text-xs text-slate-500">
+              <span className="shrink-0">起</span>
+              <input
+                type="datetime-local"
+                value={startAt}
+                onChange={(event) => setStartAt(event.target.value)}
+                aria-label="开始时间"
+                title="开始时间"
+                className="h-10 min-w-0 flex-1 bg-transparent text-sm text-slate-800 focus:outline-none sm:h-8"
+              />
+            </label>
+            <label className="flex items-center gap-1.5 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white px-2.5 text-xs text-slate-500">
+              <span className="shrink-0">止</span>
+              <input
+                type="datetime-local"
+                value={endAt}
+                onChange={(event) => setEndAt(event.target.value)}
+                aria-label="结束时间"
+                title="结束时间"
+                className="h-10 min-w-0 flex-1 bg-transparent text-sm text-slate-800 focus:outline-none sm:h-8"
+              />
+            </label>
             <button
               type="button"
               onClick={resetFilters}
               className="h-11 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white px-3 text-sm text-[var(--admin-v2-text-secondary)] hover:bg-[var(--admin-v2-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--admin-v2-primary)] sm:h-9"
             >
-              重置
+              重置筛选
             </button>
         </AdminFilterBar>
 
         <AdminTableViewport>
-          <table className="w-full min-w-[1180px] table-fixed text-sm">
+          <table className="w-full min-w-[980px] table-fixed text-sm">
             <colgroup>
+              <col className="w-[132px]" />
               <col className="w-[150px]" />
-              <col className="w-[190px]" />
-              <col className="w-[110px]" />
-              <col className="w-[150px]" />
-              <col className="w-[190px]" />
-              <col className="w-[92px]" />
-              <col className="w-[140px]" />
-              <col className="w-[210px]" />
-              <col className="w-[92px]" />
+              <col className="w-[76px]" />
+              <col className="w-[135px]" />
+              <col className="w-[145px]" />
+              <col className="w-[72px]" />
+              <col className="w-[108px]" />
+              <col className="w-[120px]" />
+              <col className="w-[78px]" />
             </colgroup>
             <thead className={adminListTableHeadClass}>
               <tr className="border-b border-[var(--admin-v2-border)]">
-                {["时间", "管理员", "模块", "操作动作", "目标", "结果", "IP", "请求编号", "操作"].map(
+                {["时间", "管理员", "模块", "操作动作", "目标", "结果", "IP", "请求编号"].map(
                   (heading) => (
-                    <th key={heading} className="h-10 px-3 text-left font-medium whitespace-nowrap">
+                    <th key={heading} className="h-10 px-2.5 text-left font-medium whitespace-nowrap">
                       {heading}
                     </th>
                   )
                 )}
+                <th className="sticky right-0 h-10 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-2.5 text-center font-medium shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">
+                  操作
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -402,7 +413,7 @@ export default function AdminAuditLogsPage() {
                     <td className="truncate px-3 py-2 text-xs text-slate-500" title={log.request_id}>
                       {log.request_id}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="sticky right-0 bg-white px-2.5 py-2 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">
                       <button
                         type="button"
                         onClick={() => setSelectedLog(log)}

@@ -20,6 +20,7 @@ import {
 import type { AdminPaymentCallback } from "@/lib/payments/admin-payment-types";
 import { enrichAdminOrderSessionEvidence } from "@/lib/payments/admin-order-session-evidence";
 import type { AdminBep20OverpaymentWallet } from "@/lib/payments/admin-payment-types";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -228,6 +229,8 @@ export async function PATCH(request: Request, props: RouteContext) {
     });
     return NextResponse.json({ error: admin.message }, { status: admin.status });
   }
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "payment_patch"));
+  if (!limit.allowed) return limit.response!;
 
   const body = (await request.json().catch(() => null)) as { action?: string; chainSessionId?: string; reason?: string } | null;
   const action = String(body?.action ?? "");

@@ -18,6 +18,7 @@ export type BitrefillCostAnomalyKind =
   | "COST_CAP_EXCEEDED"
   | "GLOBAL_LIMIT_EXCEEDED"
   | "MARGIN_NEGATIVE"
+  | "PRICE_DRIFT_CIRCUIT_BREAKER"
   | "UPSTREAM_FETCH_FAILED";
 
 export type BitrefillCostAnomaly = {
@@ -49,17 +50,32 @@ export type BitrefillCostSyncItem = {
   detail: string;
 };
 
+export type BitrefillPriceAdjustment = {
+  skuId: string;
+  productId: string;
+  skuTitle: string;
+  previousRetailCny: number;
+  nextRetailCny: number;
+  liveUsdCost: number;
+  driftPercent: number;
+};
+
 export type BitrefillCostSyncReport = {
   mode: "dry_run" | "apply";
+  updateRetailPrice: boolean;
   usdCnyRate: number;
   rateSource: string;
   capBufferPercent: number;
   markupPercent: number;
+  maxPriceDriftPercent: number;
   scannedSkus: number;
   updatedSkus: number;
+  retailUpdatedSkus: number;
   anomalyCount: number;
   emailAlertSent: boolean;
+  priceReportSent: boolean;
   anomalies: BitrefillCostAnomaly[];
+  priceAdjustments: BitrefillPriceAdjustment[];
   items: BitrefillCostSyncItem[];
   checkedAt: string;
 };
@@ -144,6 +160,81 @@ export async function notifyBitrefillCostAnomaly(input: {
   }
 }
 
+export async function notifyBitrefillPriceSyncSummary(input: {
+  usdCnyRate: number;
+  markupPercent: number;
+  maxPriceDriftPercent: number;
+  adjustments: BitrefillPriceAdjustment[];
+  anomalyCount: number;
+}): Promise<boolean> {
+  if (!input.adjustments.length) return false;
+  try {
+    const now = Date.now();
+    const timeDisplay = new Date(now).toLocaleString("zh-CN", {
+      timeZone: "Asia/Shanghai",
+      hour12: false,
+    });
+    const rowsHtml = input.adjustments
+      .slice(0, 40)
+      .map((item) => {
+        const direction = item.nextRetailCny > item.previousRetailCny ? "↑ 上浮" : "↓ 下调";
+        const color = item.nextRetailCny > item.previousRetailCny ? "#c2571a" : "#15803d";
+        return `<tr>
+          <td style="padding:6px 8px;border-bottom:1px solid #f0e4d7;">${escapeHtml(item.skuTitle)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #f0e4d7;">$${item.liveUsdCost.toFixed(2)}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid #f0e4d7;">¥${item.previousRetailCny.toFixed(2)} → <strong style="color:${color};">¥${item.nextRetailCny.toFixed(2)}</strong></td>
+          <td style="padding:6px 8px;border-bottom:1px solid #f0e4d7;color:${color};">${direction} ${Math.abs(item.driftPercent).toFixed(1)}%</td>
+        </tr>`;
+      })
+      .join("");
+
+    const subject = `【Jianlian Shop 售价联动简报】Bitrefill 本次自动联动调价 ${input.adjustments.length} 个 SKU`;
+    const html = `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:680px;margin:0 auto;padding:24px;border:1px solid #e7edf5;border-radius:14px;background:#fafcff;color:#1f2329;">
+        <h2 style="margin:0 0 12px;font-size:18px;color:#0f4c81;">Bitrefill 价格自动联动调价简报</h2>
+        <p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:#4e5969;">
+          参考汇率：<strong>1 USD = ¥${input.usdCnyRate.toFixed(2)}</strong> · 加价规则：<strong>+${input.markupPercent}%</strong> · 单次熔断阈值：<strong>±${input.maxPriceDriftPercent}%</strong>${input.anomalyCount > 0 ? ` · 另有 <strong>${input.anomalyCount}</strong> 项异常已拦截跳过` : ""}
+        </p>
+        <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5ebf3;font-size:12px;">
+          <thead>
+            <tr style="background:#f3f7fc;text-align:left;">
+              <th style="padding:8px;">SKU</th>
+              <th style="padding:8px;">实时成本</th>
+              <th style="padding:8px;">售价变更</th>
+              <th style="padding:8px;">变动幅度</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <p style="margin:14px 0 0;font-size:12px;color:#86909c;">执行时间：${timeDisplay}（北京时间）。</p>
+      </div>
+    `;
+    const text = [
+      subject,
+      `汇率：1 USD = ¥${input.usdCnyRate.toFixed(2)}，加价率：+${input.markupPercent}%，熔断：±${input.maxPriceDriftPercent}%`,
+      ...input.adjustments.slice(0, 40).map(
+        (item) => `- ${item.skuTitle}: ¥${item.previousRetailCny.toFixed(2)} -> ¥${item.nextRetailCny.toFixed(2)} (${item.driftPercent >= 0 ? "+" : ""}${item.driftPercent.toFixed(1)}%, live $${item.liveUsdCost.toFixed(2)})`
+      ),
+      `执行时间：${timeDisplay}`,
+    ].join("\n");
+
+    await sendEmail({
+      to: ALERT_RECIPIENT,
+      subject,
+      html,
+      text,
+      templateCode: "admin_system_alert",
+      businessType: "admin",
+      businessId: null,
+      idempotencyKey: `bitrefill-price-sync:${Math.floor(now / (10 * 60 * 1000))}:${input.adjustments.length}`,
+    });
+    return true;
+  } catch (err) {
+    console.error("[BitrefillCostSync] price summary email failed", err);
+    return false;
+  }
+}
+
 export async function syncBitrefillCostsAndRates(
   service: SupabaseClient,
   options: {
@@ -151,6 +242,7 @@ export async function syncBitrefillCostsAndRates(
     updateRetailPrice?: boolean;
     capBufferPercent?: number;
     markupPercent?: number;
+    maxPriceDriftPercent?: number;
     notifyOnAnomaly?: boolean;
   } = {},
   env: NodeJS.ProcessEnv = process.env
@@ -159,6 +251,7 @@ export async function syncBitrefillCostsAndRates(
   const updateRetailPrice = Boolean(options.updateRetailPrice);
   const capBufferPercent = clampNumber(options.capBufferPercent, 5, 0, 30);
   const markupPercent = clampNumber(options.markupPercent, 13, 0, 100);
+  const maxPriceDriftPercent = clampNumber(options.maxPriceDriftPercent, 15, 1, 50);
   const notifyOnAnomaly = options.notifyOnAnomaly !== false;
   const globalMaxOrderCostUsd = Number(env.BITREFILL_MAX_ORDER_COST_USD ?? 50) || 50;
 
@@ -195,7 +288,10 @@ export async function syncBitrefillCostsAndRates(
   const detailCache = new Map<string, { detail?: Record<string, unknown>; error?: string }>();
   const items: BitrefillCostSyncItem[] = [];
   const anomalies: BitrefillCostAnomaly[] = [];
+  const priceAdjustments: BitrefillPriceAdjustment[] = [];
+  const affectedProductIds = new Set<string>();
   let updatedSkus = 0;
+  let retailUpdatedSkus = 0;
 
   for (const row of bitrefillSkus) {
     const meta = (row.metadata && typeof row.metadata === "object" ? row.metadata : {}) as Record<string, unknown>;
@@ -292,12 +388,23 @@ export async function syncBitrefillCostsAndRates(
     const recommendedMaxUnitCostUsd = Math.ceil(liveUsdCost * (1 + capBufferPercent / 100) * 100) / 100;
     const liveCostCny = Math.round(liveUsdCost * usdCnyRate * 100) / 100;
     const recommendedRetailCny = Math.round(liveCostCny * (1 + markupPercent / 100) * 100) / 100;
+    const rawDriftPercent =
+      currentRetailCny > 0
+        ? ((recommendedRetailCny - currentRetailCny) / currentRetailCny) * 100
+        : 0;
+    const circuitBreakerTriggered =
+      updateRetailPrice &&
+      currentRetailCny > 0 &&
+      Math.abs(rawDriftPercent) > maxPriceDriftPercent;
 
     let anomaly: BitrefillCostAnomalyKind | null = null;
     let detailText = "ok";
     if (liveUsdCost > globalMaxOrderCostUsd) {
       anomaly = "GLOBAL_LIMIT_EXCEEDED";
       detailText = `实时成本 $${liveUsdCost.toFixed(2)} 超过全局单笔限额 $${globalMaxOrderCostUsd}`;
+    } else if (circuitBreakerTriggered) {
+      anomaly = "PRICE_DRIFT_CIRCUIT_BREAKER";
+      detailText = `建议售价 ¥${recommendedRetailCny.toFixed(2)} 相对现价 ¥${currentRetailCny.toFixed(2)} 变动 ${rawDriftPercent >= 0 ? "+" : ""}${rawDriftPercent.toFixed(1)}%，超过 ±${maxPriceDriftPercent}% 熔断阈值，已跳过自动改价`;
     } else if (currentMaxUnitCostUsd !== null && liveUsdCost > currentMaxUnitCostUsd) {
       anomaly = "COST_CAP_EXCEEDED";
       detailText = `实时成本 $${liveUsdCost.toFixed(2)} 已高于风控上限 $${currentMaxUnitCostUsd.toFixed(2)}`;
@@ -325,10 +432,13 @@ export async function syncBitrefillCostsAndRates(
     const capNeedsUpdate =
       currentMaxUnitCostUsd === null || Math.abs(recommendedMaxUnitCostUsd - currentMaxUnitCostUsd) >= 0.01;
     const retailNeedsUpdate =
-      updateRetailPrice && Math.abs(recommendedRetailCny - currentRetailCny) >= 0.01;
+      updateRetailPrice &&
+      !circuitBreakerTriggered &&
+      recommendedRetailCny > 0 &&
+      Math.abs(recommendedRetailCny - currentRetailCny) >= 0.01;
 
     if (mode === "apply" && anomaly !== "GLOBAL_LIMIT_EXCEEDED" && (capNeedsUpdate || retailNeedsUpdate)) {
-      const nextMetadata = {
+      const nextMetadata: Record<string, unknown> = {
         ...meta,
         supplier_max_unit_cost: recommendedMaxUnitCostUsd,
         supplier_last_synced_usd_cost: liveUsdCost,
@@ -341,12 +451,28 @@ export async function syncBitrefillCostsAndRates(
         updated_at: new Date().toISOString(),
       };
       if (retailNeedsUpdate) {
+        nextMetadata.supplier_previous_retail_cny = currentRetailCny;
+        nextMetadata.supplier_markup_percent = markupPercent;
+        nextMetadata.supplier_retail_synced_at = new Date().toISOString();
         patch.price = recommendedRetailCny;
       }
       const { error: updateErr } = await service.from("product_skus").update(patch).eq("id", row.id);
       if (!updateErr) {
         updated = true;
         updatedSkus += 1;
+        if (retailNeedsUpdate) {
+          retailUpdatedSkus += 1;
+          affectedProductIds.add(String(row.product_id));
+          priceAdjustments.push({
+            skuId: String(row.id),
+            productId: String(row.product_id),
+            skuTitle,
+            previousRetailCny: currentRetailCny,
+            nextRetailCny: recommendedRetailCny,
+            liveUsdCost,
+            driftPercent: Math.round(rawDriftPercent * 10) / 10,
+          });
+        }
       }
     }
 
@@ -367,26 +493,67 @@ export async function syncBitrefillCostsAndRates(
     });
   }
 
+  // Sync parent product display price to minimum active SKU price for affected products
+  if (mode === "apply" && affectedProductIds.size > 0) {
+    for (const productId of Array.from(affectedProductIds)) {
+      try {
+        const { data: productSkus } = await service
+          .from("product_skus")
+          .select("price")
+          .eq("product_id", productId)
+          .eq("status", "active");
+        const prices = (productSkus ?? [])
+          .map((s) => Number((s as { price?: unknown }).price ?? 0))
+          .filter((p) => Number.isFinite(p) && p > 0);
+        if (prices.length > 0) {
+          const minPrice = Math.min(...prices);
+          await service
+            .from("products")
+            .update({ price: minPrice, updated_at: new Date().toISOString() })
+            .eq("id", productId);
+        }
+      } catch {
+        // Keep SKU updates intact even if parent display price sync fails
+      }
+    }
+  }
+
   let emailAlertSent = false;
   if (notifyOnAnomaly && anomalies.length > 0) {
     emailAlertSent = await notifyBitrefillCostAnomaly({
-      reason: mode === "apply" ? "Bitrefill 成本同步检测发现异常" : "Bitrefill 定时/手动成本巡检发现异常",
+      reason: mode === "apply" ? "Bitrefill 成本/售价联动同步发现异常" : "Bitrefill 定时/手动成本巡检发现异常",
       usdCnyRate,
       anomalies,
     });
   }
 
+  let priceReportSent = false;
+  if (mode === "apply" && priceAdjustments.length > 0) {
+    priceReportSent = await notifyBitrefillPriceSyncSummary({
+      usdCnyRate,
+      markupPercent,
+      maxPriceDriftPercent,
+      adjustments: priceAdjustments,
+      anomalyCount: anomalies.length,
+    });
+  }
+
   return {
     mode,
+    updateRetailPrice,
     usdCnyRate,
     rateSource,
     capBufferPercent,
     markupPercent,
+    maxPriceDriftPercent,
     scannedSkus: bitrefillSkus.length,
     updatedSkus,
+    retailUpdatedSkus,
     anomalyCount: anomalies.length,
     emailAlertSent,
+    priceReportSent,
     anomalies,
+    priceAdjustments,
     items,
     checkedAt: new Date().toISOString(),
   };

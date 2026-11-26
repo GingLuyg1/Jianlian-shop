@@ -13,6 +13,7 @@ import {
   type PaymentStatus,
 } from "@/lib/orders/order-status";
 import { PROMOTION_COMMISSION_RATE } from "@/lib/promotion";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getPromotionSettings } from "@/lib/settings/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { reconcileDajuExistingOrderWithSupabase } from "@/lib/providers/daju/fulfillment";
@@ -88,6 +89,8 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: admin.message }, { status: admin.status });
     }
     auditAdmin = { id: admin.user.id, email: admin.user.email };
+    const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "order_patch"));
+    if (!limit.allowed) return limit.response!;
 
     const body = (await request.json().catch(() => null)) as
       | {
@@ -283,6 +286,8 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: admin.message }, { status: admin.status });
     }
     auditAdmin = { id: admin.user.id, email: admin.user.email };
+    const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "order_patch"));
+    if (!limit.allowed) return limit.response!;
 
     const body = (await request.json().catch(() => null)) as
       | {

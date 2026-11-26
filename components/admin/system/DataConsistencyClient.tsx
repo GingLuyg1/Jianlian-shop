@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
 
+import { AdminDetailDrawer } from "@/components/admin/v2/AdminDetail";
 import { Button } from "@/components/ui/button";
+import { businessTypeLabel, statusLabel } from "@/lib/admin/display-labels";
 
 type Rule = { code: string; title: string; severity: string; suggestion: string };
 type Issue = {
@@ -51,7 +53,7 @@ function formatDate(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("zh-CN", { hour12: false });
+  return date.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
 }
 
 export default function DataConsistencyClient() {
@@ -149,7 +151,7 @@ export default function DataConsistencyClient() {
 
       <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
         <SummaryCard label="最近巡检" value={formatDate(state?.latestRun?.completed_at ?? state?.latestRun?.created_at)} />
-        <SummaryCard label="巡检状态" value={state?.latestRun?.status ?? "—"} />
+        <SummaryCard label="巡检状态" value={state?.latestRun?.status ? statusLabel(state.latestRun.status) : "—"} />
         <SummaryCard label="规则数量" value={String(state?.rules?.length ?? 0)} />
         <SummaryCard label="异常总数" value={String(state?.stats?.total ?? 0)} />
         <SummaryCard label="P0" value={String(state?.stats?.p0 ?? 0)} accent="red" />
@@ -186,18 +188,18 @@ export default function DataConsistencyClient() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full min-w-[1180px] table-fixed text-sm">
+          <table className="w-full min-w-[980px] table-fixed text-sm">
             <colgroup>
-              <col className="w-[90px]" />
-              <col className="w-[80px]" />
-              <col className="w-[260px]" />
-              <col className="w-[120px]" />
-              <col className="w-[180px]" />
-              <col className="w-[90px]" />
-              <col className="w-[150px]" />
-              <col className="w-[150px]" />
-              <col className="w-[100px]" />
-              <col className="w-[100px]" />
+              <col className="w-[82px]" />
+              <col className="w-[68px]" />
+              <col className="w-[210px]" />
+              <col className="w-[92px]" />
+              <col className="w-[140px]" />
+              <col className="w-[68px]" />
+              <col className="w-[126px]" />
+              <col className="w-[126px]" />
+              <col className="w-[76px]" />
+              <col className="w-[64px]" />
             </colgroup>
             <thead className="sticky top-0 z-10 bg-slate-50 text-xs text-slate-500">
               <tr>
@@ -226,8 +228,8 @@ export default function DataConsistencyClient() {
                     <td className="whitespace-nowrap px-3 py-2 font-medium text-slate-700">{item.rule_code}</td>
                     <td className="px-3 py-2"><span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${severityClass[item.severity]}`}>{item.severity}</span></td>
                     <td className="truncate px-3 py-2 font-medium text-slate-900" title={item.title}>{item.title}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-slate-600">{item.entity_type}</td>
-                    <td className="truncate px-3 py-2 text-slate-500" title={item.entity_id ?? "—"}>{item.entity_id ?? "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-center text-slate-600">{businessTypeLabel(item.entity_type)}</td>
+                    <td className="truncate px-3 py-2 font-mono text-xs text-slate-500" title={item.entity_id ?? "—"}>{item.entity_id ?? "—"}</td>
                     <td className="px-3 py-2 text-center tabular-nums">{item.occurrences}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">{formatDate(item.first_seen_at)}</td>
                     <td className="whitespace-nowrap px-3 py-2 text-xs text-slate-500">{formatDate(item.last_seen_at)}</td>
@@ -254,41 +256,42 @@ export default function DataConsistencyClient() {
       </div>
 
       {selected ? (
-        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/20" onClick={() => setSelected(null)}>
-          <div className="h-full w-full max-w-xl overflow-y-auto bg-white p-6 shadow-xl" onClick={(event) => event.stopPropagation()}>
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <div className="text-xs font-medium text-slate-500">{selected.rule_code}</div>
-                <h2 className="text-xl font-bold text-slate-950">{selected.title}</h2>
-              </div>
-              <button className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100" onClick={() => setSelected(null)}>关闭</button>
+        <AdminDetailDrawer
+          title={selected.title}
+          eyebrow={selected.rule_code}
+          status={
+            <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs ${severityClass[selected.severity]}`}>
+              {selected.severity} · {statusText[selected.status]}
+            </span>
+          }
+          onClose={() => setSelected(null)}
+          className="max-w-xl"
+        >
+          <div className="space-y-4 text-sm">
+            <Info label="严重程度" value={selected.severity} />
+            <Info label="业务类型" value={businessTypeLabel(selected.entity_type)} />
+            <Info label="业务编号" value={selected.entity_id ?? "—"} />
+            <Info label="异常摘要" value={selected.summary} />
+            <Info label="安全修复建议" value={selected.suggestion || "请人工核对后通过已有业务服务处理。"} />
+            <div>
+              <div className="mb-1 text-xs font-medium text-slate-500">关联实体（已脱敏）</div>
+              <pre className="max-h-48 overflow-auto rounded-lg bg-slate-50 p-3 text-xs text-slate-700">{JSON.stringify(selected.related_entities ?? {}, null, 2)}</pre>
             </div>
-            <div className="space-y-4 text-sm">
-              <Info label="严重程度" value={selected.severity} />
-              <Info label="业务类型" value={selected.entity_type} />
-              <Info label="业务编号" value={selected.entity_id ?? "—"} />
-              <Info label="异常摘要" value={selected.summary} />
-              <Info label="安全修复建议" value={selected.suggestion || "请人工核对后通过已有业务服务处理。"} />
-              <div>
-                <div className="mb-1 text-xs font-medium text-slate-500">关联实体（已脱敏）</div>
-                <pre className="max-h-48 overflow-auto rounded-lg bg-slate-50 p-3 text-xs text-slate-700">{JSON.stringify(selected.related_entities ?? {}, null, 2)}</pre>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-500">处理备注</label>
-                <textarea value={note} onChange={(event) => setNote(event.target.value)} className="h-24 w-full rounded-lg border border-slate-200 p-3 text-sm" placeholder="必须填写人工核对或处理说明" />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" disabled={savingStatus} onClick={() => updateStatus("investigating")}>标记处理中</Button>
-                <Button variant="outline" disabled={savingStatus} onClick={() => updateStatus("resolved")}>标记已解决</Button>
-                <Button variant="outline" disabled={savingStatus} onClick={() => updateStatus("ignored")}>标记忽略</Button>
-              </div>
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-                <ShieldAlert className="mr-1 inline h-4 w-4" />
-                页面不提供直接 SQL、余额调整、支付状态修改或库存重分配按钮。高风险修复必须通过已有业务服务并保留审计记录。
-              </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-500">处理备注</label>
+              <textarea value={note} onChange={(event) => setNote(event.target.value)} className="h-24 w-full rounded-lg border border-slate-200 p-3 text-sm" placeholder="必须填写人工核对或处理说明" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" disabled={savingStatus} onClick={() => updateStatus("investigating")}>标记处理中</Button>
+              <Button variant="outline" disabled={savingStatus} onClick={() => updateStatus("resolved")}>标记已解决</Button>
+              <Button variant="outline" disabled={savingStatus} onClick={() => updateStatus("ignored")}>标记忽略</Button>
+            </div>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+              <ShieldAlert className="mr-1 inline h-4 w-4" />
+              页面不提供直接 SQL、余额调整、支付状态修改或库存重分配按钮。高风险修复必须通过已有业务服务并保留审计记录。
             </div>
           </div>
-        </div>
+        </AdminDetailDrawer>
       ) : null}
     </section>
   );

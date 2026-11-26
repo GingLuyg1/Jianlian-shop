@@ -914,6 +914,7 @@ function AdminCategoriesPageInner() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="分类管理"
       description="维护一级分类、二级分类，以及当前分类下的商品。"
       actions={
@@ -934,8 +935,6 @@ function AdminCategoriesPageInner() {
           title="一级分类"
           loading={loadingCategories}
           emptyTitle="暂无一级分类"
-          actionLabel="新增一级分类"
-          onAction={openCreateRoot}
           error={Boolean(error && categories.length === 0)}
           onRetry={() => void loadCategories()}
         >

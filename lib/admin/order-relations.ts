@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { businessTypeLabel, directionLabel } from "@/lib/admin/display-labels";
+import { businessTypeLabel, detailLabel, directionLabel, statusLabel } from "@/lib/admin/display-labels";
 
 import { loadOrderEvidence } from "@/lib/legal/legal-service";
 
@@ -290,16 +290,16 @@ export async function loadAdminOrderRelations(
     id: String(session.id),
     label: "支付会话",
     businessNo: text(session.session_no) ?? text(session.provider_order_no),
-    summary: `${text(session.provider) ?? "支付渠道"}${text(session.provider_transaction_id) ? ` / ${text(session.provider_transaction_id)}` : ""}`,
+    summary: `${session.provider ? statusLabel(session.provider) : "支付渠道"}${text(session.provider_transaction_id) ? ` / ${text(session.provider_transaction_id)}` : ""}`,
     status: text(session.status),
     amount: money(session.payable_amount, session.currency),
     createdAt: text(session.paid_at) ?? text(session.created_at),
-    href: `/admin/payments?search=${encodeURIComponent(text(session.session_no) ?? orderNo)}`,
+    href: `/admin/payments?search=${encodeURIComponent(orderNo)}`,
   })), sessionsResult.error));
   for (const session of sessionsResult.rows) {
-    addEvent(events, { source: "支付会话", title: "支付会话创建", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.created_at) ?? "", href: `/admin/payments?search=${encodeURIComponent(text(session.session_no) ?? orderNo)}` });
-    if (text(session.paid_at)) addEvent(events, { source: "支付会话", title: "支付成功", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.paid_at)!, href: `/admin/payments?search=${encodeURIComponent(text(session.session_no) ?? orderNo)}` });
-    if (text(session.status) === "failed") addEvent(events, { source: "支付会话", title: "支付失败", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.closed_at) ?? text(session.updated_at) ?? "", href: `/admin/payments?search=${encodeURIComponent(text(session.session_no) ?? orderNo)}` });
+    addEvent(events, { source: "支付会话", title: "支付会话创建", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.created_at) ?? "", href: `/admin/payments?search=${encodeURIComponent(orderNo)}` });
+    if (text(session.paid_at)) addEvent(events, { source: "支付会话", title: "支付成功", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.paid_at)!, href: `/admin/payments?search=${encodeURIComponent(orderNo)}` });
+    if (text(session.status) === "failed") addEvent(events, { source: "支付会话", title: "支付失败", summary: text(session.session_no) ?? "支付会话", status: text(session.status), occurredAt: text(session.closed_at) ?? text(session.updated_at) ?? "", href: `/admin/payments?search=${encodeURIComponent(orderNo)}` });
   }
 
   groups.push(group("payments", paymentsResult.rows.map((payment) => relationItem({
@@ -307,7 +307,7 @@ export async function loadAdminOrderRelations(
     label: "支付记录",
     businessNo: text(payment.payment_no) ?? text(payment.provider_trade_no),
     summary: [
-      text(payment.channel) ?? text(payment.payment_method) ?? "支付记录",
+      payment.channel || payment.payment_method ? statusLabel(payment.channel ?? payment.payment_method) : "支付记录",
       exactMoney(payment.payable_amount, payment.payable_currency) ? `应付 ${exactMoney(payment.payable_amount, payment.payable_currency)}` : null,
       exactMoney(payment.received_amount, payment.received_currency) ? `到账 ${exactMoney(payment.received_amount, payment.received_currency)}` : null,
     ].filter(Boolean).join(" / "),
@@ -332,7 +332,7 @@ export async function loadAdminOrderRelations(
     status: text(session.status),
     amount: exactMoney(session.confirmed_amount ?? session.expected_amount, session.payment_currency),
     createdAt: text(session.confirmed_at) ?? text(session.created_at),
-    href: `/admin/payments?search=${encodeURIComponent(text(session.submitted_tx_hash) ?? orderNo)}`,
+    href: `/admin/payments?search=${encodeURIComponent(orderNo)}`,
   })), chainSessionsResult.error));
   for (const session of chainSessionsResult.rows) {
     addEvent(events, {
@@ -341,7 +341,7 @@ export async function loadAdminOrderRelations(
       summary: text(session.submitted_tx_hash) ?? `${text(session.asset) ?? "USDT"}-${text(session.network) ?? "BEP20"}`,
       status: text(session.status),
       occurredAt: text(session.confirmed_at) ?? text(session.created_at) ?? "",
-      href: `/admin/payments?search=${encodeURIComponent(text(session.submitted_tx_hash) ?? orderNo)}`,
+      href: `/admin/payments?search=${encodeURIComponent(orderNo)}`,
     });
   }
 
@@ -349,7 +349,7 @@ export async function loadAdminOrderRelations(
     id: String(refund.id),
     label: "退款申请",
     businessNo: text(refund.refund_no),
-    summary: text(refund.reason_code) ?? "退款申请",
+    summary: refund.reason_code ? statusLabel(refund.reason_code) : "退款申请",
     status: text(refund.status),
     amount: money(refund.approved_amount ?? refund.requested_amount, refund.currency),
     createdAt: text(refund.created_at),
@@ -381,21 +381,21 @@ export async function loadAdminOrderRelations(
     id: String(delivery.id),
     label: "交付记录",
     businessNo: text(delivery.delivery_no),
-    summary: text(delivery.delivery_type) ?? "交付记录",
+    summary: delivery.delivery_type ? statusLabel(delivery.delivery_type) : "交付记录",
     status: text(delivery.delivery_status),
     amount: null,
     createdAt: text(delivery.delivered_at) ?? text(delivery.created_at),
     href: `/admin/orders?search=${encodeURIComponent(orderNo)}`,
   })), deliveriesResult.error));
   for (const delivery of deliveriesResult.rows) {
-    addEvent(events, { source: "交付", title: text(delivery.delivered_at) ? "交付完成" : "交付记录创建", summary: text(delivery.delivery_no) ?? text(delivery.delivery_type) ?? "交付记录", status: text(delivery.delivery_status), occurredAt: text(delivery.delivered_at) ?? text(delivery.created_at) ?? "", href: `/admin/orders?search=${encodeURIComponent(orderNo)}` });
+    addEvent(events, { source: "交付", title: text(delivery.delivered_at) ? "交付完成" : "交付记录创建", summary: text(delivery.delivery_no) ?? (delivery.delivery_type ? statusLabel(delivery.delivery_type) : "交付记录"), status: text(delivery.delivery_status), occurredAt: text(delivery.delivered_at) ?? text(delivery.created_at) ?? "", href: `/admin/orders?search=${encodeURIComponent(orderNo)}` });
   }
 
   groups.push(group("inventory", inventoryResult.rows.map((inventory) => relationItem({
     id: String(inventory.id),
     label: "数字库存",
     businessNo: text(inventory.batch_no),
-    summary: `库存 ${text(inventory.status) ?? "—"}`,
+    summary: `库存 ${statusLabel(inventory.status)}`,
     status: text(inventory.status),
     amount: null,
     createdAt: text(inventory.delivered_at) ?? text(inventory.reserved_at) ?? text(inventory.created_at),
@@ -425,7 +425,7 @@ export async function loadAdminOrderRelations(
     id: String(agreement.id),
     label: "协议确认",
     businessNo: text(agreement.document_version),
-    summary: `${text(agreement.document_type) ?? "协议"} / hash ${text(agreement.content_hash)?.slice(0, 12) ?? "—"}`,
+    summary: `${agreement.document_type ? statusLabel(agreement.document_type) : "协议"} / 摘要 ${text(agreement.content_hash)?.slice(0, 12) ?? "—"}`,
     status: text(agreement.acceptance_source) ?? "checkout",
     amount: null,
     createdAt: text(agreement.accepted_at) ?? text(agreement.created_at),
@@ -444,7 +444,7 @@ export async function loadAdminOrderRelations(
     addEvent(events, {
       source: "协议确认",
       title: "用户确认协议版本",
-      summary: `${text(agreement.document_type) ?? "协议"} ${text(agreement.document_version) ?? ""}`.trim(),
+      summary: `${agreement.document_type ? statusLabel(agreement.document_type) : "协议"} ${text(agreement.document_version) ?? ""}`.trim(),
       status: text(agreement.acceptance_source) ?? "checkout",
       occurredAt: text(agreement.accepted_at) ?? "",
       href: null,

@@ -16,13 +16,22 @@ function json(body: unknown, status = 200) {
 }
 
 function hasValidInternalCronBearer(request: Request) {
-  const expected = String(process.env.INTERNAL_CRON_SECRET ?? "").trim();
   const auth = String(request.headers.get("authorization") ?? "").trim();
-  if (!expected || !auth.startsWith("Bearer ")) return false;
+  if (!auth.startsWith("Bearer ")) return false;
   const provided = auth.slice(7).trim();
+  if (!provided) return false;
+  const candidates = [
+    process.env.INTERNAL_CRON_SECRET,
+    process.env.INTERNAL_JOB_SECRET,
+    process.env.CRON_SECRET,
+  ]
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
   const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  return candidates.some((expected) => {
+    const b = Buffer.from(expected);
+    return a.length === b.length && timingSafeEqual(a, b);
+  });
 }
 
 export async function GET(request: Request) {
@@ -38,14 +47,24 @@ export async function GET(request: Request) {
   if (!service) {
     return json({ error: "数据库服务未就绪", code: "SERVICE_UNAVAILABLE", requestId }, 503);
   }
+  const url = new URL(request.url);
+  const requestedMode = url.searchParams.get("mode") === "apply" && isCron ? "apply" : "dry_run";
+  const updateRetailPrice = isCron && url.searchParams.get("updateRetailPrice") === "1";
+  const markupPercent = url.searchParams.get("markupPercent") ? Number(url.searchParams.get("markupPercent")) : undefined;
+  const capBufferPercent = url.searchParams.get("capBufferPercent") ? Number(url.searchParams.get("capBufferPercent")) : undefined;
+  const maxPriceDriftPercent = url.searchParams.get("maxPriceDriftPercent") ? Number(url.searchParams.get("maxPriceDriftPercent")) : undefined;
   try {
     const report = await syncBitrefillCostsAndRates(service, {
-      mode: "dry_run",
+      mode: requestedMode,
+      updateRetailPrice,
+      markupPercent,
+      capBufferPercent,
+      maxPriceDriftPercent,
       notifyOnAnomaly: true,
     });
     return json({ ok: true, requestId, ...report });
   } catch (error) {
-    console.error("[BitrefillCostSync] dry_run failed", {
+    console.error("[BitrefillCostSync] sync failed", {
       requestId,
       message: error instanceof Error ? error.message : String(error),
     });
@@ -74,6 +93,7 @@ export async function POST(request: Request) {
     updateRetailPrice?: boolean;
     capBufferPercent?: number;
     markupPercent?: number;
+    maxPriceDriftPercent?: number;
     notifyOnAnomaly?: boolean;
   };
 
@@ -83,6 +103,7 @@ export async function POST(request: Request) {
       updateRetailPrice: Boolean(body.updateRetailPrice),
       capBufferPercent: body.capBufferPercent,
       markupPercent: body.markupPercent,
+      maxPriceDriftPercent: body.maxPriceDriftPercent,
       notifyOnAnomaly: body.notifyOnAnomaly !== false,
     });
     return json({ ok: true, requestId, ...report });

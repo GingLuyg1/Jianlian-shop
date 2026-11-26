@@ -133,6 +133,7 @@ export function normalizeOrderPaymentRow(row: AnyRow): AdminPaymentRecord {
     platform_net_amount: Math.max(receivedAmount - feeAmount, 0),
     status: normalizeUnifiedPaymentStatus(row.status === "submitted" || row.status === "under_review" ? "processing" : row.status),
     provider_trade_no: stringOrNull(row.provider_trade_no),
+    payment_session_no: stringOrNull(row.payment_session_no ?? row.session_no),
     transaction_reference: stringOrNull(row.transaction_reference),
     callback_status: stringOrNull(row.callback_status),
     exception_type: stringOrNull(row.exception_type),
@@ -179,7 +180,8 @@ export function normalizeRechargeRow(row: AnyRow): AdminPaymentRecord {
     platform_net_amount: Math.max(receivedAmount - feeAmount, 0),
     status: normalizeUnifiedPaymentStatus(row.status),
     provider_trade_no: stringOrNull(row.provider_trade_no),
-    transaction_reference: null,
+    payment_session_no: stringOrNull(row.payment_session_no ?? row.session_no),
+    transaction_reference: stringOrNull(row.transaction_reference ?? row.submitted_tx_hash ?? row.tx_hash),
     callback_status: stringOrNull(row.callback_status),
     exception_type: stringOrNull(row.exception_type),
     error_summary: stringOrNull(row.error_summary),
@@ -199,8 +201,8 @@ export function normalizeRechargeRow(row: AnyRow): AdminPaymentRecord {
 
 export function filterPaymentRecords(rows: AdminPaymentRecord[], filters: PaymentListFilters) {
   const search = (filters.search ?? "").trim().toLowerCase();
-  const start = filters.startDate ? new Date(`${filters.startDate}T00:00:00`).getTime() : null;
-  const end = filters.endDate ? new Date(`${filters.endDate}T23:59:59`).getTime() : null;
+  const start = filters.startDate ? new Date(`${filters.startDate}T00:00:00+08:00`).getTime() : null;
+  const end = filters.endDate ? new Date(`${filters.endDate}T23:59:59.999+08:00`).getTime() : null;
 
   return rows.filter((row) => {
     if (filters.rechargeOnly && row.business_type !== "recharge") return false;

@@ -354,6 +354,7 @@ export default function AdminFinancePage() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="财务与报表"
       description="统一查看去重现金流入、已售商品成本毛利、渠道通道费（USDT 0% 费率），以及经营报表与 10 类 CSV 导出。"
       actions={

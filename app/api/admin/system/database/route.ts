@@ -154,11 +154,13 @@ async function loadSchemaCheck(userSupabase: any, fallbackSupabase: any) {
     };
   }
 
-  const missingTables: string[] = [];
-  for (const table of FALLBACK_TABLES) {
-    const { error } = await fallbackSupabase.from(table).select("id").limit(1);
-    if (error) missingTables.push(table);
-  }
+  const probeResults = await Promise.all(
+    FALLBACK_TABLES.map(async (table) => {
+      const { error } = await fallbackSupabase.from(table).select("id").limit(1);
+      return error ? table : null;
+    })
+  );
+  const missingTables = probeResults.filter((table): table is string => Boolean(table));
 
   return {
     ok: missingTables.length === 0,

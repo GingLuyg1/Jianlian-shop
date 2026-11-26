@@ -23,6 +23,7 @@ import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import { supplierUiRegistry } from "@/components/admin/suppliers/supplier-ui-registry";
+import { AdminConfirmDialog } from "@/components/admin/v2/AdminConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -161,16 +162,20 @@ export default function AdminSuppliersWorkspace() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<SupplierError | null>(null);
 
-  const [costSyncMode, setCostSyncMode] = useState<"dry_run" | "apply" | null>(null);
+  const [costSyncMode, setCostSyncMode] = useState<"dry_run" | "apply" | "reprice" | null>(null);
+  const [confirmSyncAction, setConfirmSyncAction] = useState<"apply_cap" | "apply_reprice" | null>(null);
   const [costSyncError, setCostSyncError] = useState<string | null>(null);
   const [costSyncReport, setCostSyncReport] = useState<{
     mode: "dry_run" | "apply";
+    updateRetailPrice?: boolean;
     usdCnyRate: number;
     rateSource: string;
     scannedSkus: number;
     updatedSkus: number;
+    retailUpdatedSkus?: number;
     anomalyCount: number;
     emailAlertSent: boolean;
+    priceReportSent?: boolean;
     checkedAt: string;
     anomalies: Array<{
       kind: string;
@@ -182,17 +187,9 @@ export default function AdminSuppliersWorkspace() {
     }>;
   } | null>(null);
 
-  const runBitrefillCostSync = useCallback(async (mode: "dry_run" | "apply") => {
+  const executeBitrefillCostSync = useCallback(async (mode: "dry_run" | "apply", updateRetailPrice = false) => {
     if (costSyncMode) return;
-    if (
-      mode === "apply" &&
-      !window.confirm(
-        "确认按 Bitrefill 最新实时成本与汇率一键更新所有已绑定 SKU 的风控上限（supplier_max_unit_cost，含 5% 波动缓冲）与成本价？此操作不会修改前台零售价。"
-      )
-    ) {
-      return;
-    }
-    setCostSyncMode(mode);
+    setCostSyncMode(mode === "dry_run" ? "dry_run" : updateRetailPrice ? "reprice" : "apply");
     setCostSyncError(null);
     try {
       const response = await fetch("/api/admin/suppliers/bitrefill/cost-sync", {
@@ -200,8 +197,10 @@ export default function AdminSuppliersWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode,
-          updateRetailPrice: false,
+          updateRetailPrice,
           capBufferPercent: 5,
+          markupPercent: 13,
+          maxPriceDriftPercent: 15,
           notifyOnAnomaly: true,
         }),
       });
@@ -209,6 +208,7 @@ export default function AdminSuppliersWorkspace() {
       if (!response.ok || !payload.ok) {
         throw new Error(String(payload.error || "Bitrefill 成本同步失败"));
       }
+      setConfirmSyncAction(null);
       setCostSyncReport(payload);
       if (typeof payload.usdCnyRate === "number" && payload.usdCnyRate > 0) {
         setUsdtCnyRate(payload.usdCnyRate);
@@ -381,6 +381,7 @@ export default function AdminSuppliersWorkspace() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="供应商管理"
       description="管理第三方供应商连接状态、可用余额、商品目录浏览与商品履约对接。"
       actions={
@@ -642,7 +643,7 @@ export default function AdminSuppliersWorkspace() {
                       variant="outline"
                       size="sm"
                       className="h-8 border-orange-200 bg-orange-50/60 text-xs text-orange-800 hover:bg-orange-100/80"
-                      onClick={() => void runBitrefillCostSync("dry_run")}
+                      onClick={() => void executeBitrefillCostSync("dry_run", false)}
                       disabled={costSyncMode !== null}
                     >
                       {costSyncMode === "dry_run" ? (
@@ -653,9 +654,10 @@ export default function AdminSuppliersWorkspace() {
                       巡检实时成本
                     </Button>
                     <Button
+                      variant="outline"
                       size="sm"
-                      className="h-8 bg-orange-600 text-xs text-white hover:bg-orange-700"
-                      onClick={() => void runBitrefillCostSync("apply")}
+                      className="h-8 border-orange-300 bg-white text-xs text-orange-700 hover:bg-orange-50"
+                      onClick={() => setConfirmSyncAction("apply_cap")}
                       disabled={costSyncMode !== null}
                     >
                       {costSyncMode === "apply" ? (
@@ -663,10 +665,23 @@ export default function AdminSuppliersWorkspace() {
                       ) : (
                         <Zap className="mr-1.5 h-3.5 w-3.5" />
                       )}
-                      一键同步风控上限
+                      同步风控上限
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 bg-orange-600 text-xs text-white hover:bg-orange-700"
+                      onClick={() => setConfirmSyncAction("apply_reprice")}
+                      disabled={costSyncMode !== null}
+                    >
+                      {costSyncMode === "reprice" ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Zap className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      一键联动调价 (±15%熔断)
                     </Button>
                     <span className="inline-flex items-center rounded-lg border border-orange-200/80 bg-orange-50/70 px-2.5 py-1 text-[11px] font-medium text-orange-800">
-                      统一美金(USD)计价 · 参考汇率 1 USD ≈ ¥{usdtCnyRate.toFixed(2)}（每周自动巡检 / 异常发邮件告警）
+                      USD 计价 · 1 USD ≈ ¥{usdtCnyRate.toFixed(2)}（每周一 09:00 自动双向联动 +13% / 异常熔断告警）
                     </span>
                   </>
                 ) : null}
@@ -735,8 +750,11 @@ export default function AdminSuppliersWorkspace() {
                     {costSyncError
                       ? `Bitrefill 成本巡检失败：${costSyncError}`
                       : costSyncReport?.mode === "apply"
-                        ? `Bitrefill 风控上限同步完成：扫描 ${costSyncReport.scannedSkus} 个 SKU，更新 ${costSyncReport.updatedSkus} 个，异常 ${costSyncReport.anomalyCount} 项（汇率 1 USD = ¥${costSyncReport.usdCnyRate.toFixed(2)}）`
+                        ? costSyncReport.updateRetailPrice
+                          ? `Bitrefill 价格联动同步完成：扫描 ${costSyncReport.scannedSkus} 个 SKU，更新上限 ${costSyncReport.updatedSkus} 个，双向联动调价 ${costSyncReport.retailUpdatedSkus ?? 0} 个，拦截/异常 ${costSyncReport.anomalyCount} 项（汇率 1 USD = ¥${costSyncReport.usdCnyRate.toFixed(2)}）`
+                          : `Bitrefill 风控上限同步完成：扫描 ${costSyncReport.scannedSkus} 个 SKU，更新 ${costSyncReport.updatedSkus} 个，异常 ${costSyncReport.anomalyCount} 项（汇率 1 USD = ¥${costSyncReport.usdCnyRate.toFixed(2)}）`
                         : `Bitrefill 成本巡检完成：扫描 ${costSyncReport?.scannedSkus ?? 0} 个 SKU，发现异常 ${costSyncReport?.anomalyCount ?? 0} 项（汇率 1 USD = ¥${(costSyncReport?.usdCnyRate ?? usdtCnyRate).toFixed(2)}）`}
+                    {costSyncReport?.priceReportSent ? " · 已发送调价简报邮件" : ""}
                     {costSyncReport?.emailAlertSent ? " · 已自动发送异常告警邮件" : ""}
                   </div>
                   <button
@@ -1009,6 +1027,34 @@ export default function AdminSuppliersWorkspace() {
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <AdminConfirmDialog
+        open={Boolean(confirmSyncAction)}
+        onOpenChange={(next) => { if (!next) setConfirmSyncAction(null); }}
+        title={confirmSyncAction === "apply_reprice" ? "确认执行 Bitrefill 售价双向联动调价" : "确认一键同步 Bitrefill 风控上限"}
+        description={
+          confirmSyncAction === "apply_reprice"
+            ? "将按 Bitrefill 最新美元成本 × 当日汇率 × (1 + 13%) 双向联动调整所有已绑定 SKU 前台售价（上涨跟着上浮、下降跟着下调），并同步更新商品起售价与风控上限。"
+            : "将按 Bitrefill 最新实时成本与汇率更新所有已绑定 SKU 的风控上限（含 5% 波动缓冲）与成本价，不会修改前台零售价。"
+        }
+        summaryLines={
+          confirmSyncAction === "apply_reprice"
+            ? [
+                { label: "加价规则", value: "实时成本 +13%" },
+                { label: "单次变动熔断", value: "超过 ±15% 自动跳过并邮件告警" },
+                { label: "通知方式", value: "调价完成后自动发送变更简报邮件" },
+              ]
+            : [
+                { label: "风控缓冲", value: "+5% 波动缓冲" },
+                { label: "前台售价", value: "保持不变" },
+              ]
+        }
+        confirmLabel={confirmSyncAction === "apply_reprice" ? "确认联动调价" : "确认同步上限"}
+        loading={costSyncMode === "apply" || costSyncMode === "reprice"}
+        onConfirm={async () => {
+          await executeBitrefillCostSync("apply", confirmSyncAction === "apply_reprice");
+        }}
+      />
     </AdminPageShell>
   );
 }

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerAdminContext, getServerSuperAdminContext } from "@/lib/auth/require-admin";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { isPaymentSchemaMissing } from "@/lib/payments/admin-payment-queries";
 import {
   PAYMENT_CHANNELS,
@@ -621,7 +622,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
 
   if (!admin.ok) {
     await writeAdminAuditLog({
@@ -638,6 +639,9 @@ export async function PATCH(request: Request) {
       { status: admin.status },
     );
   }
+
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "payment_channels_patch"));
+  if (!limit.allowed) return limit.response!;
 
   const parsedBody = (await request.json().catch(() => null)) as
     | Record<string, unknown>

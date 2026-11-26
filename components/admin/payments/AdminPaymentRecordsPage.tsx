@@ -14,6 +14,7 @@ import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import AdminBep20UnderpaymentPanel from "@/components/admin/payments/AdminBep20UnderpaymentPanel";
 import AdminPaymentCallbackPanel from "@/components/admin/payments/AdminPaymentCallbackPanel";
 import AdminReconciliationPanel from "@/components/admin/payments/AdminReconciliationPanel";
+import { AdminConfirmDialog } from "@/components/admin/v2/AdminConfirmDialog";
 import { AdminDetailDrawer } from "@/components/admin/v2/AdminDetail";
 import { AdminInfoGrid, AdminInfoItem } from "@/components/admin/v2/AdminInfoGrid";
 import {
@@ -411,43 +412,70 @@ export default function AdminPaymentRecordsPage({ mode }: Props) {
 }
 
 function PaymentTable({ isRechargePage, payments, copyText, loadDetail, hasFilters }: { isRechargePage: boolean; payments: AdminPaymentRecord[]; copyText: (value: string | null | undefined) => void; loadDetail: (payment: AdminPaymentRecord) => void; hasFilters: boolean }) {
-  const colSpan = isRechargePage ? 14 : 15;
+  const colSpan = isRechargePage ? 9 : 11;
   return (
-    <table className="w-full min-w-[1760px] table-fixed text-sm">
+    <table className="w-full min-w-[1000px] table-fixed text-sm">
       <colgroup>
-        <col className="w-[170px]" />
-        {!isRechargePage ? <col className="w-[110px]" /> : null}
-        <col className="w-[170px]" /><col className="w-[210px]" /><col className="w-[130px]" /><col className="w-[110px]" />
-        <col className="w-[120px]" /><col className="w-[110px]" /><col className="w-[120px]" /><col className="w-[120px]" />
-        <col className="w-[110px]" /><col className="w-[190px]" /><col className="w-[150px]" /><col className="w-[150px]" /><col className="w-[90px]" />
+        <col className="w-[136px]" />
+        {!isRechargePage ? <col className="w-[58px]" /> : null}
+        {!isRechargePage ? <col className="w-[130px]" /> : null}
+        <col className="w-[148px]" />
+        <col className="w-[86px]" />
+        <col className="w-[84px]" />
+        <col className="w-[84px]" />
+        <col className="w-[84px]" />
+        <col className="w-[78px]" />
+        <col className="w-[118px]" />
+        <col className="w-[68px]" />
       </colgroup>
       <thead className={adminListTableHeadClass}>
         <tr className="border-b">
-          <Th>支付单号</Th>
-          {!isRechargePage ? <Th>业务类型</Th> : null}
-          <Th>{isRechargePage ? "充值单号" : "订单号/充值单号"}</Th>
-          <Th>用户邮箱</Th><Th>支付渠道</Th><Th>网络</Th>
-          {isRechargePage ? <><Th>申请充值</Th><Th>应付</Th><Th>实际到账</Th><Th>入账</Th></> : <><Th>业务金额</Th><Th>手续费</Th><Th>应付金额</Th><Th>到账金额</Th></>}
-          <Th>支付状态</Th><Th>渠道交易号</Th><Th>创建时间</Th><Th>支付时间</Th><Th className="sticky right-0 bg-[var(--admin-v2-surface-muted)] text-right shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</Th>
+          <Th>{isRechargePage ? "充值单号" : "支付单号"}</Th>
+          {!isRechargePage ? <Th>类型</Th> : null}
+          {!isRechargePage ? <Th>关联业务单号</Th> : null}
+          <Th>用户邮箱</Th>
+          <Th>支付渠道</Th>
+          {isRechargePage ? (
+            <>
+              <Th>申请充值</Th>
+              <Th>应付</Th>
+              <Th>入账</Th>
+            </>
+          ) : (
+            <>
+              <Th>业务金额</Th>
+              <Th>应付金额</Th>
+              <Th>到账金额</Th>
+            </>
+          )}
+          <Th>支付状态</Th>
+          <Th>创建时间</Th>
+          <Th className="sticky right-0 bg-[var(--admin-v2-surface-muted)] text-right shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</Th>
         </tr>
       </thead>
       <tbody>
         {payments.length ? payments.map((payment) => (
           <tr key={`${payment.source}-${payment.id}`} className={adminListRowClass}>
-            <Td mono>{payment.payment_no}</Td>
+            <Td mono title={payment.payment_no}>
+              <button
+                type="button"
+                onClick={() => copyText(payment.payment_no)}
+                className="flex max-w-full items-center gap-1 text-left hover:text-primary"
+                title={`点击复制：${payment.payment_no}`}
+              >
+                <span className="truncate font-mono text-xs">{payment.payment_no}</span>
+                <Copy className="h-3 w-3 shrink-0 text-slate-400" />
+              </button>
+            </Td>
             {!isRechargePage ? <Td>{getBusinessTypeLabel(payment.business_type)}</Td> : null}
-            <Td mono>{payment.business_no ?? "—"}</Td>
+            {!isRechargePage ? <Td mono title={payment.business_no ?? ""}>{payment.business_no ?? "—"}</Td> : null}
             <Td title={payment.user_email ?? ""}>{payment.user_email ?? "—"}</Td>
             <Td>{getPaymentChannelLabel(payment.channel)}</Td>
-            <Td>{payment.channel === "alipay" || payment.channel === "wechat" ? "—" : payment.network ?? "—"}</Td>
             <Td>{isRechargePage ? formatRechargeRequested(payment) : formatPaymentMoney(payment.business_amount, payment.business_currency)}</Td>
-            <Td>{isRechargePage ? formatRechargeExpected(payment) : formatPaymentMoney(payment.fee_amount, payment.payable_currency ?? payment.business_currency)}</Td>
-            <Td>{isRechargePage ? formatRechargeActual(payment) : formatPaymentMoney(payment.payable_amount, payment.payable_currency)}</Td>
+            <Td>{isRechargePage ? formatRechargeExpected(payment) : formatPaymentMoney(payment.payable_amount, payment.payable_currency)}</Td>
             <Td>{isRechargePage ? formatRechargeCredited(payment) : formatPaymentMoney(payment.received_amount, payment.received_currency)}</Td>
             <Td><AdminStatusBadge tone={paymentStatusTone(payment.status)}>{getUnifiedPaymentStatusLabel(payment.status)}</AdminStatusBadge></Td>
-            <Td><button type="button" onClick={() => copyText(payment.provider_trade_no)} className="flex min-h-11 max-w-full items-center gap-1 text-left text-slate-700 hover:text-primary sm:min-h-0" title={payment.provider_trade_no ?? ""}><span className="truncate font-mono text-xs">{payment.provider_trade_no ?? "—"}</span>{payment.provider_trade_no ? <Copy className="h-3.5 w-3.5 shrink-0" /> : null}</button></Td>
             <Td>{formatDate(payment.created_at)}</Td>
-            <Td>{formatDate(payment.paid_at)}</Td>
             <Td className="sticky right-0 bg-white text-right shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">
               {isRechargePage && ["submitted", "reviewing", "approved", "failed"].includes(payment.status) ? (
                 <Button variant="outline" className="min-h-11 border-orange-200 bg-orange-50/70 text-orange-700 hover:bg-orange-100 hover:text-orange-800 sm:min-h-9" size="sm" onClick={() => loadDetail(payment)}>
@@ -507,16 +535,20 @@ function PaymentDrawer({ isRechargePage, selected, detail, callbacks, callbackEr
 
 function Bep20ChainPaymentPanel({ detail, chainPayment, chainPaymentError, overpaymentWallet, copyText, onChanged }: { detail: AdminPaymentRecord; chainPayment: AdminBep20ChainPayment | null; chainPaymentError: string; overpaymentWallet: AdminBep20OverpaymentWallet; copyText: (value: string | null | undefined) => void; onChanged: () => Promise<void> }) {
   const [checking, setChecking] = useState(false);
-  async function runChainAction(action: "recheck_bep20" | "approve_late_payment" | "reject_late_payment", promptText: string) {
+  const [pendingAction, setPendingAction] = useState<
+    | { kind: "chain"; action: "recheck_bep20" | "approve_late_payment" | "reject_late_payment"; title: string; description: string; destructive?: boolean }
+    | { kind: "overpayment" }
+    | null
+  >(null);
+
+  async function executeChainAction(action: "recheck_bep20" | "approve_late_payment" | "reject_late_payment", reason: string) {
     if (!chainPayment || checking) return;
-    const reason = window.prompt(promptText)?.trim() ?? "";
-    if (!reason) return;
-    if (action !== "recheck_bep20" && !window.confirm(action === "approve_late_payment" ? "确认批准该笔晚到账支付？" : "确认拒绝该笔晚到账支付？")) return;
     setChecking(true);
     try {
       const response = await fetch(`/api/admin/payments/${detail.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, chainSessionId: chainPayment.sessionId, reason }) });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error || "链上支付操作失败");
+      setPendingAction(null);
       toast.success(action === "approve_late_payment" ? "晚到账支付已批准" : action === "reject_late_payment" ? "晚到账支付已拒绝" : "链上交易已重新核验");
       await onChanged();
     } catch (error) {
@@ -525,11 +557,9 @@ function Bep20ChainPaymentPanel({ detail, chainPayment, chainPaymentError, overp
       setChecking(false);
     }
   }
-  async function creditOverpayment() {
+
+  async function executeCreditOverpayment(reason: string) {
     if (!chainPayment || checking || overpaymentWallet.disposition) return;
-    const reason = window.prompt("请输入超额金额转入站内余额的原因：")?.trim() ?? "";
-    if (!reason) return;
-    if (!window.confirm("确认按该订单冻结汇率将超额 USDT 转为用户人民币余额？该操作不可撤销。")) return;
     setChecking(true);
     try {
       const response = await fetch(`/api/admin/payments/${encodeURIComponent(detail.id)}/overpayment-credit`, {
@@ -539,6 +569,7 @@ function Bep20ChainPaymentPanel({ detail, chainPayment, chainPaymentError, overp
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error?.message || "超额金额转入余额失败");
+      setPendingAction(null);
       toast.success(payload?.idempotent ? "该超额金额此前已转入余额" : `已转入 ${payload?.credited_cny ?? "0"} CNY`);
       await onChanged();
     } catch (error) {
@@ -561,7 +592,79 @@ function Bep20ChainPaymentPanel({ detail, chainPayment, chainPaymentError, overp
   const rows: Array<[string, string, (() => void)?]> = [
     ["网络", `${chainPayment.network} / Chain ID ${chainPayment.chainId}`], ["订单原金额", `${chainPayment.orderAmount} ${chainPayment.orderCurrency}`], ["汇率", `${chainPayment.exchangeRate} (${chainPayment.exchangeRateSource})`], ["汇率获取时间", formatDate(chainPayment.exchangeRateFetchedAt)], ["汇率有效期", formatDate(chainPayment.exchangeRateExpiresAt)], ["应付金额", `${chainPayment.expectedAmount} ${chainPayment.paymentCurrency}`], ["实际到账", chainPayment.confirmedAmount ? `${chainPayment.confirmedAmount} ${chainPayment.paymentCurrency}` : "—"], ["收款地址", chainPayment.receiveAddress, () => copyText(chainPayment.receiveAddress)], ["付款地址", chainPayment.transaction?.fromAddress ?? "—", chainPayment.transaction?.fromAddress ? () => copyText(chainPayment.transaction?.fromAddress) : undefined], ["TxHash", chainPayment.submittedTxHash ?? "—", chainPayment.submittedTxHash ? () => copyText(chainPayment.submittedTxHash) : undefined], ["区块号", chainPayment.transaction?.blockNumber ?? "—"], ["确认数", chainPayment.transaction?.confirmationCount == null ? "—" : String(chainPayment.transaction.confirmationCount)], ["USDT 合约", chainPayment.tokenContract, () => copyText(chainPayment.tokenContract)], ["支付会话状态", chainPayment.status], ["人工审核决策", chainPayment.manualReviewDecision ?? "—"], ["决策原因", chainPayment.manualReviewDecisionReason ?? "—"], ["决策时间", formatDate(chainPayment.manualReviewDecidedAt)], ["异常原因", chainPayment.failureReason ?? chainPayment.manualReviewReason ?? "—"], ["创建时间", formatDate(chainPayment.createdAt)], ["确认时间", formatDate(chainPayment.confirmedAt)], ["过期时间", formatDate(chainPayment.expiresAt)],
   ];
-  return <section className="rounded-xl border"><div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3"><div className="text-sm font-semibold text-slate-950">USDT-BEP20 链上明细</div><div className="flex flex-wrap gap-2">{canManageChainPayment ? <><Button size="sm" variant="outline" onClick={() => runChainAction("recheck_bep20", "请输入重新核验原因：")} disabled={checking || chainPayment.status === "paid" || !chainPayment.submittedTxHash || chainPayment.manualReviewDecision === "rejected"}>{checking ? "处理中..." : "重新核验"}</Button>{chainPayment.status === "manual_review" && !manualReviewDecided ? <><Button size="sm" onClick={() => runChainAction("approve_late_payment", "请输入批准晚到账的原因：")} disabled={checking}>批准晚到账</Button><Button size="sm" variant="destructive" onClick={() => runChainAction("reject_late_payment", "请输入拒绝晚到账的原因：")} disabled={checking}>拒绝晚到账</Button></> : null}</> : null}{canCreditOverpayment ? <Button size="sm" onClick={creditOverpayment} disabled={checking}>{checking ? "处理中..." : "超额转入余额"}</Button> : null}</div></div><div className="divide-y">{rows.map(([label, value, onCopy]) => <div key={label} className="flex items-start justify-between gap-4 px-4 py-3 text-sm"><span className="shrink-0 text-slate-500">{label}</span><button type="button" disabled={!onCopy} onClick={onCopy} className={cn("min-w-0 text-right text-slate-900", onCopy && "hover:text-primary")}><span className="break-all">{value || "—"}</span></button></div>)}</div>{overpaymentWallet.disposition ? <div className="border-t bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><div className="font-medium">超额金额已转入站内余额</div><div className="mt-1">{overpaymentWallet.disposition.overpaidUsdt} USDT × {overpaymentWallet.disposition.exchangeRate} = {overpaymentWallet.disposition.creditedCny} CNY</div><div className="mt-1 text-xs">处理方式：{overpaymentWallet.disposition.settlementSource === "automatic_service" ? "自动一次性安全结算" : "管理员人工入账"}</div><div className="mt-1 text-xs">处理时间：{formatDate(overpaymentWallet.disposition.processedAt)}</div></div> : null}{overpaymentWallet.authorized && overpaymentWallet.error ? <div className="border-t px-4 py-3 text-sm text-amber-700">{overpaymentWallet.error}</div> : null}{chainPayment.explorerUrl && chainPayment.submittedTxHash ? <div className="border-t px-4 py-3 text-sm"><a href={chainPayment.explorerUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">在 BscScan 查看交易</a></div> : null}{chainPaymentError ? <div className="border-t px-4 py-3 text-sm text-amber-700">{chainPaymentError}</div> : null}</section>;
+  return (
+    <section className="rounded-xl border">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+        <div className="text-sm font-semibold text-slate-950">USDT-BEP20 链上明细</div>
+        <div className="flex flex-wrap gap-2">
+          {canManageChainPayment ? <><Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPendingAction({ kind: "chain", action: "recheck_bep20", title: "重新核验链上交易", description: "系统将重新查询 BSC 链上交易回执与确认数，并写入审计日志。" })}
+                disabled={checking || chainPayment.status === "paid" || !chainPayment.submittedTxHash || chainPayment.manualReviewDecision === "rejected"}
+              >
+                {checking ? "处理中..." : "重新核验"}
+              </Button>
+              {chainPayment.status === "manual_review" && !manualReviewDecided ? (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => setPendingAction({ kind: "chain", action: "approve_late_payment", title: "批准晚到账支付", description: "确认该笔晚到账链上付款金额与归属已核验无误，并推进人工批准流程？" })}
+                    disabled={checking}
+                  >
+                    批准晚到账
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setPendingAction({ kind: "chain", action: "reject_late_payment", title: "拒绝晚到账支付", description: "拒绝后该笔链上会话将标记为人工拒绝并记录审计日志。", destructive: true })}
+                    disabled={checking}
+                  >
+                    拒绝晚到账
+                  </Button>
+                </>
+              ) : null}</> : null}
+          {canCreditOverpayment ? (
+            <Button size="sm" onClick={() => setPendingAction({ kind: "overpayment" })} disabled={checking}>
+              {checking ? "处理中..." : "超额转入余额"}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+      <div className="divide-y">{rows.map(([label, value, onCopy]) => <div key={label} className="flex items-start justify-between gap-4 px-4 py-3 text-sm"><span className="shrink-0 text-slate-500">{label}</span><button type="button" disabled={!onCopy} onClick={onCopy} className={cn("min-w-0 text-right text-slate-900", onCopy && "hover:text-primary")}><span className="break-all">{value || "—"}</span></button></div>)}</div>
+      {overpaymentWallet.disposition ? <div className="border-t bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><div className="font-medium">超额金额已转入站内余额</div><div className="mt-1">{overpaymentWallet.disposition.overpaidUsdt} USDT × {overpaymentWallet.disposition.exchangeRate} = {overpaymentWallet.disposition.creditedCny} CNY</div><div className="mt-1 text-xs">处理方式：{overpaymentWallet.disposition.settlementSource === "automatic_service" ? "自动一次性安全结算" : "管理员人工入账"}</div><div className="mt-1 text-xs">处理时间：{formatDate(overpaymentWallet.disposition.processedAt)}</div></div> : null}
+      {overpaymentWallet.authorized && overpaymentWallet.error ? <div className="border-t px-4 py-3 text-sm text-amber-700">{overpaymentWallet.error}</div> : null}
+      {chainPayment.explorerUrl && chainPayment.submittedTxHash ? <div className="border-t px-4 py-3 text-sm"><a href={chainPayment.explorerUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">在 BscScan 查看交易</a></div> : null}
+      {chainPaymentError ? <div className="border-t px-4 py-3 text-sm text-amber-700">{chainPaymentError}</div> : null}
+      <AdminConfirmDialog
+        open={Boolean(pendingAction)}
+        onOpenChange={(next) => { if (!next) setPendingAction(null); }}
+        title={pendingAction?.kind === "overpayment" ? "确认将超额 USDT 转入用户余额" : pendingAction?.title ?? "确认链上操作"}
+        description={
+          pendingAction?.kind === "overpayment"
+            ? "确认按该订单冻结汇率将超额 USDT 转为用户人民币余额？该操作不可撤销并会写入余额流水与审计日志。"
+            : pendingAction?.description
+        }
+        summaryLines={[
+          { label: "支付单号", value: detail.payment_no },
+          { label: "应付 / 实到", value: `${chainPayment.expectedAmount} / ${chainPayment.confirmedAmount ?? "—"} ${chainPayment.paymentCurrency}` },
+        ]}
+        destructive={pendingAction?.kind === "chain" && Boolean(pendingAction.destructive)}
+        confirmLabel="确认执行"
+        reasonLabel="操作原因"
+        reasonRequired
+        reasonPlaceholder="请输入人工核验或处置说明（必填）"
+        loading={checking}
+        onConfirm={async (reason) => {
+          if (pendingAction?.kind === "overpayment") {
+            await executeCreditOverpayment(reason);
+          } else if (pendingAction?.kind === "chain") {
+            await executeChainAction(pendingAction.action, reason);
+          }
+        }}
+      />
+    </section>
+  );
 }
 
 function RechargeReviewPanel({ rechargeId, onChanged, embedded = false }: { rechargeId: string; onChanged: () => Promise<void>; embedded?: boolean }) {

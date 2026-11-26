@@ -1,5 +1,5 @@
 ﻿"use client";
-import { statusLabel as adminUnknownStatusLabel } from '@/lib/admin/display-labels';
+import { statusLabel } from '@/lib/admin/display-labels';
 
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -59,7 +59,7 @@ const BUSINESS_LABEL: Record<string, string> = {
 function formatDate(value?: string | null) {
   if (!value) return "-";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("zh-CN", { hour12: false });
+  return Number.isNaN(date.getTime()) ? "-" : date.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
 }
 
 export default function AdminCompensationsPage() {
@@ -124,6 +124,7 @@ export default function AdminCompensationsPage() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="事务补偿"
       description="查看支付、订单、余额、退款和交付等无法自动回滚时产生的人工补偿任务。"
       actions={
@@ -193,9 +194,9 @@ export default function AdminCompensationsPage() {
                     <tr key={task.id} className="border-t">
                       <td className="px-3 py-3">{BUSINESS_LABEL[String(task.business_type)] ?? task.business_type ?? "-"}</td>
                       <td className="px-3 py-3 font-mono text-xs">{task.business_no ?? task.business_id ?? "-"}</td>
-                      <td className="px-3 py-3">{task.operation ?? "-"}</td>
-                      <td className="px-3 py-3">{task.failure_stage ?? "-"}</td>
-                      <td className="px-3 py-3">{STATUS_LABEL[String(task.status)] ?? adminUnknownStatusLabel(task.status) ?? "-"}</td>
+                      <td className="px-3 py-3">{task.operation ? statusLabel(task.operation) : "-"}</td>
+                      <td className="px-3 py-3">{task.failure_stage ? statusLabel(task.failure_stage) : "-"}</td>
+                      <td className="px-3 py-3">{STATUS_LABEL[String(task.status)] ?? statusLabel(task.status) ?? "-"}</td>
                       <td className="max-w-[260px] px-3 py-3" title={task.error_summary ?? task.error_code ?? ""}>
                         <div className="truncate">{task.error_code ?? "-"} {task.error_summary ?? ""}</div>
                         {task.resolution_note ? <div className="mt-1 truncate text-xs text-slate-500">处置：{task.resolution_note}</div> : null}

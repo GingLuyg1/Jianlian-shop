@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { businessTypeLabel, directionLabel } from "@/lib/admin/display-labels";
+import { businessTypeLabel, detailLabel, directionLabel, statusLabel } from "@/lib/admin/display-labels";
 import { isLikelyBusinessNo, isUuid, normalizeBusinessKeyword } from "@/lib/business/business-ids";
 import { sanitizePostgrestFilterTerm } from "@/lib/security/postgrest-sanitize";
 
@@ -217,7 +217,7 @@ export async function runAdminGlobalSearch(
             typeLabel: "订单",
             businessNo: no,
             title: `订单 ${no}`,
-            subtitle: `订单状态 ${text(row.status) ?? "—"} / 支付 ${text(row.payment_status) ?? "—"}`,
+            subtitle: `订单状态：${statusLabel(row.status)} / 支付：${statusLabel(row.payment_status)}`,
             userLabel: emailLabel(row.customer_email),
             amountLabel: money(row.total_amount, row.currency),
             status: text(row.status),
@@ -308,7 +308,7 @@ export async function runAdminGlobalSearch(
                   typeLabel: "退款",
                   businessNo: no,
                   title: `退款 ${no}`,
-                  subtitle: text(row.reason_code),
+                  subtitle: row.reason_code ? statusLabel(row.reason_code) : null,
                   userLabel: text(row.user_id),
                   amountLabel: money(row.approved_amount ?? row.requested_amount, row.currency),
                   status: text(row.status),
@@ -399,7 +399,7 @@ export async function runAdminGlobalSearch(
                   typeLabel: "用户",
                   businessNo: emailLabel(email) ?? userId,
                   title: text(row.display_name) ?? emailLabel(email) ?? "用户",
-                  subtitle: text(row.account_status) ?? text(row.role),
+                  subtitle: row.account_status ? statusLabel(row.account_status) : row.role ? detailLabel(row.role) : null,
                   userLabel: emailLabel(email),
                   amountLabel: null,
                   status: text(row.risk_status),

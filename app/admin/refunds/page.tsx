@@ -11,6 +11,7 @@ import AdminEmptyState from "@/components/admin/AdminEmptyState";
 import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
+import { AdminConfirmDialog } from "@/components/admin/v2/AdminConfirmDialog";
 import { AdminListPagination } from "@/components/admin/v2/AdminList";
 import { listPagination } from "@/lib/admin/list-pagination.mjs";
 import { Badge } from "@/components/ui/badge";
@@ -172,6 +173,39 @@ export default function AdminRefundsPage() {
 
   const submitLockRef = useRef(false);
 
+  const [confirmRefundOpen, setConfirmRefundOpen] = useState(false);
+
+  async function executeRefundAction() {
+    if (!selected || submitLockRef.current || submitting) return;
+    submitLockRef.current = true;
+    setSubmitting(true);
+    try {
+      const response = await fetch(`/api/admin/refunds/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          approvedAmount: Number(approvedAmount || selected.requestedAmount),
+          reviewNote: note,
+          userVisibleNote: userNote,
+          providerRefundId,
+          requestId: crypto.randomUUID(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || "退款操作失败");
+      setConfirmRefundOpen(false);
+      toast.success("退款状态已更新");
+      setSelected(null);
+      await loadRefunds();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "退款操作失败");
+    } finally {
+      submitLockRef.current = false;
+      setSubmitting(false);
+    }
+  }
+
   async function submitAction() {
     if (!selected || submitLockRef.current || submitting) return;
     if (!note.trim()) {
@@ -192,38 +226,16 @@ export default function AdminRefundsPage() {
       return;
     }
     const dangerous = ["approve_balance", "reject", "cancel", "complete_external", "fail"].includes(action);
-    if (dangerous && !window.confirm("确认执行该退款操作？操作会写入审计日志。")) return;
-
-    submitLockRef.current = true;
-    setSubmitting(true);
-    try {
-      const response = await fetch(`/api/admin/refunds/${selected.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action,
-          approvedAmount: Number(approvedAmount || selected.requestedAmount),
-          reviewNote: note,
-          userVisibleNote: userNote,
-          providerRefundId,
-          requestId: crypto.randomUUID(),
-        }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || "退款操作失败");
-      toast.success("退款状态已更新");
-      setSelected(null);
-      await loadRefunds();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "退款操作失败");
-    } finally {
-      submitLockRef.current = false;
-      setSubmitting(false);
+    if (dangerous) {
+      setConfirmRefundOpen(true);
+      return;
     }
+    await executeRefundAction();
   }
 
   return (
     <AdminPageShell
+      variant="v2"
       title="售后退款"
       description="审核用户退款申请，登记余额退款或外部渠道人工退款。"
       actions={(
@@ -382,6 +394,28 @@ export default function AdminRefundsPage() {
           </aside>
         </div>
       ) : null}
+      <AdminConfirmDialog
+        open={confirmRefundOpen}
+        onOpenChange={setConfirmRefundOpen}
+        title="确认执行退款审核操作"
+        description="该操作会实时变更退款状态并写入不可篡改的后台审计日志，请核对金额与原因后再确认。"
+        summaryLines={
+          selected
+            ? [
+                { label: "退款单号", value: selected.refundNo },
+                { label: "订单编号", value: selected.orderNo },
+                { label: "执行动作", value: (isBalanceRefund(selected) ? BALANCE_REFUND_ACTIONS : EXTERNAL_REFUND_ACTIONS).find((a) => a.value === action)?.label ?? action },
+                { label: "批准金额", value: formatMoney(Number(approvedAmount || selected.requestedAmount), selected.currency) },
+              ]
+            : undefined
+        }
+        destructive={["reject", "cancel", "fail"].includes(action)}
+        confirmLabel="确认执行退款操作"
+        loading={submitting}
+        onConfirm={async () => {
+          await executeRefundAction();
+        }}
+      />
       </div>
     </AdminPageShell>
   );
@@ -401,4 +435,4 @@ function statusClass(status: string) {
   if (["rejected", "failed"].includes(status)) return "border-red-200 bg-red-50 text-red-700";
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
-function formatDate(value: string | null) { return value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"; }
+function formatDate(value: string | null) { return value ? new Date(value).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false }) : "-"; }

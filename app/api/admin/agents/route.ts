@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerAdminContext, getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { enforceAdminWriteGuard } from "@/lib/security/rate-limit";
 import { chunkArray, POSTGREST_PAGE_SIZE, selectAllPaginated } from "@/lib/supabase/paginated-select";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -81,7 +81,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [appsRes, whitelistsRes, ordersRes] = await Promise.all([
+    const [appsRes, whitelistsRes] = await Promise.all([
       service
         .from("agent_applications")
         .select("id,user_id,email,merchant_name,business_scenario,server_ips,contact,status,app_id,app_secret_prefix,reviewed_at,created_at,updated_at")
@@ -92,18 +92,6 @@ export async function GET(request: Request) {
         .select("id,application_id,email,merchant_name,app_id,ip,remark,status,created_at")
         .order("created_at", { ascending: false })
         .limit(1000),
-      selectAllPaginated<Record<string, unknown>>(
-        (from, to) =>
-          service
-            .from("orders")
-            .select("id,order_no,customer_email,total_amount,subtotal,status,payment_status,created_at,order_items(id,product_id,sku_id,product_name,quantity,line_total)")
-            .order("created_at", { ascending: false })
-            .range(from, to) as unknown as PromiseLike<{
-            data: Record<string, unknown>[] | null;
-            error: { code?: string; message?: string } | null;
-          }>,
-        { pageSize: POSTGREST_PAGE_SIZE, maxRows: 5000 }
-      ),
     ]);
 
     const schemaReady =
@@ -142,16 +130,38 @@ export async function GET(request: Request) {
 
     // Match orders belonging to approved agent merchants and aggregate real cost/profit
     const approvedByEmail = new Map<string, { appId: string }>();
+    const approvedEmailList: string[] = [];
     for (const app of applications) {
       if (app.status === "approved" && app.email && app.appId) {
-        approvedByEmail.set(app.email.trim().toLowerCase(), { appId: app.appId });
+        const rawEmail = app.email.trim();
+        const lower = rawEmail.toLowerCase();
+        approvedByEmail.set(lower, { appId: app.appId });
+        if (!approvedEmailList.includes(rawEmail)) approvedEmailList.push(rawEmail);
+        if (lower !== rawEmail && !approvedEmailList.includes(lower)) approvedEmailList.push(lower);
       }
     }
 
-    const agentRawOrders = (ordersRes.error ? [] : ordersRes.rows).filter((row) => {
-      const email = String(row.customer_email ?? "").trim().toLowerCase();
-      return Boolean(email && approvedByEmail.has(email));
-    });
+    const agentRawOrders: Array<Record<string, unknown>> = [];
+    if (approvedEmailList.length > 0) {
+      for (const emailChunk of chunkArray(approvedEmailList, 100)) {
+        const ordersRes = await selectAllPaginated<Record<string, unknown>>(
+          (from, to) =>
+            service
+              .from("orders")
+              .select("id,order_no,customer_email,total_amount,subtotal,status,payment_status,created_at,order_items(id,product_id,sku_id,product_name,quantity,line_total)")
+              .in("customer_email", emailChunk)
+              .order("created_at", { ascending: false })
+              .range(from, to) as unknown as PromiseLike<{
+              data: Record<string, unknown>[] | null;
+              error: { code?: string; message?: string } | null;
+            }>,
+          { pageSize: POSTGREST_PAGE_SIZE, maxRows: 5000 }
+        );
+        if (!ordersRes.error) {
+          agentRawOrders.push(...ordersRes.rows);
+        }
+      }
+    }
 
     const itemIds: string[] = [];
     const skuIds = new Set<string>();
@@ -275,7 +285,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status });
 
   const guardError = enforceAdminWriteGuard(request, admin.user.id, "agent_manage", 32 * 1024);

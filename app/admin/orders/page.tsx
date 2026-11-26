@@ -14,6 +14,7 @@ import AdminErrorState from "@/components/admin/AdminErrorState";
 import AdminPageShell from "@/components/admin/AdminPageShell";
 import AdminTableSkeleton from "@/components/admin/AdminTableSkeleton";
 import OrderFulfillmentPanel from "@/components/admin/orders/OrderFulfillmentPanel";
+import { AdminConfirmDialog } from "@/components/admin/v2/AdminConfirmDialog";
 import { AdminDetailDrawer } from "@/components/admin/v2/AdminDetail";
 import {
   AdminFilterBar,
@@ -93,7 +94,7 @@ function formatMoney(value: number | string | null | undefined, currency = "CNY"
 
 function formatDate(value: string | null | undefined) {
   if (!value) return "未记录";
-  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+  return new Date(value).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
 }
 
 function getDeliveryLabel(deliveryType: string | null | undefined) {
@@ -348,12 +349,12 @@ export default function AdminOrdersPage() {
           ) : (
             <>
               <AdminTableViewport>
-            <table className="min-w-[1140px] w-full text-sm">
+            <table className="min-w-[960px] w-full text-sm">
               <thead className={adminListTableHeadClass}>
                 <tr>
-                  {["订单编号", "用户邮箱", "商品摘要"].map((heading) => <th scope="col" key={heading} className="whitespace-nowrap px-4 py-3 text-left">{heading}</th>)}
-                  {["金额", "订单状态", "支付状态", "交付方式", "下单时间", "更新时间"].map((heading) => <th scope="col" key={heading} className="whitespace-nowrap px-4 py-3 text-center">{heading}</th>)}
-                  <th scope="col" className="sticky right-0 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-4 py-3 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</th>
+                  {["订单编号", "用户邮箱", "商品摘要"].map((heading) => <th scope="col" key={heading} className="whitespace-nowrap px-3 py-3 text-left">{heading}</th>)}
+                  {["金额", "订单状态", "支付状态", "交付方式", "下单时间"].map((heading) => <th scope="col" key={heading} className="whitespace-nowrap px-3 py-3 text-center">{heading}</th>)}
+                  <th scope="col" className="sticky right-0 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-3 py-3 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">操作</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -362,18 +363,35 @@ export default function AdminOrdersPage() {
                     const orderStatus = normalizeOrderStatus(order.status);
                     const payStatus = normalizePaymentStatus(order.payment_status);
                     const itemSummary = order.order_items?.map((item) => `${item.product_name} x ${item.quantity}`).join("、") || "—";
+                    const orderNoText = getOrderNo(order);
                     return (
                       <tr key={order.id} className={adminListRowClass}>
-                        <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-900">{getOrderNo(order)}</td>
-                        <td className="px-4 py-3 text-slate-600">{order.customer_email || "—"}</td>
-                        <td className="max-w-[320px] truncate px-4 py-3 text-slate-700" title={itemSummary}>{itemSummary}</td>
-                        <td className="px-4 py-3 text-center font-semibold tabular-nums text-slate-950">{formatMoney(order.total_amount, order.currency)}</td>
-                        <td className="px-4 py-3 text-center"><AdminStatusBadge tone={orderStatusTone(orderStatus)}>{getOrderStatusLabel(orderStatus)}</AdminStatusBadge></td>
-                        <td className="px-4 py-3 text-center"><AdminStatusBadge tone={paymentStatusTone(payStatus)}>{getPaymentStatusLabel(payStatus)}</AdminStatusBadge></td>
-                        <td className="px-4 py-3 text-center text-slate-600">{getDeliveryLabel(order.delivery_type)}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-center text-slate-500">{formatDate(order.created_at)}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-center text-slate-500">{formatDate(order.updated_at)}</td>
-                        <td className="sticky right-0 border-l border-[var(--admin-v2-border)] bg-white px-4 py-3 text-center whitespace-nowrap">
+                        <td className="whitespace-nowrap px-3 py-3 font-mono text-xs font-semibold text-slate-900">
+                          <div className="inline-flex items-center gap-1">
+                            <span>{orderNoText}</span>
+                            <button
+                              type="button"
+                              title="复制订单号"
+                              className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                              onClick={() => {
+                                void navigator.clipboard.writeText(orderNoText).then(
+                                  () => toast.success("已复制订单号"),
+                                  () => toast.error("复制失败")
+                                );
+                              }}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="max-w-[180px] truncate px-3 py-3 text-slate-600" title={order.customer_email || ""}>{order.customer_email || "—"}</td>
+                        <td className="max-w-[210px] truncate px-3 py-3 text-slate-700" title={itemSummary}>{itemSummary}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-center font-semibold tabular-nums text-slate-950">{formatMoney(order.total_amount, order.currency)}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-center"><AdminStatusBadge tone={orderStatusTone(orderStatus)}>{getOrderStatusLabel(orderStatus)}</AdminStatusBadge></td>
+                        <td className="whitespace-nowrap px-3 py-3 text-center"><AdminStatusBadge tone={paymentStatusTone(payStatus)}>{getPaymentStatusLabel(payStatus)}</AdminStatusBadge></td>
+                        <td className="whitespace-nowrap px-3 py-3 text-center text-slate-600">{getDeliveryLabel(order.delivery_type)}</td>
+                        <td className="whitespace-nowrap px-3 py-3 text-center text-xs text-slate-500">{formatDate(order.created_at)}</td>
+                        <td className="sticky right-0 border-l border-[var(--admin-v2-border)] bg-white px-3 py-3 text-center whitespace-nowrap">
                           <Button
                             className={cn(
                               "min-h-11 sm:min-h-9",
@@ -392,7 +410,7 @@ export default function AdminOrdersPage() {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={10} className="h-72">
+                    <td colSpan={9} className="h-72">
                       <AdminEmptyState
                         title={hasFilters ? "没有符合条件的订单" : "暂无订单"}
                         description={hasFilters ? "请调整筛选条件后再试。" : "新订单创建后会显示在这里。"}
@@ -588,9 +606,13 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
     void loadRelations();
   }, [loadRelations]);
 
-  async function updateStatus(nextStatus: OrderStatus) {
-    const note = window.prompt(`确认将订单 ${getOrderNo(order)} 更新为「${getOrderStatusLabel(nextStatus)}」？请输入管理员备注：`);
-    if (note === null) return;
+  const [confirmAction, setConfirmAction] = useState<
+    | { kind: "status"; nextStatus: OrderStatus }
+    | { kind: "expire_unpaid" }
+    | null
+  >(null);
+
+  async function executeStatusUpdate(nextStatus: OrderStatus, note: string) {
     setWorking(true);
     try {
       const response = await fetch(`/api/admin/orders/${order.id}`, {
@@ -609,6 +631,7 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
           }
         : order;
       onUpdated(mergedOrder);
+      setConfirmAction(null);
       toast.success("订单状态已更新");
       void loadRelations();
     } catch (err) {
@@ -618,16 +641,9 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
     }
   }
 
-  async function expireUnpaidOrderManually() {
+  async function executeExpireUnpaidOrder(note: string) {
     if (orderStatus !== "pending_payment" || paymentStatus !== "unpaid") {
       toast.error("只有未支付的待支付订单可以关闭");
-      return;
-    }
-    const reason = window.prompt(`确认关闭未支付订单 ${getOrderNo(order)} 并释放库存预留？请输入操作原因：`);
-    if (reason === null) return;
-    const note = reason.trim();
-    if (!note) {
-      toast.error("请填写关闭原因");
       return;
     }
     setWorking(true);
@@ -635,7 +651,7 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
       const response = await fetch(`/api/admin/orders/${order.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "expire_unpaid_order", note }),
+        body: JSON.stringify({ action: "expire_unpaid_order", note: note.trim() }),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || payload?.result?.ok === false) {
@@ -653,6 +669,7 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
       } as OrderRecord;
       onUpdated(nextOrder);
       onRefresh();
+      setConfirmAction(null);
       toast.success("未支付订单已关闭，预留库存已按服务端结果释放");
       void loadRelations();
     } catch (err) {
@@ -912,21 +929,15 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
             <InfoCard title="用户信息">
               <InfoRow label="用户邮箱" value={order.customer_email || "—"} />
               <InfoRow label="用户 ID" value={order.user_id || "—"} mono />
-              {isShippingOrder ? (
-                <>
-                  <InfoRow label="收件人" value={shipping.recipient || "—"} />
-                  <InfoRow label="联系电话" value={shipping.phone || "—"} mono />
-                  <InfoRow label="收货地址" value={shipping.address || "—"} />
-                </>
-              ) : (
+              {!isShippingOrder ? (
                 <InfoRow label="接收邮箱" value={order.customer_email || "—"} />
-              )}
+              ) : null}
               <InfoRow label="用户备注" value={order.customer_note || "—"} />
               <InfoRow label="管理员备注" value={order.admin_note || "—"} />
             </InfoCard>
             <InfoCard title="订单金额">
               <InfoRow label="订单总额" value={formatMoney(order.total_amount, order.currency)} strong />
-              <InfoRow label="支付方式" value={order.payment_method ? `${getPaymentMethodLabel(order.payment_method)} (${order.payment_method})` : "—"} />
+              <InfoRow label="支付方式" value={order.payment_method ? getPaymentMethodLabel(order.payment_method) : "—"} />
               <InfoRow label="实付金额" value={formatMoney(order.paid_at ? order.total_amount : 0, order.currency)} />
               <InfoRow label="退款金额" value={formatMoney(refundedAmount, order.currency)} />
               <InfoRow label="创建时间" value={formatDate(order.created_at)} />
@@ -977,13 +988,13 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
               ) : null}
               <div className="flex flex-wrap gap-2">
                 {availableActions.map((nextStatus) => (
-                  <Button key={nextStatus} size="sm" variant={nextStatus === "cancelled" || nextStatus === "failed" ? "destructive" : "outline"} disabled={working} onClick={() => void updateStatus(nextStatus)}>
+                  <Button key={nextStatus} size="sm" variant={nextStatus === "cancelled" || nextStatus === "failed" ? "destructive" : "outline"} disabled={working} onClick={() => setConfirmAction({ kind: "status", nextStatus })}>
                     {working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     {getOrderStatusLabel(nextStatus)}
                   </Button>
                 ))}
                 {orderStatus === "pending_payment" && paymentStatus === "unpaid" ? (
-                  <Button size="sm" variant="destructive" disabled={working} onClick={() => void expireUnpaidOrderManually()}>
+                  <Button size="sm" variant="destructive" disabled={working} onClick={() => setConfirmAction({ kind: "expire_unpaid" })}>
                     {working ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     关闭未支付订单并释放预留
                   </Button>
@@ -1003,6 +1014,44 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
             error={relationsError}
             relations={relations}
             onRetry={() => void loadRelations()}
+          />
+
+          <AdminConfirmDialog
+            open={Boolean(confirmAction)}
+            onOpenChange={(next) => { if (!next) setConfirmAction(null); }}
+            title={
+              confirmAction?.kind === "expire_unpaid"
+                ? "关闭未支付订单并释放库存预留"
+                : confirmAction?.kind === "status"
+                  ? `更新订单状态为「${getOrderStatusLabel(confirmAction.nextStatus)}」`
+                  : "确认操作"
+            }
+            description={
+              confirmAction?.kind === "expire_unpaid"
+                ? "关闭后该订单将标记为已过期，并按服务端规则释放已预留的数字库存。"
+                : "请核对目标状态并填写管理员备注，所有变更均会写入后台审计日志。"
+            }
+            summaryLines={[
+              { label: "订单编号", value: getOrderNo(order) },
+              { label: "当前状态", value: `${getOrderStatusLabel(orderStatus)} / ${getPaymentStatusLabel(paymentStatus)}` },
+              { label: "订单金额", value: formatMoney(order.total_amount, order.currency) },
+            ]}
+            destructive={
+              confirmAction?.kind === "expire_unpaid" ||
+              (confirmAction?.kind === "status" && ["cancelled", "failed"].includes(confirmAction.nextStatus))
+            }
+            confirmLabel={confirmAction?.kind === "expire_unpaid" ? "确认关闭并释放预留" : "确认更新状态"}
+            reasonLabel={confirmAction?.kind === "expire_unpaid" ? "关闭原因" : "管理员备注"}
+            reasonRequired={confirmAction?.kind === "expire_unpaid"}
+            reasonPlaceholder={confirmAction?.kind === "expire_unpaid" ? "例如：买家取消下单或超时未支付" : "选填：记录本次状态变更说明"}
+            loading={working}
+            onConfirm={async (reason) => {
+              if (confirmAction?.kind === "expire_unpaid") {
+                await executeExpireUnpaidOrder(reason);
+              } else if (confirmAction?.kind === "status") {
+                await executeStatusUpdate(confirmAction.nextStatus, reason);
+              }
+            }}
           />
     </AdminDetailDrawer>
   );

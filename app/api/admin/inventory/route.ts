@@ -152,26 +152,53 @@ export async function GET(request: Request) {
     if (error) throw error;
     const rows = Array.isArray(data) ? (data as Array<Record<string, unknown>>) : [];
     const productIds = Array.from(new Set(rows.map((row) => String(row.product_id ?? "")).filter(Boolean)));
+    const batchNos = Array.from(new Set(rows.map((row) => String(row.batch_no ?? "").trim()).filter(Boolean)));
     if (productIds.length > 0) {
       const serviceClient = getSupabaseServiceRoleClient() ?? admin.supabase;
-      const { data: skuRows } = await serviceClient
-        .from("product_skus")
-        .select("product_id,sku_title,sku_code")
-        .in("product_id", productIds);
+      const [skuRes, batchRes] = await Promise.all([
+        serviceClient
+          .from("product_skus")
+          .select("id,product_id,sku_title,sku_code")
+          .in("product_id", productIds),
+        batchNos.length > 0
+          ? serviceClient
+              .from("digital_inventory_batches")
+              .select("batch_no,batch_name,sku_id")
+              .in("batch_no", batchNos)
+          : Promise.resolve({ data: [] as Array<{ batch_no?: string | null; batch_name?: string | null; sku_id?: string | null }> }),
+      ]);
       const skuMap = new Map<string, string[]>();
-      for (const sku of (skuRows ?? []) as Array<{ product_id?: string | null; sku_title?: string | null; sku_code?: string | null }>) {
+      const skuById = new Map<string, string>();
+      for (const sku of (skuRes.data ?? []) as Array<{ id?: string | null; product_id?: string | null; sku_title?: string | null; sku_code?: string | null }>) {
         const pid = String(sku.product_id ?? "");
         const label = String(sku.sku_title || sku.sku_code || "").trim();
+        if (sku.id && label) skuById.set(String(sku.id), label);
         if (!pid || !label) continue;
         const list = skuMap.get(pid) ?? [];
         if (!list.includes(label)) list.push(label);
         skuMap.set(pid, list);
       }
+      const batchInfoMap = new Map<string, { batch_name: string | null; batch_sku_label: string | null }>();
+      for (const batch of (batchRes.data ?? []) as Array<{ batch_no?: string | null; batch_name?: string | null; sku_id?: string | null }>) {
+        const bno = String(batch.batch_no ?? "").trim();
+        if (!bno) continue;
+        batchInfoMap.set(bno, {
+          batch_name: batch.batch_name ? String(batch.batch_name) : null,
+          batch_sku_label: batch.sku_id ? (skuById.get(String(batch.sku_id)) ?? null) : null,
+        });
+      }
       return NextResponse.json({
-        data: rows.map((row) => ({
-          ...row,
-          sku_labels: skuMap.get(String(row.product_id ?? "")) ?? [],
-        })),
+        data: rows.map((row) => {
+          const bno = String(row.batch_no ?? "").trim();
+          const bInfo = bno ? batchInfoMap.get(bno) : undefined;
+          return {
+            ...row,
+            batch_no: bno || null,
+            batch_name: bInfo?.batch_name ?? null,
+            batch_sku_label: bInfo?.batch_sku_label ?? null,
+            sku_labels: skuMap.get(String(row.product_id ?? "")) ?? [],
+          };
+        }),
       });
     }
     return NextResponse.json({ data: rows });

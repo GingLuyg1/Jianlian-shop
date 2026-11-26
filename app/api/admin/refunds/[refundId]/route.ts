@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { REFUND_ACTION_LABELS, normalizeRefundError } from "@/lib/refunds/refund-utils";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -10,18 +11,19 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ refundId: string }> };
 type Row = Record<string, unknown>;
 
+const ADMIN_REFUND_DETAIL_SELECT = [
+  "id,refund_no,order_id,user_id,status,reason_code,reason_detail,requested_amount,approved_amount,currency,refund_method,review_note,user_visible_note,provider_refund_id,reviewed_by,reviewed_at,refunded_at,created_at,updated_at",
+  "orders(id,order_no,status,payment_status,fulfillment_status,payment_method,total_amount,currency,customer_email,created_at,paid_at,order_items(id,product_id,product_name,sku_title,sku_code,quantity,unit_price,line_total,delivery_type,delivery_status))",
+  "profiles(email,display_name)",
+  "refund_status_logs(id,from_status,to_status,action,note,operator_id,created_at)",
+].join(",");
+
 function json(body: unknown, init?: ResponseInit) {
   return NextResponse.json(body, init);
 }
 
-async function requireSuperAdmin(request: Request) {
+export async function GET(_request: Request, context: RouteContext) {
   const admin = await requireApiSuperAdmin();
-  if (!admin.ok) return admin;
-  return admin;
-}
-
-export async function GET(request: Request, context: RouteContext) {
-  const admin = await requireSuperAdmin(request);
   if (!admin.ok) return admin.response;
   const { refundId } = await context.params;
   const supabase = getSupabaseServiceRoleClient() ?? admin.supabase;
@@ -29,7 +31,7 @@ export async function GET(request: Request, context: RouteContext) {
   try {
     const { data, error } = await supabase
       .from("refund_requests")
-      .select("*,orders(*,order_items(*)),profiles(email,display_name),refund_status_logs(*)")
+      .select(ADMIN_REFUND_DETAIL_SELECT)
       .eq("id", refundId)
       .maybeSingle();
     if (error) return json({ error: normalizeRefundError(error.message) }, { status: 503 });
@@ -42,8 +44,10 @@ export async function GET(request: Request, context: RouteContext) {
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const admin = await requireSuperAdmin(request);
+  const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "refund_patch"));
+  if (!limit.allowed) return limit.response!;
   const { refundId } = await context.params;
   const supabase = admin.supabase;
 

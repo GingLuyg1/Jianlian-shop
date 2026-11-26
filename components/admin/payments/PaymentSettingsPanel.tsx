@@ -64,9 +64,9 @@ function providerLabel(provider: PaymentProviderCode) {
   return {
     liuhaoyi: "六号易",
     snpay: "德云付",
-    generic_api: "Generic API",
-    binance: "Binance",
-    crypto_address: "Crypto Address",
+    generic_api: "通用接口",
+    binance: "币安接口",
+    crypto_address: "链上收款地址",
   }[provider];
 }
 
@@ -478,8 +478,8 @@ export default function PaymentSettingsPanel() {
                     <span className="text-base font-semibold text-slate-950">
                       {channel.display_name || channel.channel}
                     </span>
-                    <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-[11px] font-medium text-slate-600">
-                      {channel.code}
+                    <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600" title={channel.code}>
+                      {channel.currency === "USDT" ? (channel.code.includes("trc20") ? "TRC20 网络" : "BEP20 网络") : "人民币通道"}
                     </span>
                     <span
                       className={

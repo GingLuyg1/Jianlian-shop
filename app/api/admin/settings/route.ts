@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerAdminContext, getServerSuperAdminContext } from "@/lib/auth/require-admin";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import {
   readAdminSettings,
   saveAdminSettings,
@@ -22,7 +23,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: Request) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) {
     await writeAdminAuditLog({
       request,
@@ -34,6 +35,9 @@ export async function PATCH(request: Request) {
     });
     return NextResponse.json({ error: admin.message }, { status: admin.status });
   }
+
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "site_settings_patch"));
+  if (!limit.allowed) return limit.response!;
 
   const body = (await request.json().catch(() => null)) as
     | { settings?: Partial<AdminSiteSettings> }

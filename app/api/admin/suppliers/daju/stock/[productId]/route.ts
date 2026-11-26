@@ -2,8 +2,9 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { syncDajuProductStock } from "@/lib/providers/daju/stock-sync";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -11,8 +12,10 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request, props: { params: Promise<{ productId: string }> }) {
   const params = await props.params;
   const requestId = randomUUID();
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return NextResponse.json({ error: admin.message, requestId }, { status: admin.status });
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "daju_stock_sync"));
+  if (!limit.allowed) return limit.response!;
   const service = getSupabaseServiceRoleClient();
   if (!service) return NextResponse.json({ error: "服务端库存同步权限不可用", requestId }, { status: 503 });
   const result = await syncDajuProductStock({ service, productId: params.productId });

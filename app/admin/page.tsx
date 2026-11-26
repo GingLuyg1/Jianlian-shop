@@ -891,6 +891,7 @@ type DashboardFastSummary = {
     reconciliationFailed: number;
     pendingRecharges: number;
     lowStockProducts: number;
+    activeProducts?: number;
     pendingTickets: number;
     resolvedTickets: number;
   };
@@ -1856,7 +1857,7 @@ export default function AdminDashboardPage() {
                     {
                       label: "在售正常商品",
                       desc: "前台可正常浏览并下单",
-                      value: (data?.rawSeries.products ?? []).filter((p) => p.status === "active").length,
+                      value: fastSummary?.todos.activeProducts ?? (data?.rawSeries.products ?? []).filter((p) => p.status === "active").length,
                       href: "/admin/products?status=active",
                       tone: "slate" as const,
                       actionText: undefined,
@@ -2569,7 +2570,7 @@ function RecentRechargesCard({ rows, loading }: { rows: DashboardRecharge[]; loa
         row.recharge_no,
         row.user_email ?? "—",
         formatMoney(row.amount),
-        row.channel_name ?? row.channel_code ?? "—",
+        row.channel_name ?? (row.channel_code ? statusLabel(row.channel_code) : "—"),
         statusLabel(row.status),
       ])}
       href="/admin/recharges"

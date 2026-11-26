@@ -382,6 +382,7 @@ export default function AdminTicketsPage() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="工单处理中心"
       description="统一处理前台用户提交的订单售后、充值异常、账号咨询与接口对接工单，12 小时内快速答复并闭环解决。"
     >
@@ -687,11 +688,11 @@ export default function AdminTicketsPage() {
                   </div>
 
                   {/* 消息对话与用户原始诉求 */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">
+                  <div className="flex-1 overflow-x-hidden overflow-y-auto p-4 space-y-3.5 text-xs">
                     {/* 问题摘要卡片 */}
-                    <div className="rounded-xl border border-orange-100 bg-orange-50/40 p-3.5">
-                      <div className="font-bold text-slate-900 mb-1 text-sm">{currentTicket.title}</div>
-                      <p className="whitespace-pre-wrap text-slate-700 leading-relaxed text-xs">
+                    <div className="min-w-0 rounded-xl border border-orange-100 bg-orange-50/40 p-3.5">
+                      <div className="font-bold text-slate-900 mb-1 text-sm break-words">{currentTicket.title}</div>
+                      <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-slate-700 leading-relaxed text-xs">
                         {currentTicket.description}
                       </p>
 
@@ -729,13 +730,13 @@ export default function AdminTicketsPage() {
 
                             <div
                               className={cn(
-                                "max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed shadow-2xs",
+                                "min-w-0 max-w-[85%] overflow-hidden rounded-2xl p-3.5 text-xs leading-relaxed shadow-2xs",
                                 isSupport
                                   ? "bg-slate-900 text-white rounded-tr-xs"
                                   : "border border-slate-200 bg-slate-50/90 text-slate-800 rounded-tl-xs"
                               )}
                             >
-                              <p className="whitespace-pre-wrap">{msg.content}</p>
+                              <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{msg.content}</p>
                               {msg.images && msg.images.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-2">
                                   {msg.images.map((img, i) => (

@@ -11,18 +11,20 @@ function json(data: unknown, init?: ResponseInit) {
   return NextResponse.json(data, init);
 }
 
-async function requireSuperAdmin(request: Request) {
+async function requireSuperAdmin(isWrite: boolean) {
   const admin = await getServerSuperAdminContext();
   if (!admin.ok) return { ok: false as const, response: json({ error: admin.message }, { status: admin.status }) };
-  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "email_templates"));
-  if (!limit.allowed) return { ok: false as const, response: limit.response! };
+  if (isWrite) {
+    const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "email_templates"));
+    if (!limit.allowed) return { ok: false as const, response: limit.response! };
+  }
   const service = getSupabaseServiceRoleClient();
   if (!service) return { ok: false as const, response: json({ error: "后台服务未配置：缺少 SUPABASE_SERVICE_ROLE_KEY。" }, { status: 503 }) };
   return { ok: true as const, admin, service };
 }
 
 export async function GET(request: NextRequest) {
-  const ctx = await requireSuperAdmin(request);
+  const ctx = await requireSuperAdmin(false);
   if (!ctx.ok) return ctx.response;
 
   const url = new URL(request.url);
@@ -48,7 +50,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const ctx = await requireSuperAdmin(request);
+  const ctx = await requireSuperAdmin(true);
   if (!ctx.ok) return ctx.response;
 
   try {

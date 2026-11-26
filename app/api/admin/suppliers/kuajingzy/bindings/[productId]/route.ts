@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { syncProductDeliveryModeFromSkus } from "@/lib/products/sku-summary";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +24,10 @@ const SAFE_SKU_REGEX = /^[A-Za-z0-9_-]{1,80}$/;
 export async function POST(request: Request, context: Context) {
   const { productId } = await context.params;
   const requestId = randomUUID();
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return json({ error: admin.message, code: "KUAJINGZY_ADMIN_REQUIRED", requestId }, admin.status);
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "kuajingzy_binding_write"));
+  if (!limit.allowed) return limit.response!;
   const service = getSupabaseServiceRoleClient();
   if (!service) return json({ error: "服务端商品配置权限不可用", code: "SERVICE_ROLE_UNAVAILABLE", requestId }, 503);
 
@@ -164,8 +167,10 @@ export async function POST(request: Request, context: Context) {
 export async function DELETE(request: Request, context: Context) {
   const { productId } = await context.params;
   const requestId = randomUUID();
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return json({ error: admin.message, code: "KUAJINGZY_ADMIN_REQUIRED", requestId }, admin.status);
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "kuajingzy_binding_write"));
+  if (!limit.allowed) return limit.response!;
   const service = getSupabaseServiceRoleClient();
   if (!service) return json({ error: "服务端商品配置权限不可用", code: "SERVICE_ROLE_UNAVAILABLE", requestId }, 503);
 

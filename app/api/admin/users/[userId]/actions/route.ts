@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { getAuditErrorMessage, writeAdminAuditLog } from "@/lib/admin/audit-log-service";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ async function requireSuperAdmin() {
 export async function POST(request: Request, context: RouteContext) {
   const admin = await requireSuperAdmin();
   if (!admin.ok) return admin.response;
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "user_actions"));
+  if (!limit.allowed) return limit.response!;
   const body = (await request.json().catch(() => null)) as ActionBody | null;
   if (!body) return json({ error: "请求参数不正确。" }, { status: 400 });
 

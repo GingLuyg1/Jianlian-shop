@@ -78,6 +78,7 @@ export default function ProductionReadinessClient() {
 
   return (
     <AdminPageShell
+      variant="v2"
       title="生产看板"
       description="汇总应用、数据库、订单、支付、邮件和近期运营事件；所有指标均来自现有只读接口。"
       actions={<Button type="button" variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={cn("mr-2 h-4 w-4", loading && "animate-spin")} />{loading ? "刷新中..." : "刷新"}</Button>}

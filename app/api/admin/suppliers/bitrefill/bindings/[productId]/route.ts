@@ -4,6 +4,7 @@ import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getPersonalCatalogManager } from "@/lib/providers/bitrefill/catalog-server";
 import { saveBitrefillSkuBinding } from "@/lib/providers/core/admin-sku-binding.mjs";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 export const dynamic = "force-dynamic";
 async function readInput(request: Request) {
   const reader = request.body?.getReader(); if (!reader) throw Error("BINDING_INPUT_REQUIRED");
@@ -29,6 +30,8 @@ export async function POST(request: Request, props: { params: Promise<{ productI
   const admin = await getServerSuperAdminContext();
   const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
   if (!admin.ok) return NextResponse.json({ error: admin.message }, { status: admin.status, headers });
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "bitrefill_binding_write"));
+  if (!limit.allowed) return limit.response!;
   if (!sameOrigin(request)) return NextResponse.json({ error: "同源管理请求必需" }, { status: 403, headers });
   try {
     const input = await readInput(request);

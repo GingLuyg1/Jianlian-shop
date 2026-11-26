@@ -286,7 +286,7 @@ export default function AdminRiskPage() {
 
       <AdminListSurface>
         <AdminFilterBar
-          className="sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-[minmax(200px,1fr)_128px_138px_138px_168px_168px_180px_76px]"
+          className="sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-5"
           primary={
             <>
               <label className="relative sm:col-span-2 lg:col-span-2 2xl:col-span-1">
@@ -306,20 +306,28 @@ export default function AdminRiskPage() {
           advanced={
             <>
               <Select label="业务类型" value={businessType} onChange={setBusinessType} options={BUSINESS_TYPES} />
-              <input
-                aria-label="开始时间"
-                type="datetime-local"
-                value={startAt}
-                onChange={(event) => setStartAt(event.target.value)}
-                className={cn(adminListControlClass, "px-3 outline-none")}
-              />
-              <input
-                aria-label="结束时间"
-                type="datetime-local"
-                value={endAt}
-                onChange={(event) => setEndAt(event.target.value)}
-                className={cn(adminListControlClass, "px-3 outline-none")}
-              />
+              <label className="flex items-center gap-1.5 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white px-2.5 text-xs text-slate-500">
+                <span className="shrink-0">起</span>
+                <input
+                  aria-label="开始时间"
+                  title="开始时间"
+                  type="datetime-local"
+                  value={startAt}
+                  onChange={(event) => setStartAt(event.target.value)}
+                  className="h-10 min-w-0 flex-1 bg-transparent text-sm text-slate-800 focus:outline-none sm:h-8"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 rounded-[var(--admin-v2-control-radius)] border border-[var(--admin-v2-border)] bg-white px-2.5 text-xs text-slate-500">
+                <span className="shrink-0">止</span>
+                <input
+                  aria-label="结束时间"
+                  title="结束时间"
+                  type="datetime-local"
+                  value={endAt}
+                  onChange={(event) => setEndAt(event.target.value)}
+                  className="h-10 min-w-0 flex-1 bg-transparent text-sm text-slate-800 focus:outline-none sm:h-8"
+                />
+              </label>
               <Select label="排序" value={sort} onChange={setSort} options={SORTS} />
               <button
                 type="button"
@@ -343,32 +351,35 @@ export default function AdminRiskPage() {
               description={hasFilters ? "请调整筛选条件后再试。" : "真实风险事件产生后会显示在这里。"}
             />
           ) : (
-            <table className="w-full min-w-[1260px] table-fixed text-sm">
+            <table className="w-full min-w-[1000px] table-fixed text-sm">
               <colgroup>
-                <col className="w-[180px]" />
-                <col className="w-[190px]" />
-                <col className="w-[180px]" />
-                <col className="w-[110px]" />
-                <col className="w-[240px]" />
-                <col className="w-[96px]" />
                 <col className="w-[148px]" />
-                <col className="w-[80px]" />
+                <col className="w-[152px]" />
+                <col className="w-[152px]" />
+                <col className="w-[96px]" />
+                <col className="w-[196px]" />
+                <col className="w-[82px]" />
+                <col className="w-[132px]" />
+                <col className="w-[76px]" />
               </colgroup>
               <thead className={adminListTableHeadClass}>
                 <tr className="border-b">
-                  {["关联用户", "关联业务", "触发风控规则", "等级 / 分数", "触发原因与建议", "状态", "最后发现", "操作"].map(
+                  {["关联用户", "关联业务", "触发风控规则", "等级 / 分数", "触发原因与建议", "状态", "最后发现"].map(
                     (heading) => (
                       <th
                         scope="col"
                         key={heading}
-                        className={`h-10 whitespace-nowrap px-3 font-medium ${
-                          ["等级 / 分数", "状态", "最后发现", "操作"].includes(heading) ? "text-center" : "text-left"
+                        className={`h-10 whitespace-nowrap px-2.5 font-medium ${
+                          ["等级 / 分数", "状态", "最后发现"].includes(heading) ? "text-center" : "text-left"
                         }`}
                       >
                         {heading}
                       </th>
                     )
                   )}
+                  <th scope="col" className="sticky right-0 h-10 whitespace-nowrap bg-[var(--admin-v2-surface-muted)] px-2.5 text-center font-medium shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">
+                    操作
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -438,7 +449,7 @@ export default function AdminRiskPage() {
                     <td className="whitespace-nowrap px-3 py-2 text-center text-xs tabular-nums text-slate-500">
                       {formatDate(event.lastSeenAt)}
                     </td>
-                    <td className="whitespace-nowrap px-3 py-2 text-center">
+                    <td className="sticky right-0 whitespace-nowrap bg-white px-2.5 py-2 text-center shadow-[-6px_0_10px_-6px_rgba(0,0,0,0.08)]">
                       <Link
                         href={`/admin/risk/${event.id}`}
                         className="inline-flex min-h-11 items-center font-medium text-primary hover:underline sm:min-h-9"
@@ -523,5 +534,5 @@ function businessHref(event: RiskEvent) {
 function formatDate(value: string | null) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { hour12: false });
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("zh-CN", { timeZone: "Asia/Shanghai", hour12: false });
 }

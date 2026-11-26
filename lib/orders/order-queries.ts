@@ -395,8 +395,13 @@ export async function listAdminOrders(
   }
 
   const rawSearch = options.search?.trim() ?? "";
-  const search = rawSearch.slice(0, 120).replace(/[\\%_*(),]/g, " ").replace(/\s+/g, " ").trim();
-  if (search) query = query.or(`order_no.ilike.%${search}%,customer_email.ilike.%${search}%`);
+  const isUuidSearch = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawSearch);
+  if (isUuidSearch) {
+    query = query.or(`id.eq.${rawSearch},user_id.eq.${rawSearch},order_no.ilike.%${rawSearch}%`);
+  } else {
+    const search = rawSearch.slice(0, 120).replace(/[\\%*(),]/g, " ").replace(/\s+/g, " ").trim();
+    if (search) query = query.or(`order_no.ilike.%${search}%,customer_email.ilike.%${search}%`);
+  }
 
   const ALLOWED_SORT_COLUMNS = new Set(["created_at", "updated_at", "total_amount", "paid_at", "status"]);
   const sortBy = options.sortBy && ALLOWED_SORT_COLUMNS.has(options.sortBy) ? options.sortBy : "created_at";

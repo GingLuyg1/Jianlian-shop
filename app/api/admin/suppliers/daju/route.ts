@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { notifySupplierInsufficientBalance } from "@/lib/providers/core/supplier-balance-alert";
 import { createDajuClient } from "@/lib/providers/daju/client";
 import { getSafeDajuError } from "@/lib/providers/daju/errors";
@@ -20,7 +20,7 @@ function json(body: unknown, status = 200) {
 
 export async function GET(request: Request) {
   const requestId = randomUUID();
-  const admin = await getServerAdminContext();
+  const admin = await getServerSuperAdminContext();
   if (!admin.ok) return json({ error: admin.message, code: "DAJU_ADMIN_REQUIRED", requestId }, admin.status);
 
   const url = new URL(request.url);

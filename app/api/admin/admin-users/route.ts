@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 
 import { requireApiSuperAdmin } from "@/lib/admin/api-auth";
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
+import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,8 @@ export async function GET() {
 export async function POST(request: Request) {
   const admin = await requireApiSuperAdmin();
   if (!admin.ok) return admin.response;
+  const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "admin_users_write"));
+  if (!limit.allowed) return limit.response!;
   const body = (await request.json().catch(() => null)) as AdminUserBody | null;
   const userId = String(body?.userId ?? "").trim();
   const reason = String(body?.reason ?? "").trim();
