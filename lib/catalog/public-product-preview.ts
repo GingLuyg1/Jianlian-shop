@@ -1,9 +1,10 @@
 "use client";
 
 import type { PublicProductRow } from "@/lib/supabase/public-catalog";
+import type { Product } from "@/lib/types";
 
 // Public listing projection for a fast visual shell only. Never purchase authority.
-const TTL = 15_000;
+const TTL = 120_000;
 const entries = new Map<string, { product: PublicProductRow; savedAt: number }>();
 const STORAGE_PREFIX = "jianlian_product_preview_";
 
@@ -78,6 +79,38 @@ export function peekPublicProductPreviewFromStorage(id: string, now = Date.now()
     return stored.product;
   }
   return null;
+}
+
+export function rememberProductCardPreview(product: Product, now = Date.now()) {
+  const deliveryType =
+    product.productType === "physical"
+      ? "shipping"
+      : product.deliveryMethod === "hybrid"
+        ? "manual"
+        : "automatic";
+  rememberPublicProductPreview(
+    {
+      id: product.id,
+      slug: product.slug || product.id,
+      category_id: null,
+      name: product.name,
+      short_description: product.description || null,
+      description: product.detail || product.description || null,
+      image_url: product.imageUrl ?? null,
+      price: Number(product.price ?? 0),
+      original_price: product.originalPrice ?? null,
+      stock: Number(product.stock ?? 0),
+      has_skus: Boolean(product.metadata?.hasSkus),
+      delivery_type: deliveryType,
+      status: product.listingStatus === "active" ? "active" : "sold_out",
+      sort_order: Number(product.sortOrder ?? 0),
+      sales_count: Number(product.metadata?.salesCount ?? 0) || null,
+      metadata: (product.metadata as Record<string, unknown> | null) ?? null,
+      created_at: product.createdAt ?? null,
+      updated_at: product.updatedAt ?? null,
+    },
+    now
+  );
 }
 
 export function clearPublicProductPreviews() {

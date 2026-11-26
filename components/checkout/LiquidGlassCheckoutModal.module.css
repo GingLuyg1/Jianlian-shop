@@ -1,4 +1,7 @@
-/* Apple-inspired Liquid Glass Checkout Modal */
+/* Apple-inspired Liquid Glass Checkout Modal
+ * Outer shell opacity: 74% - 82% (+8% more transparent vs prior 82% - 90%)
+ * Purchase card opacity: 78% (+8% more transparent vs prior 86%)
+ */
 .backdrop {
   position: fixed;
   inset: 0;
@@ -6,35 +9,35 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 18px 20px;
   background: radial-gradient(
     120% 100% at 50% 0%,
-    rgba(255, 247, 237, 0.32) 0%,
-    rgba(15, 23, 42, 0.36) 100%
+    rgba(255, 247, 237, 0.24) 0%,
+    rgba(15, 23, 42, 0.30) 100%
   );
-  backdrop-filter: blur(16px) saturate(148%);
-  -webkit-backdrop-filter: blur(16px) saturate(148%);
-  animation: lgBackdropIn 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  backdrop-filter: blur(14px) saturate(145%);
+  -webkit-backdrop-filter: blur(14px) saturate(145%);
+  animation: lgBackdropIn 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .backdropClosing {
-  animation: lgBackdropOut 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: lgBackdropOut 160ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
 .shell {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(1240px, calc(100vw - 40px));
-  height: min(90dvh, 880px);
+  width: min(1540px, calc(100vw - 40px));
+  height: min(92dvh, 920px);
   max-height: calc(100dvh - 36px);
   border-radius: 30px;
   overflow: hidden;
   background: linear-gradient(
     152deg,
-    rgba(255, 255, 255, 0.88) 0%,
-    rgba(255, 250, 245, 0.82) 52%,
-    rgba(255, 255, 255, 0.9) 100%
+    rgba(255, 255, 255, 0.80) 0%,
+    rgba(255, 250, 245, 0.74) 52%,
+    rgba(255, 255, 255, 0.82) 100%
   );
   backdrop-filter: blur(28px) saturate(175%);
   -webkit-backdrop-filter: blur(28px) saturate(175%);
@@ -42,82 +45,102 @@
   box-shadow:
     inset 0 1.5px 0 rgba(255, 255, 255, 0.96),
     inset 0 -1px 0 rgba(251, 146, 60, 0.14),
-    0 34px 90px -22px rgba(15, 23, 42, 0.36),
-    0 12px 32px -12px rgba(154, 78, 22, 0.16);
-  animation: lgShellIn 280ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    0 34px 90px -22px rgba(15, 23, 42, 0.34),
+    0 12px 32px -12px rgba(154, 78, 22, 0.15);
+  animation: lgShellIn 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
   will-change: transform, opacity;
 }
 
 .shellClosing {
-  animation: lgShellOut 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+  animation: lgShellOut 160ms cubic-bezier(0.4, 0, 1, 1) forwards;
 }
 
-/* Specular top sheen for tactile liquid-glass feel */
-.specularBar {
+.body {
   position: relative;
-  z-index: 20;
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px 8px;
-  border-bottom: 1px solid rgba(251, 146, 60, 0.14);
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.78) 0%,
-    rgba(255, 250, 246, 0.45) 100%
-  );
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 16px;
 }
 
-.hintPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #6b5344;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(251, 146, 60, 0.18);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+/* Cancel outer Product Detail card box frame inside Liquid Glass modal so top & bottom edges match shell padding */
+.body :global([data-testid="checkout-product-detail"]) {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
-.hintDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #f97316, #fb923c);
-  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.14);
+/* Cancel redundant outer white wrapper <section> borders shown inside detail content (Image 3 red outlines) */
+.body :global([data-testid="checkout-product-detail-content"] section) {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 
-.glassActionBtn {
+/* Keep hero banner (section 1 child 1) & explicit warning callouts crisp */
+.body :global([data-testid="checkout-product-detail-content"] section:first-child > div:first-child) {
+  border-radius: 18px !important;
+  overflow: hidden !important;
+}
+
+.body :global([data-testid="checkout-product-detail-content"] section:first-child > div:nth-child(2)) {
+  background: transparent !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.body :global([data-testid="checkout-product-detail-content"] section[class*="bg-red-"]),
+.body :global([data-testid="checkout-product-detail-content"] section[class*="bg-rose-"]) {
+  border-color: rgba(254, 202, 202, 0.8) !important;
+  background: rgba(254, 242, 242, 0.72) !important;
+  padding-left: 20px !important;
+  padding-right: 20px !important;
+}
+
+/* Purchase panel keeps refined 78% glass surface aligned to top/right/bottom margins */
+.body :global([data-testid="checkout-purchase-panel"]) {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-color: rgba(255, 255, 255, 0.86) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 14px 36px -18px rgba(15, 23, 42, 0.16) !important;
+}
+
+.body :global([data-testid="checkout-purchase-panel"] > div) {
+  background: transparent !important;
+}
+
+.shareActionBtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   height: 32px;
-  padding: 0 12px;
+  padding: 0 13px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
   color: #334155;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(203, 213, 225, 0.75);
+  background: rgba(255, 255, 255, 0.80);
+  border: 1px solid rgba(255, 255, 255, 0.92);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 2px 8px -4px rgba(15, 23, 42, 0.16);
+    0 3px 10px -4px rgba(15, 23, 42, 0.16);
   transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
-.glassActionBtn:hover {
+.shareActionBtn:hover {
   background: rgba(255, 255, 255, 0.96);
   border-color: rgba(249, 115, 22, 0.42);
   color: #ea580c;
 }
 
-.glassActionBtn:active {
+.shareActionBtn:active {
   transform: scale(0.96);
 }
 
@@ -129,11 +152,11 @@
   height: 32px;
   border-radius: 999px;
   color: #475569;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(203, 213, 225, 0.8);
+  background: rgba(255, 255, 255, 0.80);
+  border: 1px solid rgba(255, 255, 255, 0.92);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 2px 8px -4px rgba(15, 23, 42, 0.18);
+    0 3px 10px -4px rgba(15, 23, 42, 0.16);
   transition: transform 140ms ease, background-color 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 
@@ -146,29 +169,6 @@
 
 .closeCircle:active {
   transform: scale(0.94);
-}
-
-.body {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 12px 14px 14px;
-}
-
-/* Soft translucent polish on inner checkout cards so liquid glass feels unified */
-.body :global([data-testid="checkout-product-detail"]),
-.body :global([data-testid="checkout-purchase-panel"]) {
-  background: rgba(255, 255, 255, 0.86) !important;
-  border-color: rgba(255, 255, 255, 0.88) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    0 12px 32px -18px rgba(15, 23, 42, 0.18) !important;
-}
-
-.body :global([data-testid="checkout-purchase-panel"] > div) {
-  background: transparent !important;
 }
 
 .dragHandle {
@@ -187,11 +187,11 @@
     max-height: 92dvh;
     border-radius: 26px 26px 0 0;
     border-bottom: none;
-    animation: lgSheetIn 280ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: lgSheetIn 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   .shellClosing {
-    animation: lgSheetOut 180ms cubic-bezier(0.4, 0, 1, 1) forwards;
+    animation: lgSheetOut 160ms cubic-bezier(0.4, 0, 1, 1) forwards;
   }
 
   .dragHandle {
@@ -204,12 +204,8 @@
     flex-shrink: 0;
   }
 
-  .specularBar {
-    padding: 8px 12px 8px;
-  }
-
   .body {
-    padding: 10px 10px 18px;
+    padding: 10px 12px 16px;
   }
 }
 
@@ -234,7 +230,7 @@
 @keyframes lgShellIn {
   from {
     opacity: 0;
-    transform: translate3d(0, 18px, 0) scale(0.965);
+    transform: translate3d(0, 16px, 0) scale(0.97);
   }
   to {
     opacity: 1;
@@ -249,7 +245,7 @@
   }
   to {
     opacity: 0;
-    transform: translate3d(0, 12px, 0) scale(0.975);
+    transform: translate3d(0, 10px, 0) scale(0.98);
   }
 }
 

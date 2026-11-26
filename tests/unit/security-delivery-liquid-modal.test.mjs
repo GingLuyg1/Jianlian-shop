@@ -79,17 +79,33 @@ test("Liquid Glass Checkout Modal integrates cleanly with checkout page and seco
   assert.match(modal, /CheckoutModalProvider/);
   assert.match(modal, /backdropLocked/);
   assert.match(modal, /Escape/);
+  assert.match(modal, /copyShareText/);
+  assert.doesNotMatch(modal, /独立页面/);
+  assert.doesNotMatch(modal, /点击空白处或按 ESC/);
 
   const css = read("components/checkout/LiquidGlassCheckoutModal.module.css");
   assert.match(css, /backdrop-filter:\s*blur\(/);
+  assert.match(css, /width:\s*min\(1540px/);
+  assert.match(css, /rgba\(255,\s*250,\s*245,\s*0\.74\)/);
+  assert.match(css, /rgba\(255,\s*255,\s*255,\s*0\.78\)/);
 
   const checkout = read("app/checkout/page.tsx");
   assert.match(checkout, /useCheckoutModal/);
+  assert.match(checkout, /ModalAwareCheckoutLoadingShell/);
   assert.match(checkout, /onLockBackdropChange/);
+  assert.match(checkout, /分享商品/);
+  assert.doesNotMatch(checkout, /返回选品/);
 
   const mall = read("components/products/SupabaseMallContent.tsx");
   assert.match(mall, /LiquidGlassCheckoutModal/);
+  assert.match(mall, /rememberProductCardPreview/);
+  assert.match(mall, /searchParams\.get\("p"\)/);
 
   const allProducts = read("components/products/AllProductsContent.tsx");
   assert.match(allProducts, /LiquidGlassCheckoutModal/);
+  assert.match(allProducts, /rememberProductCardPreview/);
+
+  const detailApi = read("app/api/catalog/products/[identifier]/route.ts");
+  assert.match(detailApi, /SALES_COUNT_CACHE/);
+  assert.match(detailApi, /CATEGORY_VISIBILITY_TTL_MS/);
 });

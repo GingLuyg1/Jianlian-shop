@@ -23,6 +23,9 @@ import {
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import LiquidGlassCheckoutModal from "@/components/checkout/LiquidGlassCheckoutModal";
+import { rememberProductCardPreview } from "@/lib/catalog/public-product-preview";
+import { loadPublicRechargeChannels } from "@/lib/catalog/public-recharge-channels";
+import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Button } from "@/components/ui/button";
@@ -796,9 +799,55 @@ function SupabaseMallContentInner({
     });
   }, [resolvedCategory?.id, availableSubcategories]);
 
-  const [quickCheckoutProduct, setQuickCheckoutProduct] = useState<string | null>(null);
+  const [quickCheckoutProduct, setQuickCheckoutProduct] = useState<string | null>(() => {
+    const initial = searchParams.get("p") || searchParams.get("product") || "";
+    return initial.trim() || null;
+  });
+
+  // Prewarm checkout bundle, legal docs, and payment channels in the background so clicking any product opens instantly.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void import("@/app/checkout/page").catch(() => undefined);
+      void fetchCurrentLegalDocuments().catch(() => undefined);
+      void loadPublicRechargeChannels().catch(() => undefined);
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const handleOpenQuickCheckout = useCallback((slugOrId: string, product?: Product) => {
+    if (product) rememberProductCardPreview(product);
+    setQuickCheckoutProduct(slugOrId);
+    if (typeof window !== "undefined") {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("p", slugOrId);
+        url.searchParams.delete("product");
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+      } catch {
+        // Ignore URL sync failures
+      }
+    }
+  }, []);
+
   const handleCloseQuickCheckout = useCallback(() => {
     setQuickCheckoutProduct(null);
+    if (typeof window !== "undefined") {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("p") || url.searchParams.has("product")) {
+          url.searchParams.delete("p");
+          url.searchParams.delete("product");
+          const nextSearch = url.searchParams.toString();
+          window.history.replaceState(
+            window.history.state,
+            "",
+            `${url.pathname}${nextSearch ? `?${nextSearch}` : ""}${url.hash}`
+          );
+        }
+      } catch {
+        // Ignore URL sync failures
+      }
+    }
   }, []);
 
   const handleSubcategoryToggle = useCallback(
@@ -881,12 +930,23 @@ function SupabaseMallContentInner({
           onResetFilters={resetFilters}
           onSearchSubmit={submitSearch}
           onRetry={retryLoad}
-          onOpenProduct={(slugOrId) => setQuickCheckoutProduct(slugOrId)}
+          onOpenProduct={handleOpenQuickCheckout}
         />
       </CategoryContentBoundary>
       <LiquidGlassCheckoutModal
         productId={quickCheckoutProduct}
-        returnTo={typeof window !== "undefined" ? window.location.pathname + window.location.search : `/products/${productCategory}`}
+        returnTo={(() => {
+          if (typeof window === "undefined") return `/products/${productCategory}`;
+          try {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("p");
+            url.searchParams.delete("product");
+            const qs = url.searchParams.toString();
+            return `${url.pathname}${qs ? `?${qs}` : ""}`;
+          } catch {
+            return `/products/${productCategory}`;
+          }
+        })()}
         onClose={handleCloseQuickCheckout}
       />
     </PublicLayout>
@@ -1431,7 +1491,7 @@ function ProductPanel({
   onResetFilters: () => void;
   onSearchSubmit: () => void;
   onRetry: () => void;
-  onOpenProduct?: (slugOrId: string) => void;
+  onOpenProduct?: (slugOrId: string, product?: Product) => void;
 }) {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [routeStalled, setRouteStalled] = useState(false);
@@ -1683,7 +1743,7 @@ function CatalogProductIcon({ product, category, isMobile, priority = false }: {
     : <span data-selection-icon className={cn("flex items-center justify-center bg-primary/10", sizeClass)}><Icon className={iconSizeClass} aria-label={category?.name || "商品"} /></span>;
 }
 
-function ProductRowCompact({ currencySymbol, product, category, showStock, hideSales = false, disabled, selected, isMobile = false, priority = false, onSelect, onOpenProduct }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; hideSales?: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; priority?: boolean; onSelect: () => void; onOpenProduct?: (slugOrId: string) => void }) {
+function ProductRowCompact({ currencySymbol, product, category, showStock, hideSales = false, disabled, selected, isMobile = false, priority = false, onSelect, onOpenProduct }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; hideSales?: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; priority?: boolean; onSelect: () => void; onOpenProduct?: (slugOrId: string, product?: Product) => void }) {
   const router = useRouter();
   const stock = Number(product.stock ?? 0);
   const rawSales = Number(product.metadata?.salesCount ?? 0);
@@ -1706,8 +1766,13 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, hideS
     ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
+  const handleCardHover = () => {
+    rememberProductCardPreview(product);
+  };
+
   const handleCardClick = (event?: React.MouseEvent) => {
     onSelect();
+    rememberProductCardPreview(product);
     const targetSlugOrId = product.slug || product.id;
     const href = checkoutHref(
       targetSlugOrId,
@@ -1718,7 +1783,7 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, hideS
       return;
     }
     if (onOpenProduct) {
-      onOpenProduct(targetSlugOrId);
+      onOpenProduct(targetSlugOrId, product);
       return;
     }
     safeNavigate(router, href, category?.id);
@@ -1789,6 +1854,8 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, hideS
       disabled={disabled}
       data-catalog-card
       data-selected={selected ? "true" : undefined}
+      onMouseEnter={handleCardHover}
+      onFocus={handleCardHover}
       onClick={handleCardClick}
       className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}
     >

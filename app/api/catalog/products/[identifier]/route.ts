@@ -20,6 +20,31 @@ const PRODUCT_LOOKUP_SELECT = "id,slug,status";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const VISIBLE_PRODUCT_STATUSES = ["active", "sold_out"];
 
+// Short-TTL in-memory caches ONLY for non-transactional display metadata (sales count & category visibility).
+// Product price, stock, status, and SKUs are ALWAYS read fresh from Postgres.
+const SALES_COUNT_TTL_MS = 60_000;
+const SALES_COUNT_CACHE = new Map<string, { paidQty: number; savedAt: number }>();
+const CATEGORY_VISIBILITY_TTL_MS = 30_000;
+let cachedCategoryVisibility: { map: Map<string, boolean>; savedAt: number } | null = null;
+
+function getCachedPaidQty(productId: string, now = Date.now()): number | null {
+  const hit = SALES_COUNT_CACHE.get(productId);
+  if (!hit) return null;
+  if (now - hit.savedAt > SALES_COUNT_TTL_MS) {
+    SALES_COUNT_CACHE.delete(productId);
+    return null;
+  }
+  return hit.paidQty;
+}
+
+function setCachedPaidQty(productId: string, paidQty: number, now = Date.now()) {
+  if (SALES_COUNT_CACHE.size >= 500) {
+    const oldest = SALES_COUNT_CACHE.keys().next().value;
+    if (oldest) SALES_COUNT_CACHE.delete(oldest);
+  }
+  SALES_COUNT_CACHE.set(productId, { paidQty, savedAt: now });
+}
+
 type ProductDetailRow = Record<string, unknown>;
 
 function jsonError(status: number, code: string, message: string, requestId: string) {
@@ -53,9 +78,15 @@ export async function GET(
     // This read is independent of UUID/slug resolution. Keep its error local
     // until a product exists, preserving 404/fallback behavior and never
     // reading SKUs or publishing a product before visibility is verified.
-    const categoryRead = Promise.resolve().then(() => supabase
-      .from("categories").select("id,parent_id,level,is_active"))
-      .catch((error: unknown) => ({ data: null, error }));
+    const nowMs = Date.now();
+    const hasFreshCategoryVisibility =
+      cachedCategoryVisibility && nowMs - cachedCategoryVisibility.savedAt <= CATEGORY_VISIBILITY_TTL_MS;
+    const categoryRead = hasFreshCategoryVisibility
+      ? Promise.resolve({ data: null, error: null, cachedMap: cachedCategoryVisibility!.map })
+      : Promise.resolve()
+          .then(() => supabase.from("categories").select("id,parent_id,level,is_active"))
+          .then((res) => ({ ...res, cachedMap: null as Map<string, boolean> | null }))
+          .catch((error: unknown) => ({ data: null, error, cachedMap: null as Map<string, boolean> | null }));
     const SLUG_ALIASES: Record<string, string> = {
       "sim-001": "giffgaff-sim-blank",
       "sim-002": "giffgaff-sim-5gbp",
@@ -116,18 +147,24 @@ export async function GET(
       return jsonError(404, "PRODUCT_NOT_FOUND", "商品不存在", requestId);
     }
 
-    const { data: categoryRows, error: categoryError } = await categoryRead;
-    if (categoryError) {
+    const { data: categoryRows, error: categoryError, cachedMap } = await categoryRead;
+    if (!cachedMap && categoryError) {
       return jsonError(500, "PRODUCT_CATEGORY_QUERY_FAILED", "Product detail query failed", requestId);
     }
-    const categoryVisibility = buildEffectiveCategoryVisibility(
-      ((categoryRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
-        id: String(row.id),
-        parent_id: row.parent_id ? String(row.parent_id) : null,
-        level: Number(row.level ?? 1),
-        is_active: typeof row.is_active === "boolean" ? row.is_active : null,
-      }))
-    );
+    const categoryVisibility =
+      cachedMap ??
+      (() => {
+        const built = buildEffectiveCategoryVisibility(
+          ((categoryRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
+            id: String(row.id),
+            parent_id: row.parent_id ? String(row.parent_id) : null,
+            level: Number(row.level ?? 1),
+            is_active: typeof row.is_active === "boolean" ? row.is_active : null,
+          }))
+        );
+        cachedCategoryVisibility = { map: built, savedAt: Date.now() };
+        return built;
+      })();
     if (!isProductEffectivelyVisible(productData as Record<string, unknown>, categoryVisibility)) {
       return jsonError(404, "PRODUCT_NOT_FOUND", "商品不存在", requestId);
     }
@@ -142,15 +179,19 @@ export async function GET(
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
 
+    const cachedPaidQty = getCachedPaidQty(product.id);
     const enrichmentPromise = service
       ? Promise.all([
-          service
-            .from("order_items")
-            .select("quantity,orders!inner(payment_status,refund_status)")
-            .eq("product_id", product.id)
-            .eq("orders.payment_status", "paid")
-            .eq("orders.refund_status", "none")
-            .limit(5000),
+          cachedPaidQty !== null
+            ? Promise.resolve({ data: null, cachedPaidQty })
+            : service
+                .from("order_items")
+                .select("quantity,orders!inner(payment_status,refund_status)")
+                .eq("product_id", product.id)
+                .eq("orders.payment_status", "paid")
+                .eq("orders.refund_status", "none")
+                .limit(5000)
+                .then((res) => ({ data: res.data, cachedPaidQty: null as number | null })),
           service
             .from("products")
             .select("metadata")
@@ -163,16 +204,23 @@ export async function GET(
 
     if (enrichment) {
       try {
-        const [{ data: orderRows }, { data: metaRow }] = enrichment;
+        const [salesRes, { data: metaRow }] = enrichment;
         const meta = metaRow?.metadata && typeof metaRow.metadata === "object" && !Array.isArray(metaRow.metadata)
           ? (metaRow.metadata as Record<string, unknown>)
           : null;
         const boost = Math.max(0, Math.trunc(Number(meta?.sales_boost ?? meta?.salesCount ?? 0) || 0));
         const deliveryMode = typeof meta?.delivery_mode === "string" ? meta.delivery_mode : null;
-        const paidQty = (orderRows ?? []).reduce((sum, r) => {
-          const q = Number((r as { quantity?: unknown }).quantity ?? 0);
-          return Number.isSafeInteger(q) && q > 0 ? sum + q : sum;
-        }, 0);
+        const paidQty =
+          salesRes.cachedPaidQty !== null
+            ? salesRes.cachedPaidQty
+            : (() => {
+                const computed = (salesRes.data ?? []).reduce((sum, r) => {
+                  const q = Number((r as { quantity?: unknown }).quantity ?? 0);
+                  return Number.isSafeInteger(q) && q > 0 ? sum + q : sum;
+                }, 0);
+                setCachedPaidQty(product.id, computed);
+                return computed;
+              })();
         product.sales_count = boost + paidQty;
         if (deliveryMode) {
           product.metadata = {

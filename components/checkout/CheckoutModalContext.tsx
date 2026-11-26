@@ -6,6 +6,9 @@ export type CheckoutModalContextValue = {
   isModal: boolean;
   productId: string;
   returnTo?: string;
+  backdropLocked?: boolean;
+  shareCopied?: boolean;
+  onShare?: () => void;
   onClose: () => void;
   onLockBackdropChange?: (locked: boolean) => void;
 };

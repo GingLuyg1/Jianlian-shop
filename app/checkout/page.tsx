@@ -45,6 +45,7 @@ import {
   HelpCircle,
   ArrowRight,
   BookOpen,
+  Check,
   CheckCircle2,
   Clock3,
   Download,
@@ -57,6 +58,7 @@ import {
   ChevronDown,
   Plus,
   RefreshCcw,
+  Share2,
   ShieldAlert,
   Truck,
   ShieldCheck,
@@ -97,10 +99,11 @@ import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import ExternalCashierFeeSummary from "@/components/payments/ExternalCashierFeeSummary";
 import { useCheckoutModal } from "@/components/checkout/CheckoutModalContext";
+import modalStyles from "@/components/checkout/LiquidGlassCheckoutModal.module.css";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
-import { peekPublicProductPreview } from "@/lib/catalog/public-product-preview";
+import { peekPublicProductPreview, peekPublicProductPreviewFromStorage } from "@/lib/catalog/public-product-preview";
 import { loadPublicRechargeChannels, peekPublicRechargeChannels } from "@/lib/catalog/public-recharge-channels";
 import { refreshPublicCategories } from "@/lib/catalog/public-category-snapshot";
 import {
@@ -351,9 +354,14 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
   };
 }
 
+function ModalAwareCheckoutLoadingShell() {
+  const modalCtx = useCheckoutModal();
+  return <CheckoutLoadingShell isModal={Boolean(modalCtx?.isModal)} />;
+}
+
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<CheckoutLoadingShell />}>
+    <Suspense fallback={<ModalAwareCheckoutLoadingShell />}>
       <CheckoutPageContent />
     </Suspense>
   );
@@ -616,7 +624,7 @@ function CheckoutPageContent() {
     let active = true;
 
     async function loadProduct() {
-      const cachedPreview = peekPublicProductPreview(productId);
+      const cachedPreview = peekPublicProductPreview(productId) || peekPublicProductPreviewFromStorage(productId);
       if (!cachedPreview) {
         setProductLoading(true);
       }
@@ -1232,13 +1240,50 @@ function CheckoutPageContent() {
     }
   };
 
+  const modalActionRow = isModal ? (
+    <div data-testid="checkout-modal-right-actions" className="flex shrink-0 items-center justify-end gap-2">
+      {modalCtx?.onShare ? (
+        <button
+          type="button"
+          onClick={modalCtx.onShare}
+          className={modalStyles.shareActionBtn}
+          aria-label="分享商品链接"
+        >
+          {modalCtx.shareCopied ? (
+            <>
+              <Check className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="text-emerald-700">已复制链接</span>
+            </>
+          ) : (
+            <>
+              <Share2 className="h-3.5 w-3.5" />
+              <span>分享商品</span>
+            </>
+          )}
+        </button>
+      ) : null}
+      {modalCtx?.onClose ? (
+        <button
+          type="button"
+          onClick={modalCtx.onClose}
+          className={modalStyles.closeCircle}
+          aria-label="关闭弹窗"
+          title="关闭并返回列表"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      ) : null}
+    </div>
+  ) : null;
+
   const checkoutBody = (
     <>
+      {isModal ? <div className="mb-2.5 flex justify-end lg:hidden">{modalActionRow}</div> : null}
       <div
         data-testid="checkout-layout"
         className={cn(
           "grid min-h-0 grid-cols-1 gap-3.5 lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]",
-          isModal ? "lg:h-full [--checkout-purchase-width:clamp(330px,31%,372px)]" : "lg:h-[calc(100dvh-84px)]",
+          isModal ? "lg:h-full [--checkout-purchase-width:clamp(340px,28%,392px)]" : "lg:h-[calc(100dvh-84px)]",
           isMobile && "!grid-cols-1 !h-auto"
         )}
       >
@@ -1246,7 +1291,7 @@ function CheckoutPageContent() {
           product={displayProduct ?? product}
           loading={productLoading}
           priceLabel={priceLabel}
-          onCloseModal={isModal ? modalCtx?.onClose : undefined}
+          isModal={isModal}
           closeHref={
             safeProductReturnTo(isModal ? modalCtx?.returnTo : searchParams.get("returnTo")) ??
             storedReturnTo ??
@@ -1254,7 +1299,9 @@ function CheckoutPageContent() {
           }
         />
 
-        <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className="scroll-mt-32 h-auto min-h-0 overflow-hidden !rounded-[26px] lg:h-full">
+        <div className={cn("flex min-h-0 flex-col", isModal ? "gap-2.5 lg:h-full" : "lg:h-full")}>
+          {isModal ? <div className="hidden lg:flex lg:justify-end">{modalActionRow}</div> : null}
+          <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className={cn("scroll-mt-32 h-auto min-h-0 overflow-hidden !rounded-[26px]", isModal ? "lg:flex-1" : "lg:h-full")}>
           <CardContent className="flex h-full min-h-0 flex-col bg-white p-4">
             <div className="flex min-h-0 flex-1 flex-col gap-3 lg:overflow-hidden">
               {hasSku && skuOptions.length > 1 ? (
@@ -1537,7 +1584,8 @@ function CheckoutPageContent() {
               </div>
             </div>
           </CardContent>
-        </Card>
+          </Card>
+        </div>
       </div>
 
       <TermsDialog open={termsOpen} onOpenChange={setTermsOpen} documents={legalDocuments} error={legalError} loading={legalLoading} />
@@ -1865,9 +1913,9 @@ function ProductDetailSkeleton() {
 
 function CheckoutLoadingShell({ isModal = false }: { isModal?: boolean } = {}) {
   const inner = (
-    <div data-testid="checkout-progressive-loading" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isModal ? "lg:h-full [--checkout-purchase-width:clamp(330px,31%,372px)]" : "lg:h-[calc(100dvh-84px)]")}>
-      <Card className="min-h-0 overflow-auto"><CardContent className="p-4 sm:p-6"><div className="h-7 w-40 animate-pulse rounded-lg bg-orange-100/60 motion-reduce:animate-none" /><ProductDetailSkeleton /></CardContent></Card>
-      <Card className="min-h-0 !rounded-[26px]"><CardContent className="space-y-5 p-4"><h2 className="text-base font-semibold">订单信息</h2>{["联系邮箱", "提交信息或备注", "支付方式"].map(label => <div key={label}><p className="mb-2 text-sm text-muted-foreground">{label}</p><div className="h-10 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none" /></div>)}<p className="text-xs text-muted-foreground">商品信息就绪后可继续填写。</p></CardContent></Card>
+    <div data-testid="checkout-progressive-loading" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isModal ? "lg:h-full [--checkout-purchase-width:clamp(340px,28%,392px)]" : "lg:h-[calc(100dvh-84px)]")}>
+      <Card className={cn("min-h-0 overflow-auto", isModal && "!border-0 !bg-transparent !shadow-none")}><CardContent className={cn("p-4 sm:p-6", isModal && "!p-1")}><div className="h-7 w-40 animate-pulse rounded-lg bg-orange-100/60 motion-reduce:animate-none" /><ProductDetailSkeleton /></CardContent></Card>
+      <Card className={cn("min-h-0 !rounded-[26px]", isModal && "!bg-white/75 !border-white/85")}><CardContent className="space-y-5 p-4"><h2 className="text-base font-semibold">订单信息</h2>{["联系邮箱", "提交信息或备注", "支付方式"].map(label => <div key={label}><p className="mb-2 text-sm text-muted-foreground">{label}</p><div className="h-10 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none" /></div>)}<p className="text-xs text-muted-foreground">商品信息就绪后可继续填写。</p></CardContent></Card>
     </div>
   );
   if (isModal) return inner;
@@ -1881,44 +1929,44 @@ function ProductDetailCard({
   loading = false,
   priceLabel,
   closeHref,
-  onCloseModal,
+  isModal = false,
 }: {
   product: Product;
   loading?: boolean;
   priceLabel: string;
   closeHref: string;
-  onCloseModal?: () => void;
+  isModal?: boolean;
 }) {
   const router = useRouter();
   const { isMobile } = useMobileStorefront();
   const family = resolveRechargeProductFamily(product);
   return (
-    <Card data-testid="checkout-product-detail" className="relative h-auto min-h-0 overflow-hidden lg:h-full">
-      <button
-        type="button"
-        data-route-loading={onCloseModal ? undefined : "true"}
-        className="absolute right-3 top-3 z-10 inline-flex h-8 items-center gap-1.5 rounded-full border border-orange-200/80 bg-white/95 px-3 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-primary/40 hover:bg-orange-50/80 hover:text-primary active:scale-95 sm:right-4 sm:top-4 sm:h-9 sm:px-3.5 sm:text-[13px]"
-        onClick={() => {
-          if (onCloseModal) {
-            onCloseModal();
-            return;
-          }
-          // 点击一次立即退出返回分类列表页面，触发顶部横条加载动画
-          if (typeof window !== "undefined") {
-            window.dispatchEvent(new CustomEvent("jianlian:start-top-loading"));
-          }
-          router.push(closeHref);
-        }}
-        aria-label={onCloseModal ? "关闭返回列表" : "返回列表"}
-      >
-        <ArrowLeft className="h-3.5 w-3.5" />
-        <span>{onCloseModal ? "返回选品" : "返回列表"}</span>
-      </button>
-      <CardContent className={cn("h-auto p-4 sm:p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges]", isMobile && "!h-auto !overflow-visible !p-3.5", loading && "flex flex-col")}>
+    <Card data-testid="checkout-product-detail" className={cn("relative h-auto min-h-0 overflow-hidden lg:h-full", isModal && "!border-0 !bg-transparent !shadow-none !rounded-none")}>
+      {!isModal ? (
+        <button
+          type="button"
+          data-route-loading="true"
+          className="absolute right-3 top-3 z-10 inline-flex h-8 items-center gap-1.5 rounded-full border border-orange-200/80 bg-white/95 px-3 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-primary/40 hover:bg-orange-50/80 hover:text-primary active:scale-95 sm:right-4 sm:top-4 sm:h-9 sm:px-3.5 sm:text-[13px]"
+          onClick={() => {
+            // 点击一次立即退出返回分类列表页面，触发顶部横条加载动画
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("jianlian:start-top-loading"));
+            }
+            router.push(closeHref);
+          }}
+          aria-label="返回列表"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          <span>返回列表</span>
+        </button>
+      ) : null}
+      <CardContent className={cn("h-auto p-4 sm:p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges]", isModal && "!p-1 sm:!p-1.5 lg:!py-0 lg:!pl-1 lg:!pr-2", isMobile && "!h-auto !overflow-visible !p-1", loading && "flex flex-col")}>
         <div data-testid="checkout-product-detail-content" className={cn("mx-auto w-full max-w-[1040px]", loading && "flex min-h-0 flex-1 flex-col")}>
-        <div className="mb-3 pr-24 shrink-0 text-xs font-medium text-muted-foreground sm:mb-5 sm:text-sm">
-          {product.categoryLabel}
-        </div>
+        {!isModal ? (
+          <div className="mb-3 pr-24 shrink-0 text-xs font-medium text-muted-foreground sm:mb-5 sm:text-sm">
+            {product.categoryLabel}
+          </div>
+        ) : null}
 
         <div className={cn("grid shrink-0 gap-4 sm:gap-6 lg:grid-cols-[220px_minmax(0,1fr)]", isMobile && "!grid-cols-1 !gap-3.5")}>
           <div className="relative aspect-square w-full max-w-[160px] mx-auto overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 shadow-sm sm:max-w-[220px]">

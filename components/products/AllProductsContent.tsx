@@ -6,6 +6,9 @@ import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Search } fr
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import LiquidGlassCheckoutModal from "@/components/checkout/LiquidGlassCheckoutModal";
+import { rememberProductCardPreview } from "@/lib/catalog/public-product-preview";
+import { loadPublicRechargeChannels } from "@/lib/catalog/public-recharge-channels";
+import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { usePublicCategorySnapshot } from "@/lib/catalog/public-category-snapshot";
@@ -246,13 +249,60 @@ export default function AllProductsContent() {
     };
   }, [primaryCategoryId, sortMode, inStockOnly, appliedSearch, page, retryNonce]);
 
-  const [quickCheckoutProduct, setQuickCheckoutProduct] = useState<string | null>(null);
+  const [quickCheckoutProduct, setQuickCheckoutProduct] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      return (sp.get("p") || sp.get("product") || "").trim() || null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void import("@/app/checkout/page").catch(() => undefined);
+      void fetchCurrentLegalDocuments().catch(() => undefined);
+      void loadPublicRechargeChannels().catch(() => undefined);
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const handleCloseQuickCheckout = useCallback(() => {
     setQuickCheckoutProduct(null);
+    if (typeof window !== "undefined") {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has("p") || url.searchParams.has("product")) {
+          url.searchParams.delete("p");
+          url.searchParams.delete("product");
+          const nextSearch = url.searchParams.toString();
+          window.history.replaceState(
+            window.history.state,
+            "",
+            `${url.pathname}${nextSearch ? `?${nextSearch}` : ""}${url.hash}`
+          );
+        }
+      } catch {
+        // Ignore URL sync failures
+      }
+    }
   }, []);
 
   const handleOpenProduct = (product: Product) => {
-    setQuickCheckoutProduct(product.slug || product.id);
+    rememberProductCardPreview(product);
+    const slugOrId = product.slug || product.id;
+    setQuickCheckoutProduct(slugOrId);
+    if (typeof window !== "undefined") {
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.set("p", slugOrId);
+        url.searchParams.delete("product");
+        window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+      } catch {
+        // Ignore URL sync failures
+      }
+    }
   };
 
   const handlePageChange = (nextPage: number) => {
@@ -571,6 +621,8 @@ export default function AllProductsContent() {
                   >
                     <button
                       type="button"
+                      onMouseEnter={() => rememberProductCardPreview(product)}
+                      onFocus={() => rememberProductCardPreview(product)}
                       onClick={() => handleOpenProduct(product)}
                       className="group flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3.5 py-3 text-left transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-[1px] hover:border-orange-300/80 hover:shadow-[0_10px_24px_-14px_rgba(169,103,52,0.28)]"
                     >
