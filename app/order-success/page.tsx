@@ -7,7 +7,6 @@ import { CheckCircle2, Clipboard, ClipboardList, Home, RefreshCw } from "lucide-
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
-import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -125,19 +124,9 @@ function OrderSuccessPageContent() {
               <CheckCircle2 className="h-8 w-8 text-green-600" />
             </div>
 
-            <h1 className="mb-3 text-xl font-bold text-foreground">
-              {paymentStatus === "paid"
-                ? orderStatus === "delivered"
-                  ? "支付成功，商品已发货"
-                  : "支付成功"
-                : "订单创建成功"}
-            </h1>
+            <h1 className="mb-3 text-xl font-bold text-foreground">订单创建成功</h1>
             <p className="mb-6 text-sm leading-6 text-muted-foreground">
-              {paymentStatus === "paid"
-                ? isShippingOrder
-                  ? "支付已确认，我们将尽快为您安排物流发货，您可在「我的订单」随时追踪进度。"
-                  : "支付已确认，卡密 / 账号内容将直接显示在下方并同步发送至您的接收邮箱，收到后请及时核验。"
-                : "订单已创建，请尽快完成支付；支付完成后系统将自动发货并展示交付内容。"}
+              订单已创建，请在「我的订单」中继续查看支付与发货进度。
             </p>
 
             {loading ? (
@@ -153,58 +142,41 @@ function OrderSuccessPageContent() {
                 </Button>
               </div>
             ) : order ? (
-              <>
-                {paymentStatus === "paid" && !isShippingOrder ? (
-                  <SecureOrderDelivery
-                    orderNo={order.order_no}
-                    paymentStatus={order.payment_status}
-                    orderStatus={order.status}
-                    fulfillmentStatus={order.fulfillment_status}
-                    deliveryStatus={order.order_deliveries?.[0]?.delivery_status}
-                    deliveryType={order.delivery_type ?? firstItem?.delivery_type}
-                    fallbackProductName={productName}
-                    pollUntilDelivered
-                    onDelivered={loadOrder}
-                    className="mb-6 text-left shadow-sm"
-                  />
-                ) : null}
-
-                <div className="mb-6 space-y-3 rounded-xl border border-slate-100 bg-slate-50/60 p-4 text-left">
-                  <div className="flex items-center justify-between gap-4 text-sm">
-                    <span className="text-muted-foreground">订单编号</span>
-                    <button
-                      type="button"
-                      onClick={copyOrderNo}
-                      className="inline-flex min-w-0 items-center gap-2 rounded-md px-2 py-1 font-mono font-medium text-foreground transition-colors hover:bg-muted"
-                    >
-                      <span className="truncate">{order.order_no}</span>
-                      <Clipboard className="h-3.5 w-3.5 shrink-0" />
-                    </button>
-                  </div>
-                  <InfoRow label="下单时间" value={formatDate(order.created_at)} />
-                  <InfoRow label="商品名称" value={productName} />
-                  <InfoRow label="购买数量" value={String(quantity)} />
-                  <InfoRow label="订单金额" value={formatMoney(order.total_amount)} primary />
-                  <div className="flex justify-between gap-4 text-sm">
-                    <span className="text-muted-foreground">订单状态</span>
-                    <Badge variant="outline" className={cn("text-xs", ORDER_STATUS_STYLES[orderStatus])}>
-                      {getOrderStatusLabel(order.status)}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between gap-4 text-sm">
-                    <span className="text-muted-foreground">支付状态</span>
-                    <Badge variant="outline" className={cn("text-xs", PAYMENT_STATUS_STYLES[paymentStatus])}>
-                      {getPaymentStatusLabel(order.payment_status)}
-                    </Badge>
-                  </div>
-                  <InfoRow
-                    label="交付方式"
-                    value={getDeliveryLabel(order.delivery_type ?? firstItem?.delivery_type)}
-                  />
-                  {isShippingOrder ? <InfoRow label="收货信息" value={formatShippingAddress(order)} /> : null}
-                  <InfoRow label="订单备注" value={order.customer_note || "无"} />
+              <div className="mb-6 space-y-3 text-left">
+                <div className="flex items-center justify-between gap-4 text-sm">
+                  <span className="text-muted-foreground">订单编号</span>
+                  <button
+                    type="button"
+                    onClick={copyOrderNo}
+                    className="inline-flex min-w-0 items-center gap-2 rounded-md px-2 py-1 font-mono font-medium text-foreground transition-colors hover:bg-muted"
+                  >
+                    <span className="truncate">{order.order_no}</span>
+                    <Clipboard className="h-3.5 w-3.5 shrink-0" />
+                  </button>
                 </div>
-              </>
+                <InfoRow label="下单时间" value={formatDate(order.created_at)} />
+                <InfoRow label="商品名称" value={productName} />
+                <InfoRow label="购买数量" value={String(quantity)} />
+                <InfoRow label="订单金额" value={formatMoney(order.total_amount)} primary />
+                <div className="flex justify-between gap-4 text-sm">
+                  <span className="text-muted-foreground">订单状态</span>
+                  <Badge variant="outline" className={cn("text-xs", ORDER_STATUS_STYLES[orderStatus])}>
+                    {getOrderStatusLabel(order.status)}
+                  </Badge>
+                </div>
+                <div className="flex justify-between gap-4 text-sm">
+                  <span className="text-muted-foreground">支付状态</span>
+                  <Badge variant="outline" className={cn("text-xs", PAYMENT_STATUS_STYLES[paymentStatus])}>
+                    {getPaymentStatusLabel(order.payment_status)}
+                  </Badge>
+                </div>
+                <InfoRow
+                  label="交付方式"
+                  value={getDeliveryLabel(order.delivery_type ?? firstItem?.delivery_type)}
+                />
+                {isShippingOrder ? <InfoRow label="收货信息" value={formatShippingAddress(order)} /> : null}
+                <InfoRow label="订单备注" value={order.customer_note || "无"} />
+              </div>
             ) : (
               <div className="rounded-xl border border-dashed p-6 text-sm text-muted-foreground">
                 订单不存在或无权限查看。
