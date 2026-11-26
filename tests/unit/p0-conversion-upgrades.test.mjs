@@ -18,11 +18,11 @@ test("P0-1: guest checkout session + CF email order lookup + signup redirectTo",
   assert.doesNotMatch(orderQueryService, /delivery_content/);
 
   const orderQueryRoute = read("app/api/order-query/route.ts");
-  assert.match(orderQueryRoute, /verifyTurnstileToken/);
+  assert.doesNotMatch(orderQueryRoute, /verifyTurnstileToken/);
   assert.match(orderQueryRoute, /lookupGuestOrdersByEmail/);
 
   const orderQueryPage = read("app/order-query/page.tsx");
-  assert.match(orderQueryPage, /TurnstileWidget/);
+  assert.doesNotMatch(orderQueryPage, /TurnstileWidget/);
   assert.match(orderQueryPage, /游客邮箱查单/);
   assert.match(orderQueryPage, /仅凭订单号无法查看订单/);
 

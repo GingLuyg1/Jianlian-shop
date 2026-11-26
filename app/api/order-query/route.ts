@@ -2,7 +2,6 @@
 
 import { lookupGuestOrder, lookupGuestOrdersByEmail } from "@/lib/orders/order-query-service";
 import { checkRateLimit, checkRequestSize, getBusinessRateLimitKey, getRequestSourceKey } from "@/lib/security/rate-limit";
-import { getTurnstileSiteKey, isTurnstileConfigured, verifyTurnstileToken } from "@/lib/security/turnstile";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +17,6 @@ function getErrorMessage(error: unknown, fallback = "订单查询失败，请稍
   return fallback;
 }
 
-export async function GET() {
-  return NextResponse.json({
-    turnstileEnabled: isTurnstileConfigured(),
-    turnstileSiteKey: getTurnstileSiteKey(),
-  });
-}
-
 export async function POST(request: Request) {
   const sizeError = checkRequestSize(request, 8 * 1024);
   if (sizeError) return sizeError;
@@ -37,7 +29,6 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as {
       mode?: string;
       email?: string;
-      turnstileToken?: string;
       orderNo?: string;
       queryToken?: string;
     } | null;
@@ -55,14 +46,6 @@ export async function POST(request: Request) {
       const emailLimit = checkRateLimit("order_lookup", getBusinessRateLimitKey("guest_email", email, "order_lookup"));
       if (!emailLimit.allowed) return emailLimit.response!;
 
-      const turnstileResult = await verifyTurnstileToken(body?.turnstileToken, sourceKey);
-      if (!turnstileResult.ok) {
-        return NextResponse.json(
-          { error: turnstileResult.message, code: turnstileResult.code },
-          { status: 400 }
-        );
-      }
-
       const result = await lookupGuestOrdersByEmail(email);
       if (!result.ok) {
         if (result.reason === "unavailable") {
@@ -73,7 +56,6 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         orders: result.orders,
-        turnstileRequired: isTurnstileConfigured(),
       });
     }
 
