@@ -96,6 +96,7 @@ import type { PaymentChannel, PaymentSubmitForm } from "@/lib/payments/channel-t
 import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import ExternalCashierFeeSummary from "@/components/payments/ExternalCashierFeeSummary";
+import { useCheckoutModal } from "@/components/checkout/CheckoutModalContext";
 import { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { ACCOUNT_BALANCE_UPDATED_EVENT } from "@/lib/account/balance-events";
@@ -359,12 +360,16 @@ export default function CheckoutPage() {
 }
 
 function CheckoutPageContent() {
+  const modalCtx = useCheckoutModal();
+  const isModal = Boolean(modalCtx?.isModal);
   const { isMobile } = useMobileStorefront();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { settings } = usePublicSettings();
-  const productId = searchParams.get("p") || searchParams.get("product") || "";
-  const requestedSkuId = searchParams.get("sku") ?? "";
+  const productId = isModal
+    ? (modalCtx?.productId ?? "")
+    : (searchParams.get("p") || searchParams.get("product") || "");
+  const requestedSkuId = isModal ? "" : (searchParams.get("sku") ?? "");
 
   const [email, setEmail] = useState("");
   const [customerName, setCustomerName] = useState("");
@@ -921,7 +926,7 @@ function CheckoutPageContent() {
   const currentCheckoutUrl = useMemo(() => {
     const params = new URLSearchParams();
     params.set("product", productId);
-    const originalReturnTo = searchParams.get("returnTo");
+    const originalReturnTo = isModal ? (modalCtx?.returnTo ?? null) : searchParams.get("returnTo");
     if (originalReturnTo) params.set("returnTo", originalReturnTo);
     if (selectedSku?.id) params.set("sku", selectedSku.id);
     if (quantity > 1) params.set("qty", String(quantity));
@@ -941,21 +946,31 @@ function CheckoutPageContent() {
     }`;
   }, [balanceSummary, currentCheckoutUrl, effectiveOrderAmount]);
 
+  const modalBackdropLocked = submitLoading || Boolean(pendingBalanceOrder);
+  useEffect(() => {
+    if (!isModal || !modalCtx?.onLockBackdropChange) return;
+    modalCtx.onLockBackdropChange(modalBackdropLocked);
+  }, [isModal, modalBackdropLocked, modalCtx]);
+
   if (productLoading && !product) {
-    return <CheckoutLoadingShell />;
+    return <CheckoutLoadingShell isModal={isModal} />;
   }
 
   if (!product || !productRow) {
+    const notFoundCard = (
+      <Card>
+        <CardContent className="py-20 text-center">
+          <h2 className="text-lg font-semibold">商品未找到</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {error || "请返回商品页重新选择。"}
+          </p>
+        </CardContent>
+      </Card>
+    );
+    if (isModal) return notFoundCard;
     return (
       <PublicLayout mobileNavigationUntilLg contentClassName="max-w-none px-4 py-5 sm:px-5 lg:mt-0 lg:px-6">
-        <Card>
-          <CardContent className="py-20 text-center">
-            <h2 className="text-lg font-semibold">商品未找到</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {error || "请返回商品页重新选择。"}
-            </p>
-          </CardContent>
-        </Card>
+        {notFoundCard}
       </PublicLayout>
     );
   }
@@ -1217,15 +1232,23 @@ function CheckoutPageContent() {
     }
   };
 
-  return (
-    <PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={cn("max-w-none py-3 lg:mt-0 lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
-      <div data-testid="checkout-layout" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:h-[calc(100dvh-84px)] lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isMobile && "!grid-cols-1 !h-auto")}>
+  const checkoutBody = (
+    <>
+      <div
+        data-testid="checkout-layout"
+        className={cn(
+          "grid min-h-0 grid-cols-1 gap-3.5 lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]",
+          isModal ? "lg:h-full [--checkout-purchase-width:clamp(330px,31%,372px)]" : "lg:h-[calc(100dvh-84px)]",
+          isMobile && "!grid-cols-1 !h-auto"
+        )}
+      >
         <ProductDetailCard
           product={displayProduct ?? product}
           loading={productLoading}
           priceLabel={priceLabel}
+          onCloseModal={isModal ? modalCtx?.onClose : undefined}
           closeHref={
-            safeProductReturnTo(searchParams.get("returnTo")) ??
+            safeProductReturnTo(isModal ? modalCtx?.returnTo : searchParams.get("returnTo")) ??
             storedReturnTo ??
             getProductListHref(product)
           }
@@ -1553,6 +1576,16 @@ function CheckoutPageContent() {
           </div>
         </DialogContent>
       </Dialog>
+    </>
+  );
+
+  if (isModal) {
+    return checkoutBody;
+  }
+
+  return (
+    <PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={cn("max-w-none py-3 lg:mt-0 lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
+      {checkoutBody}
     </PublicLayout>
   );
 }
@@ -1830,12 +1863,16 @@ function ProductDetailSkeleton() {
   </div>;
 }
 
-function CheckoutLoadingShell() {
-  return <PublicLayout mobileNavigationUntilLg viewportLocked contentClassName="max-w-none py-3 lg:mt-0 lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
-    <div data-testid="checkout-progressive-loading" className="grid min-h-0 grid-cols-1 gap-3.5 lg:h-[calc(100dvh-84px)] lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]">
+function CheckoutLoadingShell({ isModal = false }: { isModal?: boolean } = {}) {
+  const inner = (
+    <div data-testid="checkout-progressive-loading" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isModal ? "lg:h-full [--checkout-purchase-width:clamp(330px,31%,372px)]" : "lg:h-[calc(100dvh-84px)]")}>
       <Card className="min-h-0 overflow-auto"><CardContent className="p-4 sm:p-6"><div className="h-7 w-40 animate-pulse rounded-lg bg-orange-100/60 motion-reduce:animate-none" /><ProductDetailSkeleton /></CardContent></Card>
       <Card className="min-h-0 !rounded-[26px]"><CardContent className="space-y-5 p-4"><h2 className="text-base font-semibold">订单信息</h2>{["联系邮箱", "提交信息或备注", "支付方式"].map(label => <div key={label}><p className="mb-2 text-sm text-muted-foreground">{label}</p><div className="h-10 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none" /></div>)}<p className="text-xs text-muted-foreground">商品信息就绪后可继续填写。</p></CardContent></Card>
     </div>
+  );
+  if (isModal) return inner;
+  return <PublicLayout mobileNavigationUntilLg viewportLocked contentClassName="max-w-none py-3 lg:mt-0 lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
+    {inner}
   </PublicLayout>;
 }
 
@@ -1844,11 +1881,13 @@ function ProductDetailCard({
   loading = false,
   priceLabel,
   closeHref,
+  onCloseModal,
 }: {
   product: Product;
   loading?: boolean;
   priceLabel: string;
   closeHref: string;
+  onCloseModal?: () => void;
 }) {
   const router = useRouter();
   const { isMobile } = useMobileStorefront();
@@ -1857,19 +1896,23 @@ function ProductDetailCard({
     <Card data-testid="checkout-product-detail" className="relative h-auto min-h-0 overflow-hidden lg:h-full">
       <button
         type="button"
-        data-route-loading="true"
+        data-route-loading={onCloseModal ? undefined : "true"}
         className="absolute right-3 top-3 z-10 inline-flex h-8 items-center gap-1.5 rounded-full border border-orange-200/80 bg-white/95 px-3 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-primary/40 hover:bg-orange-50/80 hover:text-primary active:scale-95 sm:right-4 sm:top-4 sm:h-9 sm:px-3.5 sm:text-[13px]"
         onClick={() => {
+          if (onCloseModal) {
+            onCloseModal();
+            return;
+          }
           // 点击一次立即退出返回分类列表页面，触发顶部横条加载动画
           if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("jianlian:start-top-loading"));
           }
           router.push(closeHref);
         }}
-        aria-label="返回列表"
+        aria-label={onCloseModal ? "关闭返回列表" : "返回列表"}
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        <span>返回列表</span>
+        <span>{onCloseModal ? "返回选品" : "返回列表"}</span>
       </button>
       <CardContent className={cn("h-auto p-4 sm:p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges]", isMobile && "!h-auto !overflow-visible !p-3.5", loading && "flex flex-col")}>
         <div data-testid="checkout-product-detail-content" className={cn("mx-auto w-full max-w-[1040px]", loading && "flex min-h-0 flex-1 flex-col")}>

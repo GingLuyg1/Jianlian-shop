@@ -5,11 +5,11 @@ const contentSecurityPolicy = [
   "object-src 'none'",
   "frame-ancestors 'self'",
   "form-action 'self' https:",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com https://cdn.tailwindcss.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://cloudflareinsights.com https://api.qrserver.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://cloudflareinsights.com",
   "frame-src 'self' https://challenges.cloudflare.com",
 ].join("; ");
 

@@ -165,8 +165,15 @@ export async function POST() {
 }
 
 export async function PATCH(request: Request) {
+  const { checkRateLimit, checkRequestSize, getUserRateLimitKey } = await import("@/lib/security/rate-limit");
+  const sizeError = checkRequestSize(request, 16 * 1024);
+  if (sizeError) return sizeError;
+
   const context = await getCurrentUser();
   if (!context.ok) return context.response;
+
+  const rateLimit = checkRateLimit("ticket_write", getUserRateLimitKey(context.user.id, "profile_update"));
+  if (!rateLimit.allowed) return rateLimit.response!;
 
   try {
     await assertUserBusinessAllowed(context.supabase, context.user.id, "update_profile");
@@ -192,12 +199,27 @@ export async function PATCH(request: Request) {
     return json({ error: "Invalid phone format." }, { status: 400 });
   }
 
+  const rawAvatar = cleanText(safeBody.avatar_url, 1000);
+  let safeAvatarUrl: string | null = null;
+  if (rawAvatar) {
+    if (rawAvatar.startsWith("/") && !rawAvatar.startsWith("//")) {
+      safeAvatarUrl = rawAvatar;
+    } else {
+      try {
+        const parsed = new URL(rawAvatar);
+        if (parsed.protocol === "https:") safeAvatarUrl = rawAvatar;
+      } catch {
+        // Ignore invalid avatar URL
+      }
+    }
+  }
+
   const payload = {
     display_name: displayName,
     phone,
     recipient_name: cleanText(safeBody.recipient_name, 80),
     shipping_address: safeBody.shipping_address && typeof safeBody.shipping_address === "object" ? safeBody.shipping_address : {},
-    avatar_url: cleanText(safeBody.avatar_url, 1000),
+    avatar_url: safeAvatarUrl,
   };
 
   const { data, error } = await context.supabase

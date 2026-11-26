@@ -1,4 +1,5 @@
 ﻿import { NextResponse } from "next/server";
+import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
@@ -44,6 +45,15 @@ export async function GET(_request: Request, context: RouteContext) {
     const supabase = getSupabaseServerClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return json({ error: "请先登录" }, { status: 401 });
+
+    try {
+      await assertUserBusinessAllowed(supabase, user.id, "view_delivery");
+    } catch (guardError) {
+      if (isAccountRestrictionError(guardError)) {
+        return json({ error: guardError.message, code: guardError.code }, { status: guardError.status });
+      }
+      throw guardError;
+    }
 
     const { data, error } = await supabase.rpc("get_order_fulfillment_for_user", {
       p_order_no: (await context.params).orderNo,

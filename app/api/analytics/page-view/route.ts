@@ -93,6 +93,10 @@ function getClientIp(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const { checkRateLimit, getRequestSourceKey } = await import("@/lib/security/rate-limit");
+  const rateLimit = checkRateLimit("catalog_read", `pv:${getRequestSourceKey(request)}`);
+  if (!rateLimit.allowed) return json({ ok: true, skipped: true, reason: "rate_limited" });
+
   const contentLength = Number(request.headers.get("content-length") ?? 0);
   if (contentLength > MAX_BODY_BYTES) return json({ ok: false, error: "统计请求过大" }, 413);
 

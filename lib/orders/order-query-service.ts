@@ -4,6 +4,16 @@ import { createHash, randomBytes, timingSafeEqual } from "crypto";
 
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
+export type PublicOrderDeliveryItem = {
+  id: string;
+  orderItemId: string | null;
+  deliveryType: string | null;
+  deliveryStatus: string;
+  content: string | null;
+  deliveryNote: string | null;
+  deliveredAt: string | null;
+};
+
 export type PublicOrderLookupResult = {
   orderNo: string;
   status: string;
@@ -21,6 +31,7 @@ export type PublicOrderLookupResult = {
     unitPrice: number;
     lineTotal: number;
   }>;
+  deliveries?: PublicOrderDeliveryItem[];
 };
 
 const ORDER_LOOKUP_SELECT = `
@@ -126,11 +137,11 @@ export async function lookupGuestOrder(orderNo: string, token: string) {
   return { ok: true as const, order: normalizeOrder(row) };
 }
 
-const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const STRICT_EMAIL_REGEX = /^[^\s@%\\]+@[^\s@%\\]+\.[^\s@%\\]+$/;
 
 export async function lookupGuestOrdersByEmail(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
-  if (!normalizedEmail || normalizedEmail.length > 254 || !SIMPLE_EMAIL_REGEX.test(normalizedEmail)) {
+  if (!normalizedEmail || normalizedEmail.length > 254 || !STRICT_EMAIL_REGEX.test(normalizedEmail)) {
     return { ok: false as const, reason: "invalid" };
   }
 
@@ -142,7 +153,7 @@ export async function lookupGuestOrdersByEmail(email: string) {
   const { data, error } = await service
     .from("orders")
     .select(ORDER_EMAIL_LOOKUP_SELECT)
-    .ilike("customer_email", normalizedEmail)
+    .eq("customer_email", normalizedEmail)
     .order("created_at", { ascending: false })
     .limit(20);
 

@@ -1,4 +1,4 @@
-import { randomInt } from "crypto";
+import { randomInt, timingSafeEqual } from "crypto";
 import { sendEmail } from "@/lib/email/provider";
 
 export type VerificationPurpose = "current_email_verify" | "new_email_verify" | "password_reset";
@@ -10,8 +10,30 @@ interface CodeEntry {
   sentAt: number;
 }
 
-// In-memory verification code registry with TTL
+// In-memory verification code registry with bounded size and periodic TTL sweep
 const codeStore = new Map<string, CodeEntry>();
+const MAX_CODE_STORE_SIZE = 2000;
+let lastCodeSweepAt = 0;
+
+function sweepExpiredCodes(now: number) {
+  if (now - lastCodeSweepAt < 60_000 && codeStore.size < MAX_CODE_STORE_SIZE) return;
+  lastCodeSweepAt = now;
+  codeStore.forEach((entry, k) => {
+    if (now > entry.expiresAt) codeStore.delete(k);
+  });
+  while (codeStore.size >= MAX_CODE_STORE_SIZE) {
+    const oldestKey = codeStore.keys().next().value;
+    if (!oldestKey) break;
+    codeStore.delete(oldestKey);
+  }
+}
+
+function safeCodeEquals(expected: string, actual: string): boolean {
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(actual, "utf8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 function getStoreKey(email: string, purpose: VerificationPurpose): string {
   return `${purpose}:${email.trim().toLowerCase()}`;
@@ -39,6 +61,7 @@ export async function generateAndSendEmailCode(
   const normalizedEmail = email.trim().toLowerCase();
   const key = getStoreKey(normalizedEmail, purpose);
   const now = Date.now();
+  sweepExpiredCodes(now);
 
   const existing = codeStore.get(key);
   if (existing && now - existing.sentAt < 60_000) {
@@ -131,7 +154,7 @@ export async function generateAndSendEmailCode(
   }
 }
 
-export function verifyEmailCode(
+export function peekEmailCode(
   email: string,
   purpose: VerificationPurpose,
   code: string
@@ -154,12 +177,25 @@ export function verifyEmailCode(
     return { valid: false, message: "验证码错误次数过多，请重新获取" };
   }
 
-  if (entry.code !== code.trim()) {
+  if (!safeCodeEquals(entry.code, code.trim())) {
     entry.attempts += 1;
     return { valid: false, message: "验证码错误，请重新核对" };
   }
 
-  // Success, consume code
-  codeStore.delete(key);
+  return { valid: true };
+}
+
+export function consumeEmailCode(email: string, purpose: VerificationPurpose) {
+  codeStore.delete(getStoreKey(email.trim().toLowerCase(), purpose));
+}
+
+export function verifyEmailCode(
+  email: string,
+  purpose: VerificationPurpose,
+  code: string
+): { valid: boolean; message?: string } {
+  const result = peekEmailCode(email, purpose, code);
+  if (!result.valid) return result;
+  consumeEmailCode(email, purpose);
   return { valid: true };
 }

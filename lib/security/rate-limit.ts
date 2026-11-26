@@ -74,13 +74,16 @@ export function hashRateLimitValue(value: string) {
   return createHash("sha256").update(value).digest("hex").slice(0, 32);
 }
 
-export function getRequestSourceKey(request: Request) {
+export function getClientIp(request: Request): string {
   const cfIp = request.headers.get("cf-connecting-ip")?.trim();
   const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const realIp = request.headers.get("x-real-ip")?.trim();
-  const ip = cfIp || forwardedFor || realIp || "unknown";
-  const userAgent = request.headers.get("user-agent")?.slice(0, 120) || "unknown";
-  return `src:${hashRateLimitValue(`${ip}:${userAgent}`)}`;
+  return cfIp || forwardedFor || realIp || "unknown";
+}
+
+export function getRequestSourceKey(request: Request) {
+  const ip = getClientIp(request);
+  return `src:${hashRateLimitValue(ip)}`;
 }
 
 export function getUserRateLimitKey(userId: string, scope = "user") {

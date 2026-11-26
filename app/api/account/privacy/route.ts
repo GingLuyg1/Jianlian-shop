@@ -2,6 +2,7 @@
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { buildPersonalDataExport, createPrivacyRequest, getCurrentUserPrivacySummary, getDeletionBlockers, privacyInitError } from "@/lib/privacy/privacy-service";
+import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -41,8 +42,14 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const sizeError = checkRequestSize(request, 8 * 1024);
+  if (sizeError) return sizeError;
+
   const current = await requireUser();
   if (!current.ok) return current.response;
+
+  const rateLimit = checkRateLimit("auth_resend", getUserRateLimitKey(current.user.id, "privacy_action"));
+  if (!rateLimit.allowed) return rateLimit.response!;
 
   const body = (await request.json().catch(() => null)) as Body | null;
   const action = String(body?.action ?? "").trim();

@@ -456,12 +456,16 @@ export default function HomePage() {
   const [hotMinPrices, setHotMinPrices] = useState<Record<string, number>>({});
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/catalog/products?page=1&pageSize=200&sort=price_asc&inStockOnly=1")
+    fetch("/api/catalog/products?page=1&pageSize=200&inStockOnly=1")
       .then((res) => (res.ok ? res.json() : null))
-      .then((payload: { items?: Array<{ name?: string | null; min_price?: number | string | null; price?: number | string | null }> } | null) => {
-        if (cancelled || !payload?.items?.length) return;
+      .then((payload: {
+        data?: { products?: Array<{ name?: string | null; min_price?: number | string | null; price?: number | string | null }> };
+        items?: Array<{ name?: string | null; min_price?: number | string | null; price?: number | string | null }>;
+      } | null) => {
+        const list = payload?.data?.products ?? payload?.items ?? [];
+        if (cancelled || !list.length) return;
         const mins: Record<string, number> = {};
-        for (const p of payload.items) {
+        for (const p of list) {
           const name = String(p.name ?? "");
           const price = Number(p.min_price ?? p.price ?? 0);
           if (!Number.isFinite(price) || price <= 0) continue;

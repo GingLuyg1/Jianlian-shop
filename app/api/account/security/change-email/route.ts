@@ -1,12 +1,24 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
-import { verifyEmailCode } from "@/lib/security/email-code-service";
+import {
+  checkRateLimit,
+  checkRequestSize,
+  getRequestSourceKey,
+  getUserRateLimitKey,
+} from "@/lib/security/rate-limit";
+import { consumeEmailCode, peekEmailCode } from "@/lib/security/email-code-service";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
+    const sizeError = checkRequestSize(request, 8 * 1024);
+    if (sizeError) return sizeError;
+
+    const ipLimit = checkRateLimit("auth_resend", `change_email:${getRequestSourceKey(request)}`);
+    if (!ipLimit.allowed) return ipLimit.response!;
+
     const supabase = await getSupabaseServerClient();
     const {
       data: { user },
@@ -17,6 +29,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "登录已失效，请重新登录" }, { status: 401 });
     }
 
+    if (user.user_metadata?.is_guest || user.email.toLowerCase().endsWith("@guest.jianlian.shop")) {
+      return NextResponse.json({ error: "游客账号不支持更换邮箱，请先注册正式账号" }, { status: 403 });
+    }
+
+    const userLimit = checkRateLimit("auth_resend", getUserRateLimitKey(user.id, "change_email"));
+    if (!userLimit.allowed) return userLimit.response!;
+
     const body = await request.json().catch(() => ({}));
     const currentCode = String(body.currentCode || "").trim();
     const newEmail = String(body.newEmail || "").trim().toLowerCase();
@@ -25,7 +44,7 @@ export async function POST(request: Request) {
     if (!currentCode) {
       return NextResponse.json({ error: "请输入当前邮箱收到的验证码" }, { status: 400 });
     }
-    if (!newEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+    if (!newEmail || newEmail.length > 254 || !/^[^\s@%\\]+@[^\s@%\\]+\.[^\s@%\\]+$/.test(newEmail)) {
       return NextResponse.json({ error: "请输入正确的新邮箱地址" }, { status: 400 });
     }
     if (newEmail === user.email.toLowerCase()) {
@@ -35,17 +54,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "请输入新邮箱收到的验证码" }, { status: 400 });
     }
 
-    // 1. Verify current email code
-    const currentVerify = verifyEmailCode(user.email, "current_email_verify", currentCode);
+    // Verify both codes before consuming either so a typo in newCode doesn't burn currentCode
+    const currentVerify = peekEmailCode(user.email, "current_email_verify", currentCode);
     if (!currentVerify.valid) {
       return NextResponse.json({ error: `当前邮箱${currentVerify.message}` }, { status: 400 });
     }
 
-    // 2. Verify new email code
-    const newVerify = verifyEmailCode(newEmail, "new_email_verify", newCode);
+    const newVerify = peekEmailCode(newEmail, "new_email_verify", newCode);
     if (!newVerify.valid) {
       return NextResponse.json({ error: `新邮箱${newVerify.message}` }, { status: 400 });
     }
+
+    consumeEmailCode(user.email, "current_email_verify");
+    consumeEmailCode(newEmail, "new_email_verify");
 
     // 3. Perform email update using service role
     const service = getSupabaseServiceRoleClient();
@@ -70,8 +91,8 @@ export async function POST(request: Request) {
     });
 
     if (updateAuthError) {
-      console.error("[AccountSecurityChangeEmail] auth update error:", updateAuthError);
-      return NextResponse.json({ error: `邮箱更新失败：${updateAuthError.message || "请稍后重试"}` }, { status: 400 });
+      console.error("[AccountSecurityChangeEmail] auth update error:", updateAuthError.message);
+      return NextResponse.json({ error: "邮箱更新失败，请确认新邮箱未被占用后重试" }, { status: 400 });
     }
 
     // Update profile record if exists

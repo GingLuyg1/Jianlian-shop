@@ -1,9 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { checkRateLimit, getRequestSourceKey } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const rateLimit = checkRateLimit("catalog_read", `v1_assets:${getRequestSourceKey(request)}`);
+  if (!rateLimit.allowed) return rateLimit.response!;
+
   try {
     const supabase = getSupabaseServerClient();
     const {
@@ -34,15 +38,15 @@ export async function GET(request: NextRequest) {
         balance: profile?.balance ?? 0,
         currency: "CNY",
         rateLimit: {
-          limitPerMinute: 60,
-          remaining: 59,
+          limitPerMinute: rateLimit.limit,
+          remaining: rateLimit.remaining,
         },
       },
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Internal server error";
+    console.error("[V1Assets] error", err instanceof Error ? err.message : String(err));
     return NextResponse.json(
-      { code: 500, message: "Internal server error", error: message },
+      { code: 500, message: "Internal server error" },
       { status: 500 }
     );
   }

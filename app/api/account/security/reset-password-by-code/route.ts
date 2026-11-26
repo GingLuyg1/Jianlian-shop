@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import {
+  checkRateLimit,
+  checkRequestSize,
+  getRequestSourceKey,
+  getUserRateLimitKey,
+} from "@/lib/security/rate-limit";
 import { verifyEmailCode } from "@/lib/security/email-code-service";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +18,12 @@ function validatePassword(value: string) {
 
 export async function POST(request: Request) {
   try {
+    const sizeError = checkRequestSize(request, 8 * 1024);
+    if (sizeError) return sizeError;
+
+    const ipLimit = checkRateLimit("auth_resend", `reset_pw:${getRequestSourceKey(request)}`);
+    if (!ipLimit.allowed) return ipLimit.response!;
+
     const supabase = await getSupabaseServerClient();
     const {
       data: { user },
@@ -21,6 +33,13 @@ export async function POST(request: Request) {
     if (authError || !user || !user.email) {
       return NextResponse.json({ error: "登录已失效，请重新登录" }, { status: 401 });
     }
+
+    if (user.user_metadata?.is_guest || user.email.toLowerCase().endsWith("@guest.jianlian.shop")) {
+      return NextResponse.json({ error: "游客账号不支持修改密码，请先注册正式账号" }, { status: 403 });
+    }
+
+    const userLimit = checkRateLimit("auth_resend", getUserRateLimitKey(user.id, "reset_pw"));
+    if (!userLimit.allowed) return userLimit.response!;
 
     const body = await request.json().catch(() => ({}));
     const code = String(body.code || "").trim();
@@ -57,8 +76,8 @@ export async function POST(request: Request) {
     });
 
     if (updateError) {
-      console.error("[AccountSecurityResetPassword] admin update password error:", updateError);
-      return NextResponse.json({ error: `密码修改失败：${updateError.message || "请稍后重试"}` }, { status: 400 });
+      console.error("[AccountSecurityResetPassword] admin update password error:", updateError.message);
+      return NextResponse.json({ error: "密码修改失败，请检查密码强度后重试" }, { status: 400 });
     }
 
     return NextResponse.json({

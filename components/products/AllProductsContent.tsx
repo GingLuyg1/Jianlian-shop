@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Search } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import LiquidGlassCheckoutModal from "@/components/checkout/LiquidGlassCheckoutModal";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { usePublicCategorySnapshot } from "@/lib/catalog/public-category-snapshot";
@@ -245,12 +246,13 @@ export default function AllProductsContent() {
     };
   }, [primaryCategoryId, sortMode, inStockOnly, appliedSearch, page, retryNonce]);
 
+  const [quickCheckoutProduct, setQuickCheckoutProduct] = useState<string | null>(null);
+  const handleCloseQuickCheckout = useCallback(() => {
+    setQuickCheckoutProduct(null);
+  }, []);
+
   const handleOpenProduct = (product: Product) => {
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("jianlian:start-top-loading"));
-    }
-    const href = checkoutHref(product.slug || product.id, "/products/all");
-    router.push(href);
+    setQuickCheckoutProduct(product.slug || product.id);
   };
 
   const handlePageChange = (nextPage: number) => {
@@ -662,6 +664,11 @@ export default function AllProductsContent() {
           ) : null}
         </CardContent>
       </Card>
+      <LiquidGlassCheckoutModal
+        productId={quickCheckoutProduct}
+        returnTo="/products/all"
+        onClose={handleCloseQuickCheckout}
+      />
     </PublicLayout>
   );
 }

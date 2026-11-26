@@ -2,14 +2,33 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import {
+  checkRateLimit,
+  checkRequestSize,
+  getRequestSourceKey,
+  getUserRateLimitKey,
+} from "@/lib/security/rate-limit";
+import {
   generateAndSendEmailCode,
   type VerificationPurpose,
 } from "@/lib/security/email-code-service";
 
 export const dynamic = "force-dynamic";
 
+function isGuestAccount(user: { email?: string | null; user_metadata?: Record<string, unknown> | null }) {
+  return Boolean(
+    user.user_metadata?.is_guest ||
+      user.email?.toLowerCase().endsWith("@guest.jianlian.shop")
+  );
+}
+
 export async function POST(request: Request) {
   try {
+    const sizeError = checkRequestSize(request, 8 * 1024);
+    if (sizeError) return sizeError;
+
+    const ipLimit = checkRateLimit("auth_resend", `acct_sec:${getRequestSourceKey(request)}`);
+    if (!ipLimit.allowed) return ipLimit.response!;
+
     const supabase = await getSupabaseServerClient();
     const {
       data: { user },
@@ -20,11 +39,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "登录已失效，请重新登录" }, { status: 401 });
     }
 
+    if (isGuestAccount(user)) {
+      return NextResponse.json({ error: "游客账号不支持安全验证操作，请先注册正式账号" }, { status: 403 });
+    }
+
+    const userLimit = checkRateLimit("auth_resend", getUserRateLimitKey(user.id, "acct_sec_send"));
+    if (!userLimit.allowed) return userLimit.response!;
+
     const body = await request.json().catch(() => ({}));
     const email = String(body.email || "").trim().toLowerCase();
     const purpose = body.purpose as VerificationPurpose;
 
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!email || email.length > 254 || !/^[^\s@%\\]+@[^\s@%\\]+\.[^\s@%\\]+$/.test(email)) {
       return NextResponse.json({ error: "请输入有效的邮箱地址" }, { status: 400 });
     }
 

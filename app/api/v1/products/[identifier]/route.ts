@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { checkRateLimit, getRequestSourceKey } from "@/lib/security/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type RouteContext = {
   params: Promise<{
@@ -13,15 +16,25 @@ export async function GET(
   request: NextRequest,
   context: RouteContext
 ) {
+  const rateLimit = checkRateLimit("catalog_read", `v1_product:${getRequestSourceKey(request)}`);
+  if (!rateLimit.allowed) return rateLimit.response!;
+
   try {
     const supabase = getSupabaseServerClient();
-    const { identifier } = await context.params;
+    const { identifier: rawIdentifier } = await context.params;
+    const identifier = String(rawIdentifier ?? "").trim();
+    if (!identifier || identifier.length > 160) {
+      return NextResponse.json({ code: 400, message: "Invalid product identifier" }, { status: 400 });
+    }
 
-    const { data: product, error } = await supabase
+    const baseQuery = supabase
       .from("products")
-      .select("id, name, slug, price, original_price, stock, status, delivery_type, image_url, description, details")
-      .or(`id.eq.${identifier},slug.eq.${identifier}`)
-      .maybeSingle();
+      .select("id, name, slug, price, original_price, stock, status, delivery_type, image_url, description")
+      .in("status", ["active", "sold_out"]);
+
+    const { data: product, error } = UUID_RE.test(identifier)
+      ? await baseQuery.eq("id", identifier).maybeSingle()
+      : await baseQuery.eq("slug", identifier).maybeSingle();
 
     if (error || !product) {
       return NextResponse.json(
@@ -34,6 +47,7 @@ export async function GET(
       .from("product_skus")
       .select("id, sku_code, sku_title, price, stock, status, sort_order")
       .eq("product_id", product.id)
+      .in("status", ["active", "sold_out"])
       .order("sort_order", { ascending: true });
 
     return NextResponse.json({
@@ -46,9 +60,9 @@ export async function GET(
       },
     });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Internal server error";
+    console.error("[V1Product] lookup error", err instanceof Error ? err.message : String(err));
     return NextResponse.json(
-      { code: 500, message: "Internal server error", error: message },
+      { code: 500, message: "Internal server error" },
       { status: 500 }
     );
   }

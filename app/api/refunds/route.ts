@@ -27,9 +27,10 @@ export async function GET(request: Request) {
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
+    const orderJoin = orderNo ? "orders!inner" : "orders";
     let query = supabase
       .from("refund_requests")
-      .select("*,orders(order_no,total_amount,currency,status,payment_status,created_at)", { count: "exact" })
+      .select(`*,${orderJoin}(order_no,total_amount,currency,status,payment_status,created_at)`, { count: "exact" })
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .range(from, to);

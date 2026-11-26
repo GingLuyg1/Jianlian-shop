@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import LiquidGlassCheckoutModal from "@/components/checkout/LiquidGlassCheckoutModal";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Button } from "@/components/ui/button";
@@ -795,6 +796,11 @@ function SupabaseMallContentInner({
     });
   }, [resolvedCategory?.id, availableSubcategories]);
 
+  const [quickCheckoutProduct, setQuickCheckoutProduct] = useState<string | null>(null);
+  const handleCloseQuickCheckout = useCallback(() => {
+    setQuickCheckoutProduct(null);
+  }, []);
+
   const handleSubcategoryToggle = useCallback(
     (subName: string) => {
       const fallbackSub = getDefaultSubcategoryForCategory(resolvedCategory);
@@ -875,8 +881,14 @@ function SupabaseMallContentInner({
           onResetFilters={resetFilters}
           onSearchSubmit={submitSearch}
           onRetry={retryLoad}
+          onOpenProduct={(slugOrId) => setQuickCheckoutProduct(slugOrId)}
         />
       </CategoryContentBoundary>
+      <LiquidGlassCheckoutModal
+        productId={quickCheckoutProduct}
+        returnTo={typeof window !== "undefined" ? window.location.pathname + window.location.search : `/products/${productCategory}`}
+        onClose={handleCloseQuickCheckout}
+      />
     </PublicLayout>
   );
 }
@@ -1390,6 +1402,7 @@ function ProductPanel({
   onResetFilters,
   onSearchSubmit,
   onRetry,
+  onOpenProduct,
 }: {
   pageRoute: string;
   activeCategory: DisplayCategory | null;
@@ -1418,6 +1431,7 @@ function ProductPanel({
   onResetFilters: () => void;
   onSearchSubmit: () => void;
   onRetry: () => void;
+  onOpenProduct?: (slugOrId: string) => void;
 }) {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [routeStalled, setRouteStalled] = useState(false);
@@ -1551,6 +1565,7 @@ function ProductPanel({
                         setSelectedProductId(product.id);
                         centerItem(product.id);
                       }}
+                      onOpenProduct={onOpenProduct}
                     />
                   </div>
                 </div>
@@ -1668,7 +1683,7 @@ function CatalogProductIcon({ product, category, isMobile, priority = false }: {
     : <span data-selection-icon className={cn("flex items-center justify-center bg-primary/10", sizeClass)}><Icon className={iconSizeClass} aria-label={category?.name || "商品"} /></span>;
 }
 
-function ProductRowCompact({ currencySymbol, product, category, showStock, hideSales = false, disabled, selected, isMobile = false, priority = false, onSelect }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; hideSales?: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; priority?: boolean; onSelect: () => void }) {
+function ProductRowCompact({ currencySymbol, product, category, showStock, hideSales = false, disabled, selected, isMobile = false, priority = false, onSelect, onOpenProduct }: { currencySymbol: string; product: Product; category: DisplayCategory | null; showStock: boolean; hideSales?: boolean; disabled: boolean; selected: boolean; isMobile?: boolean; priority?: boolean; onSelect: () => void; onOpenProduct?: (slugOrId: string) => void }) {
   const router = useRouter();
   const stock = Number(product.stock ?? 0);
   const rawSales = Number(product.metadata?.salesCount ?? 0);
@@ -1691,12 +1706,21 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, hideS
     ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
-  const handleCardClick = () => {
+  const handleCardClick = (event?: React.MouseEvent) => {
     onSelect();
+    const targetSlugOrId = product.slug || product.id;
     const href = checkoutHref(
-      product.slug || product.id,
+      targetSlugOrId,
       typeof window !== "undefined" ? window.location.pathname + window.location.search : ""
     );
+    if (event && (event.metaKey || event.ctrlKey || event.shiftKey)) {
+      window.open(href, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (onOpenProduct) {
+      onOpenProduct(targetSlugOrId);
+      return;
+    }
     safeNavigate(router, href, category?.id);
   };
 

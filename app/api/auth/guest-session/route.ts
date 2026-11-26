@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const GUEST_EMAIL_DOMAIN = "guest.jianlian.shop";
 
 function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  return /^[^\s@%\\]+@[^\s@%\\]+\.[^\s@%\\]+$/.test(value);
 }
 
 function hashEmailBucket(email: string) {

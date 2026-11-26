@@ -2,6 +2,7 @@
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
 import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { sendOrderDeliveryEmail } from "@/lib/email/order-delivery-email";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -129,6 +130,8 @@ export async function POST(request: Request, context: RouteContext) {
         has_delivery_note: Boolean(deliveryNote),
       },
     });
+
+    void sendOrderDeliveryEmail(serviceClient, (await context.params).orderId).catch(() => undefined);
 
     return json({ delivery: data });
   } catch (error) {

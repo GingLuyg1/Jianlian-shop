@@ -1,8 +1,22 @@
 ﻿import { NextResponse } from "next/server";
 
+import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 import { getPaymentErrorMessage, getManualPaymentMethod } from "@/lib/payments/payment-status";
 import { normalizePaymentRecord, normalizePaymentRows, paymentSelect } from "@/lib/payments/payment-queries";
+import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
+
+function isSafeProofUrl(url: string): boolean {
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.length > 1000) return false;
+  if (trimmed.startsWith("/")) return !trimmed.startsWith("//");
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 function isSchemaMissing(message: string) {
   return /order_payments|submit_order_payment|schema cache|PGRST205|42P01/i.test(message);
@@ -27,9 +41,10 @@ export async function GET(request: Request) {
   const orderNo = searchParams.get("order_no") || searchParams.get("orderNo");
 
   try {
+    const selectStr = orderNo ? paymentSelect.replace("orders(", "orders!inner(") : paymentSelect;
     let query = supabase
       .from("order_payments")
-      .select(paymentSelect)
+      .select(selectStr)
       .eq("user_id", user.id)
       .order("created_at", { ascending: false });
 
@@ -55,6 +70,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase 环境变量未配置" }, { status: 500 });
   }
 
+  const sizeError = checkRequestSize(request, 16 * 1024);
+  if (sizeError) return sizeError;
+
   const supabase = getSupabaseServerClient();
   const {
     data: { user },
@@ -63,6 +81,18 @@ export async function POST(request: Request) {
 
   if (userError || !user) {
     return NextResponse.json({ error: "请先登录" }, { status: 401 });
+  }
+
+  const rateLimit = checkRateLimit("payment_session_create", getUserRateLimitKey(user.id, "manual_payment_submit"));
+  if (!rateLimit.allowed) return rateLimit.response!;
+
+  try {
+    await assertUserBusinessAllowed(supabase, user.id, "create_payment");
+  } catch (guardError) {
+    if (isAccountRestrictionError(guardError)) {
+      return NextResponse.json({ error: guardError.message, code: guardError.code }, { status: guardError.status });
+    }
+    throw guardError;
   }
 
   const body = (await request.json().catch(() => null)) as
@@ -89,7 +119,7 @@ export async function POST(request: Request) {
 
   const rawProofUrls = body?.proofUrls;
   const proofUrls = Array.isArray(rawProofUrls)
-    ? rawProofUrls.filter((url): url is string => typeof url === "string" && Boolean(url.trim())).slice(0, 3)
+    ? rawProofUrls.filter((url): url is string => typeof url === "string" && isSafeProofUrl(url)).slice(0, 3)
     : [];
 
   if (proofUrls.length === 0 && !body?.transactionReference?.trim()) {

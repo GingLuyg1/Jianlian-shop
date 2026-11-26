@@ -308,14 +308,28 @@ export async function syncBitrefillCostsAndRates(
     if (!supplierProductId || !supplierSku) continue;
 
     if (!detailCache.has(supplierProductId)) {
-      try {
-        const detail = await client.getProductDetail(supplierProductId);
-        detailCache.set(supplierProductId, { detail: detail as Record<string, unknown> });
-      } catch (err) {
-        detailCache.set(supplierProductId, {
-          error: err instanceof Error ? err.message : String(err),
-        });
+      if (detailCache.size > 0) {
+        await sleepMs(220);
       }
+      let fetchedDetail: Record<string, unknown> | undefined;
+      let lastErrMsg: string | undefined;
+      for (let attempt = 0; attempt <= 3; attempt += 1) {
+        try {
+          const detail = await client.getProductDetail(supplierProductId);
+          fetchedDetail = detail as Record<string, unknown>;
+          lastErrMsg = undefined;
+          break;
+        } catch (err) {
+          lastErrMsg = err instanceof Error ? err.message : String(err);
+          const isRateLimited = /429|rate|too many/i.test(lastErrMsg);
+          if (!isRateLimited || attempt === 3) break;
+          await sleepMs(800 * (attempt + 1) + attempt * 500);
+        }
+      }
+      detailCache.set(
+        supplierProductId,
+        fetchedDetail ? { detail: fetchedDetail } : { error: lastErrMsg ?? "upstream detail unavailable" }
+      );
     }
 
     const cached = detailCache.get(supplierProductId)!;
@@ -555,6 +569,10 @@ export async function syncBitrefillCostsAndRates(
     items,
     checkedAt: new Date().toISOString(),
   };
+}
+
+function sleepMs(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function clampNumber(value: unknown, fallback: number, min: number, max: number) {

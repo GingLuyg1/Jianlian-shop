@@ -1,9 +1,9 @@
 ﻿"use client";
 
-import { FormEvent, Suspense, useEffect, useRef, useState } from "react";
+import { FormEvent, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ClipboardList, Headphones, KeyRound, Mail, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { Check, ClipboardList, Copy, Eye, EyeOff, Headphones, KeyRound, Mail, RefreshCw, Search, ShieldCheck } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import TurnstileWidget from "@/components/security/TurnstileWidget";
@@ -12,6 +12,16 @@ import { Input } from "@/components/ui/input";
 import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 import { openPublicSupport } from "@/lib/support/open-public-support";
 import { cn } from "@/lib/utils";
+
+type PublicOrderDelivery = {
+  id: string;
+  orderItemId: string | null;
+  deliveryType: string | null;
+  deliveryStatus: string;
+  content: string | null;
+  deliveryNote: string | null;
+  deliveredAt: string | null;
+};
 
 type PublicOrder = {
   orderNo: string;
@@ -30,6 +40,7 @@ type PublicOrder = {
     unitPrice: number;
     lineTotal: number;
   }>;
+  deliveries?: PublicOrderDelivery[];
 };
 
 type QueryTab = "email" | "token";
@@ -96,7 +107,37 @@ function OrderQueryContent() {
   const [hasSearched, setHasSearched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [revealedIds, setRevealedIds] = useState<Record<string, boolean>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const submitLockRef = useRef(false);
+  const autoQueriedRef = useRef(false);
+
+  const runTokenLookup = useCallback(async (targetOrderNo: string, targetToken: string) => {
+    if (submitLockRef.current) return;
+    setError("");
+    setOrders([]);
+    setHasSearched(false);
+    submitLockRef.current = true;
+    setLoading(true);
+    try {
+      const response = await fetchWithTimeout("/api/order-query", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ orderNo: targetOrderNo.trim(), queryToken: targetToken.trim() }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.order) {
+        throw new Error(data.error || "订单信息或验证信息不正确");
+      }
+      setOrders([data.order]);
+      setHasSearched(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "订单查询失败，请稍后重试");
+    } finally {
+      submitLockRef.current = false;
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const initialOrderNo = (
@@ -105,15 +146,25 @@ function OrderQueryContent() {
       searchParams.get("order") ||
       ""
     ).trim();
+    const initialToken = (
+      searchParams.get("token") ||
+      searchParams.get("queryToken") ||
+      ""
+    ).trim();
     const initialEmail = (searchParams.get("email") || "").trim();
     if (initialOrderNo) {
       setOrderNo((prev) => prev || initialOrderNo);
+      if (initialToken) setQueryToken((prev) => prev || initialToken);
       setActiveTab("token");
+      if (initialToken && !autoQueriedRef.current) {
+        autoQueriedRef.current = true;
+        void runTokenLookup(initialOrderNo, initialToken);
+      }
     } else if (initialEmail) {
       setEmail((prev) => prev || initialEmail);
       setActiveTab("email");
     }
-  }, [searchParams]);
+  }, [runTokenLookup, searchParams]);
 
   useEffect(() => {
     let active = true;
@@ -179,34 +230,20 @@ function OrderQueryContent() {
 
   async function handleTokenSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (loading || submitLockRef.current) return;
-    setError("");
-    setOrders([]);
-    setHasSearched(false);
-
     if (!orderNo.trim() || !queryToken.trim()) {
       setError("请输入订单号和查询凭证。");
       return;
     }
-    submitLockRef.current = true;
-    setLoading(true);
+    await runTokenLookup(orderNo, queryToken);
+  }
+
+  async function handleCopyContent(id: string, text: string) {
     try {
-      const response = await fetchWithTimeout("/api/order-query", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ orderNo: orderNo.trim(), queryToken: queryToken.trim() }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok || !data.order) {
-        throw new Error(data.error || "订单信息或验证信息不正确");
-      }
-      setOrders([data.order]);
-      setHasSearched(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "订单查询失败，请稍后重试");
-    } finally {
-      submitLockRef.current = false;
-      setLoading(false);
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 2000);
+    } catch {
+      // Fallback ignored
     }
   }
 
@@ -465,6 +502,79 @@ function OrderQueryContent() {
                           </div>
                         ))}
                       </div>
+
+                      {Array.isArray(order.deliveries) && order.deliveries.length > 0 ? (
+                        <div className="space-y-2.5 rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-3.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-800">
+                              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                              已解锁数字交付内容（安全凭证校验通过）
+                            </div>
+                            <span className="text-[11px] text-emerald-700">请妥善保存，切勿泄露</span>
+                          </div>
+                          {order.deliveries.map((d, dIdx) => {
+                            const contentText = String(d.content ?? "");
+                            const isRevealed = Boolean(revealedIds[d.id]);
+                            const masked =
+                              contentText.length <= 8
+                                ? `${contentText.slice(0, 2)}••••••`
+                                : `${contentText.slice(0, 4)} •••••••• ${contentText.slice(-4)}`;
+                            return (
+                              <div
+                                key={d.id || `${order.orderNo}-delivery-${dIdx}`}
+                                className="rounded-xl border border-emerald-200/70 bg-white p-3 shadow-2xs"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="text-xs font-medium text-slate-600">
+                                    交付凭证 #{dIdx + 1}
+                                    {d.deliveredAt ? ` · ${formatDate(d.deliveredAt)}` : ""}
+                                  </span>
+                                  <div className="flex items-center gap-1.5">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-2 text-xs"
+                                      onClick={() =>
+                                        setRevealedIds((prev) => ({ ...prev, [d.id]: !prev[d.id] }))
+                                      }
+                                    >
+                                      {isRevealed ? <EyeOff className="mr-1 h-3.5 w-3.5" /> : <Eye className="mr-1 h-3.5 w-3.5" />}
+                                      {isRevealed ? "隐藏" : "显示完整卡密"}
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="h-7 px-2.5 text-xs"
+                                      onClick={() => void handleCopyContent(d.id, contentText)}
+                                    >
+                                      {copiedId === d.id ? (
+                                        <>
+                                          <Check className="mr-1 h-3.5 w-3.5" />
+                                          已复制
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="mr-1 h-3.5 w-3.5" />
+                                          一键复制
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
+                                </div>
+                                <pre className="mt-2 whitespace-pre-wrap break-all rounded-lg bg-slate-950 px-3 py-2.5 font-mono text-xs leading-relaxed text-emerald-300">
+                                  {isRevealed ? contentText : masked}
+                                </pre>
+                                {d.deliveryNote ? (
+                                  <div className="mt-2 text-xs text-slate-600">
+                                    说明：{d.deliveryNote}
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
                         <span className="text-xs text-slate-500">

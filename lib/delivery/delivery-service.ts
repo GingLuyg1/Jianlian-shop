@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fulfillSupplierOrderWithSupabase } from "@/lib/providers/core/supplier-router";
+import { sendOrderDeliveryEmail } from "@/lib/email/order-delivery-email";
 import { runLocalStockPriorityDelivery } from "./local-stock-priority.mjs";
 
 export type DeliveryServiceResult = {
@@ -178,8 +179,13 @@ export async function deliverDigitalOrder(
     throw new Error(result.message || "自动发货处理失败，等待人工处理");
   }
 
+  const totalDelivered = Number(result.delivered_count ?? 0) + supplier.fulfilled;
+  if (totalDelivered > 0) {
+    void sendOrderDeliveryEmail(supabase, orderId).catch(() => undefined);
+  }
+
   return {
     ...result,
-    delivered_count: Number(result.delivered_count ?? 0) + supplier.fulfilled,
+    delivered_count: totalDelivered,
   };
 }

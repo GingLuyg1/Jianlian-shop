@@ -119,6 +119,40 @@ function normalizeDelivery(row: Record<string, unknown>): OrderDeliveryRecord {
   };
 }
 
+function sanitizeSnapshotForUser(snapshot: Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!snapshot) return null;
+  const cleaned: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(snapshot)) {
+    const lower = key.toLowerCase();
+    if (
+      lower.includes("supplier") ||
+      lower.includes("cost") ||
+      lower.includes("upstream") ||
+      lower.includes("binding") ||
+      lower === "admin_note"
+    ) {
+      continue;
+    }
+    cleaned[key] = value;
+  }
+  return Object.keys(cleaned).length > 0 ? cleaned : null;
+}
+
+export function sanitizeOrderForUser(order: OrderRecord): OrderRecord {
+  return {
+    ...order,
+    admin_note: null,
+    order_items: (order.order_items ?? []).map((item) => ({
+      ...item,
+      product_snapshot: sanitizeSnapshotForUser(item.product_snapshot ?? null),
+    })),
+    order_status_logs: (order.order_status_logs ?? []).map((log) => ({
+      ...log,
+      operator_id: null,
+    })),
+  };
+}
+
 export function normalizeOrder(row: Record<string, unknown>): OrderRecord {
   const items = Array.isArray(row.order_items)
     ? (row.order_items as Array<Record<string, unknown>>).map(normalizeItem)
@@ -280,7 +314,7 @@ export async function listUserOrders(
   if (options.endDate) query = query.lte("created_at", options.endDate);
 
   const customerEmail = options.customerEmail?.trim().toLowerCase();
-  if (customerEmail) query = query.ilike("customer_email", customerEmail);
+  if (customerEmail) query = query.eq("customer_email", customerEmail);
 
   if (options.deliveryStatus && options.deliveryStatus !== "all") {
     const { data: deliveryRows } = await supabase
@@ -296,16 +330,18 @@ export async function listUserOrders(
 
   const itemKeyword = (options.productSearch || options.skuSearch || "").trim();
   if (itemKeyword) {
-    const escaped = itemKeyword.replace(/[,%]/g, "");
-    const { data: itemRows } = await supabase
-      .from("order_items")
-      .select("order_id")
-      .or(`product_name.ilike.%${escaped}%,sku_code.ilike.%${escaped}%,sku_title.ilike.%${escaped}%`)
-      .limit(5000);
-    const orderIds = Array.from(
-      new Set(((itemRows ?? []) as Array<{ order_id?: string }>).map((row) => row.order_id).filter(Boolean))
-    ) as string[];
-    query = orderIds.length ? query.in("id", orderIds) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+    const escaped = itemKeyword.slice(0, 100).replace(/[\\%*(),]/g, " ").replace(/\s+/g, " ").trim();
+    if (escaped) {
+      const { data: itemRows } = await supabase
+        .from("order_items")
+        .select("order_id")
+        .or(`product_name.ilike.%${escaped}%,sku_code.ilike.%${escaped}%,sku_title.ilike.%${escaped}%`)
+        .limit(5000);
+      const orderIds = Array.from(
+        new Set(((itemRows ?? []) as Array<{ order_id?: string }>).map((row) => row.order_id).filter(Boolean))
+      ) as string[];
+      query = orderIds.length ? query.in("id", orderIds) : query.eq("id", "00000000-0000-0000-0000-000000000000");
+    }
   }
 
   const { data, error, count } = await query
@@ -314,7 +350,9 @@ export async function listUserOrders(
 
   if (error) throw new Error(getOrderErrorMessage(error, "订单读取失败"));
 
-  const orders = ((data ?? []) as Array<Record<string, unknown>>).map(normalizeOrder);
+  const orders = ((data ?? []) as Array<Record<string, unknown>>)
+    .map(normalizeOrder)
+    .map(sanitizeOrderForUser);
   return {
     orders: await attachBep20PaymentStates(supabase, orders),
     count: count ?? 0,
@@ -334,7 +372,9 @@ export async function getUserOrderByNo(
 
   if (error) throw new Error(getOrderErrorMessage(error, "订单详情读取失败"));
   if (!data) return null;
-  const [order] = await attachBep20PaymentStates(supabase, [normalizeOrder(data as Record<string, unknown>)]);
+  const [order] = await attachBep20PaymentStates(supabase, [
+    sanitizeOrderForUser(normalizeOrder(data as Record<string, unknown>)),
+  ]);
   return order;
 }
 

@@ -682,9 +682,21 @@ export async function POST(request: Request) {
       if (couponApplyErr || !couponApply?.ok) {
         // Best-effort cancel the newly created unpaid order so stock is released and user is never overcharged.
         try {
-          await supabase.rpc("cancel_my_unpaid_order", { p_order_id: orderId });
-        } catch {
-          // Ignore cancel fallback errors.
+          const { error: cancelErr } = await supabase.rpc("cancel_unpaid_order", {
+            p_order_id: orderId,
+            p_reason: "coupon_apply_failed",
+          });
+          if (cancelErr) {
+            console.error("[Orders] coupon rollback cancel_unpaid_order failed", {
+              orderId,
+              message: cancelErr.message,
+            });
+          }
+        } catch (cancelErr) {
+          console.error("[Orders] coupon rollback cancel_unpaid_order threw", {
+            orderId,
+            message: cancelErr instanceof Error ? cancelErr.message : String(cancelErr),
+          });
         }
         return NextResponse.json(
           {

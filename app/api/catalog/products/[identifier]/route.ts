@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { normalizePublicProduct, normalizePublicSku } from "@/lib/supabase/public-catalog";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { checkRateLimit, getRequestSourceKey } from "@/lib/security/rate-limit";
 import {
   buildEffectiveCategoryVisibility,
   isProductEffectivelyVisible,
@@ -33,58 +34,13 @@ function isOptionalSkuSchemaError(error: { message?: string } | null) {
   return /product_skus|schema cache|could not find|does not exist|PGRST/i.test(error.message);
 }
 
-async function findVisibleProductSlugById(
-  supabase: { from: (table: string) => any },
-  identifier: string
-) {
-  const { data, error } = await supabase
-    .from("products")
-    .select(PRODUCT_LOOKUP_SELECT)
-    .in("status", VISIBLE_PRODUCT_STATUSES)
-    .limit(2000);
-
-  if (error) return { slug: null, error };
-
-  const product = ((data ?? []) as ProductDetailRow[]).find(
-    (row) => String(row.id).toLowerCase() === identifier.toLowerCase()
-  );
-
-  return { slug: product?.slug ? String(product.slug) : null, error: null };
-}
-
-async function findVisibleProductSlugByCatalogApi(request: Request, identifier: string) {
-  const origin = new URL(request.url).origin;
-  let totalPages = 1;
-
-  for (let page = 1; page <= totalPages && page <= 50; page += 1) {
-    const url = new URL("/api/catalog/products", origin);
-    url.searchParams.set("page", String(page));
-    url.searchParams.set("pageSize", "60");
-
-    const response = await fetch(url.toString(), { cache: "no-store" });
-    const payload = (await response.json().catch(() => null)) as
-      | { success: true; data?: { products?: Array<{ id?: unknown; slug?: unknown }>; totalPages?: number } }
-      | { success: false }
-      | null;
-
-    const data = payload?.success ? payload.data : null;
-    const products = data?.products;
-    if (!response.ok || !payload?.success || !Array.isArray(products)) return null;
-
-    totalPages = Math.max(1, Number(data?.totalPages ?? 1));
-    const product = products.find(
-      (row) => String(row.id).toLowerCase() === identifier.toLowerCase()
-    );
-
-    if (product?.slug) return String(product.slug);
-  }
-
-  return null;
-}
 export async function GET(
   request: Request,
   context: { params: Promise<{ identifier?: string }> }
 ) {
+  const rateLimit = checkRateLimit("catalog_read", `product_detail:${getRequestSourceKey(request)}`);
+  if (!rateLimit.allowed) return rateLimit.response!;
+
   const requestId = randomUUID();
   const identifier = decodeURIComponent(String((await context.params).identifier ?? "")).trim();
 
@@ -132,17 +88,6 @@ export async function GET(
       const fallback = await queryProduct("slug");
       productData = fallback.data;
       productError = fallback.error;
-    }
-
-    if (!productError && !productData && isUuid) {
-      const fallback = await findVisibleProductSlugById(supabase, identifier);
-      productError = fallback.error;
-      const fallbackSlug = fallback.slug ?? (productError ? null : await findVisibleProductSlugByCatalogApi(request, identifier));
-      if (!productError && fallbackSlug) {
-        const bySlug = await queryProduct("slug", fallbackSlug);
-        productData = bySlug.data;
-        productError = bySlug.error;
-      }
     }
 
     if ((productError || !productData) && isUuid) {
@@ -229,11 +174,10 @@ export async function GET(
           return Number.isSafeInteger(q) && q > 0 ? sum + q : sum;
         }, 0);
         product.sales_count = boost + paidQty;
-        if (boost > 0 || deliveryMode) {
+        if (deliveryMode) {
           product.metadata = {
             ...(product.metadata ?? {}),
-            ...(boost > 0 ? { sales_boost: boost } : {}),
-            ...(deliveryMode ? { delivery_mode: deliveryMode } : {}),
+            delivery_mode: deliveryMode,
           };
         }
       } catch {

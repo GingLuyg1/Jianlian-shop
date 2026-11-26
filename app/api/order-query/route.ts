@@ -1,13 +1,14 @@
 ﻿import { NextResponse } from "next/server";
 
 import { lookupGuestOrder, lookupGuestOrdersByEmail } from "@/lib/orders/order-query-service";
-import { checkRateLimit, checkRequestSize, getBusinessRateLimitKey, getRequestSourceKey } from "@/lib/security/rate-limit";
+import { loadVerifiedTokenDeliveries } from "@/lib/orders/order-token-delivery";
+import { checkRateLimit, checkRequestSize, getBusinessRateLimitKey, getClientIp, getRequestSourceKey } from "@/lib/security/rate-limit";
 import { getTurnstileSiteKey, isTurnstileConfigured, verifyTurnstileToken } from "@/lib/security/turnstile";
 
 export const dynamic = "force-dynamic";
 
 const GENERIC_ERROR = "订单信息或验证信息不正确";
-const SIMPLE_EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const SIMPLE_EMAIL_REGEX = /^[^\s@%\\]+@[^\s@%\\]+\.[^\s@%\\]+$/;
 
 function getErrorMessage(error: unknown, fallback = "订单查询失败，请稍后重试") {
   if (typeof error === "string" && error.trim()) return error;
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
       const emailLimit = checkRateLimit("order_lookup", getBusinessRateLimitKey("guest_email", email, "order_lookup"));
       if (!emailLimit.allowed) return emailLimit.response!;
 
-      const turnstileResult = await verifyTurnstileToken(body?.turnstileToken, sourceKey);
+      const turnstileResult = await verifyTurnstileToken(body?.turnstileToken, getClientIp(request));
       if (!turnstileResult.ok) {
         return NextResponse.json(
           { error: turnstileResult.message, code: turnstileResult.code },
@@ -91,7 +92,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: GENERIC_ERROR }, { status: 404 });
     }
 
-    return NextResponse.json({ order: result.order });
+    const deliveries =
+      result.order.paymentStatus === "paid"
+        ? await loadVerifiedTokenDeliveries(result.order.orderNo).catch(() => [])
+        : [];
+
+    return NextResponse.json({
+      order: {
+        ...result.order,
+        deliveries,
+      },
+    });
   } catch (error) {
     console.error("[OrderQuery] lookup failed", getErrorMessage(error));
     return NextResponse.json({ error: "订单查询暂时不可用，请稍后重试" }, { status: 500 });
