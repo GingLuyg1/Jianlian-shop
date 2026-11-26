@@ -13,6 +13,7 @@ export type RateLimitPolicyName =
   | "recharge_create"
   | "refund_create"
   | "admin_write"
+  | "ticket_write"
   | "inventory_import"
   | "media_upload"
   | "internal_task"
@@ -50,6 +51,7 @@ const RATE_LIMIT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
   recharge_create: { windowMs: 60_000, max: 6, message: "充值请求过于频繁，请稍后再试。" },
   refund_create: { windowMs: 300_000, max: 5, message: "退款申请过于频繁，请稍后再试。" },
   admin_write: { windowMs: 60_000, max: 30, message: "后台操作过于频繁，请稍后再试。" },
+  ticket_write: { windowMs: 300_000, max: 10, message: "工单操作过于频繁，请 5 分钟后再试。" },
   inventory_import: { windowMs: 300_000, max: 6, message: "库存导入过于频繁，请稍后再试。" },
   media_upload: { windowMs: 300_000, max: 10, message: "媒体上传过于频繁，请稍后再试。" },
   internal_task: { windowMs: 300_000, max: 3, message: "内部任务触发过于频繁，请稍后再试。" },
@@ -73,9 +75,10 @@ export function hashRateLimitValue(value: string) {
 }
 
 export function getRequestSourceKey(request: Request) {
+  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
   const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const realIp = request.headers.get("x-real-ip")?.trim();
-  const ip = forwardedFor || realIp || "unknown";
+  const ip = cfIp || forwardedFor || realIp || "unknown";
   const userAgent = request.headers.get("user-agent")?.slice(0, 120) || "unknown";
   return `src:${hashRateLimitValue(`${ip}:${userAgent}`)}`;
 }

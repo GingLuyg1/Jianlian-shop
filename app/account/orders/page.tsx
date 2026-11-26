@@ -10,6 +10,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
 import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
 import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
+import TurnstileWidget from "@/components/security/TurnstileWidget";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -120,8 +121,12 @@ export default function MyOrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<OrderRecord | null>(null);
   const [selectedGuestOrder, setSelectedGuestOrder] = useState<GuestLookupOrder | null>(null);
 
-  // Inline guest email form state (when unauthenticated)
+  // Inline guest email form state (when unauthenticated) — keeps CF Turnstile here only (not inside popup)
   const [guestEmailInput, setGuestEmailInput] = useState("");
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const [turnstileEnabled, setTurnstileEnabled] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
   const [guestSearching, setGuestSearching] = useState(false);
   const [guestError, setGuestError] = useState("");
 
@@ -136,6 +141,22 @@ export default function MyOrdersPage() {
     setQueryOpen(false);
     setPage(1);
   }, [identity.epoch]);
+
+  useEffect(() => {
+    if (isSignedInMember) return;
+    let active = true;
+    void fetch("/api/order-query", { cache: "no-store" })
+      .then((res) => res.json().catch(() => null))
+      .then((payload: { turnstileEnabled?: boolean; turnstileSiteKey?: string } | null) => {
+        if (!active || !payload) return;
+        setTurnstileEnabled(Boolean(payload.turnstileEnabled));
+        setTurnstileSiteKey(String(payload.turnstileSiteKey || ""));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [isSignedInMember]);
 
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
@@ -230,6 +251,10 @@ export default function MyOrdersPage() {
       setGuestError("请输入下单时填写的有效邮箱地址。");
       return;
     }
+    if (turnstileEnabled && !turnstileToken) {
+      setGuestError("请先完成下方 Cloudflare 人机验证后再查询。");
+      return;
+    }
     setGuestSearching(true);
     try {
       const response = await fetchWithTimeout("/api/order-query", {
@@ -238,6 +263,7 @@ export default function MyOrdersPage() {
         body: JSON.stringify({
           mode: "email",
           email: normalized,
+          turnstileToken: turnstileToken || undefined,
         }),
       });
       const payload = (await response.json().catch(() => null)) as { orders?: GuestLookupOrder[]; error?: string } | null;
@@ -250,6 +276,10 @@ export default function MyOrdersPage() {
     } catch (err) {
       setGuestError(err instanceof Error ? err.message : "订单查询失败，请稍后重试");
     } finally {
+      if (turnstileEnabled) {
+        setTurnstileToken("");
+        setTurnstileResetSignal((v) => v + 1);
+      }
       setGuestSearching(false);
     }
   }
@@ -337,10 +367,25 @@ export default function MyOrdersPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-700">
-                      <ShieldCheck className="h-4 w-4 shrink-0" />
-                      <span>已启用安全频控保护，查询结果弹窗支持一键查看订单详情</span>
-                    </div>
+                    {turnstileSiteKey ? (
+                      <div className="rounded-xl border border-orange-100 bg-orange-50/35 p-3">
+                        <div className="mb-1.5 text-xs font-medium text-slate-600">Cloudflare 人机验证</div>
+                        <TurnstileWidget
+                          siteKey={turnstileSiteKey}
+                          onVerify={(token) => {
+                            setTurnstileToken(token);
+                            setGuestError("");
+                          }}
+                          onExpire={() => setTurnstileToken("")}
+                          resetSignal={turnstileResetSignal}
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-700">
+                        <ShieldCheck className="h-4 w-4 shrink-0" />
+                        <span>已启用安全频控保护，查询结果弹窗支持一键查看订单详情</span>
+                      </div>
+                    )}
 
                     {guestError ? (
                       <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
@@ -753,23 +798,37 @@ function OrderEmailQueryDialog({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex shrink-0 flex-col gap-3 border-b px-5 py-4">
-          <div className="flex flex-col gap-3 md:flex-row">
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                type="email"
-                placeholder="输入下单邮箱"
-                className="pl-9"
-              />
+        {isSignedInMember ? (
+          <form onSubmit={handleSubmit} className="flex shrink-0 flex-col gap-3 border-b px-5 py-4">
+            <div className="flex flex-col gap-3 md:flex-row">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  type="email"
+                  placeholder="输入下单邮箱"
+                  className="pl-9"
+                />
+              </div>
+              <Button type="submit" disabled={loading}>
+                {loading ? "查询中..." : "查询"}
+              </Button>
             </div>
-            <Button type="submit" disabled={loading}>
-              {loading ? "查询中..." : "查询"}
+          </form>
+        ) : (
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b bg-orange-50/35 px-5 py-3 text-xs text-slate-600">
+            <div className="flex min-w-0 items-center gap-2">
+              <Mail className="h-4 w-4 shrink-0 text-primary" />
+              <span className="truncate">
+                当前查询邮箱：<strong className="font-mono text-slate-900">{queryEmail || "—"}</strong>
+              </span>
+            </div>
+            <Button type="button" variant="outline" size="sm" className="h-8 rounded-lg bg-white text-xs" onClick={onClose}>
+              更换邮箱重查
             </Button>
           </div>
-        </form>
+        )}
 
         <div className="min-h-0 flex-1 overflow-hidden px-5 py-4">
           {loading ? (

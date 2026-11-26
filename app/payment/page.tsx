@@ -5,7 +5,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { copyWithFeedback } from "@/lib/ui/copy-feedback";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CheckCircle2, Clock3, Copy, ExternalLink, Headphones, Loader2, PackageCheck, RefreshCw, ShieldCheck, ShoppingBag, Sparkles } from "lucide-react";
+import { AlertTriangle, BookOpen, CheckCircle2, ClipboardPaste, Clock3, Copy, ExternalLink, Headphones, Loader2, PackageCheck, RefreshCw, ShieldCheck, ShoppingBag, Sparkles } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 
 import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
@@ -757,20 +757,99 @@ function RechargePaymentPage({ rechargeNo, returnToParam = "" }: { rechargeNo: s
                 )}
 
                 {canTransfer && recharge.paymentAddress ? (
-                  <div className="grid gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
-                    <div className="rounded-xl bg-slate-50 p-3 text-center">
-                      <LocalAddressQr value={recharge.paymentAddress} />
-                      <div className="mt-2 text-xs text-muted-foreground">本地生成，仅包含公开收款地址</div>
-                    </div>
-                    <div className="space-y-3 rounded-xl bg-slate-50 p-4 text-sm">
-                      <Info label="精确应付 USDT" value={recharge.expectedUsdtAmount ?? "—"} strong copyable onCopy={() => void copyRechargeText(recharge.expectedUsdtAmount ?? "")} />
-                      <Info label="收款地址" value={recharge.paymentAddress} copyable onCopy={() => void copyRechargeText(recharge.paymentAddress ?? "")} />
-                      <Info label="Token 合约" value={recharge.paymentTokenContract ?? "—"} copyable={Boolean(recharge.paymentTokenContract)} onCopy={() => void copyRechargeText(recharge.paymentTokenContract ?? "")} />
-                      <Info label="网络" value={isTrc20Recharge ? "TRON Network (TRC20)" : "BNB Smart Chain (BEP20)"} />
-                      <Info label="支付截止时间" value={formatDate(recharge.expiresAt)} />
-                      <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-muted-foreground">
+                  <div className="space-y-4">
+                    {/* 顶部网络警示 + 倒计时栏 */}
+                    <div className={cn(
+                      "flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold",
+                      remainingSeconds <= 180
+                        ? "border-rose-200 bg-rose-50 text-rose-800"
+                        : "border-orange-200/80 bg-[#fff7ee] text-[#9a4d1f]"
+                    )}>
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold",
+                          isTrc20Recharge ? "bg-rose-600 text-white" : "bg-amber-500 text-white"
+                        )}>
+                          {isTrc20Recharge ? "TRON · TRC20" : "BSC · BEP20"}
+                        </span>
+                        <span>请核对转出网络完全一致，切勿跨链转账</span>
+                      </div>
+                      <div className="inline-flex items-center gap-1.5 font-mono text-sm font-bold">
                         <Clock3 className="h-4 w-4" />
-                        剩余 {Math.floor(remainingSeconds / 60)} 分 {remainingSeconds % 60} 秒
+                        <span>剩余 {Math.floor(remainingSeconds / 60)} 分 {String(remainingSeconds % 60).padStart(2, "0")} 秒</span>
+                      </div>
+                    </div>
+
+                    {/* 精确应付 USDT 高亮卡片 */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-200/90 bg-gradient-to-r from-[#fff8f0] via-[#fff2e3] to-white p-4 shadow-xs">
+                      <div className="min-w-0">
+                        <div className="text-xs font-medium text-slate-500">精确应付金额（请勿自行四舍五入，手续费另计）</div>
+                        <div className="mt-1 flex items-baseline gap-2">
+                          <span className="font-mono text-2xl font-black tracking-tight text-[#d95f18] sm:text-3xl">
+                            {recharge.expectedUsdtAmount ?? "—"}
+                          </span>
+                          <span className="text-sm font-bold text-slate-700">USDT</span>
+                        </div>
+                        {recharge.lockedSettlementRate ? (
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            锁定汇率：1 USDT = {recharge.lockedSettlementRate} CNY · 截止 {formatDate(recharge.expiresAt)}
+                          </div>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void copyRechargeText(recharge.expectedUsdtAmount ?? "")}
+                        className="h-9 rounded-xl bg-gradient-to-r from-[#df7334] to-[#c85f22] px-4 text-xs font-bold text-white shadow-sm hover:opacity-95"
+                      >
+                        <Copy className="mr-1.5 h-3.5 w-3.5" />
+                        复制金额
+                      </Button>
+                    </div>
+
+                    {/* 二维码 + 完整收款地址双栏 */}
+                    <div className="grid gap-4 md:grid-cols-[204px_minmax(0,1fr)]">
+                      <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/80 bg-white p-3.5 text-center shadow-2xs">
+                        <LocalAddressQr value={recharge.paymentAddress} />
+                        <div className="mt-2 text-[11px] font-medium text-slate-600">币安 / 欧易 / 钱包扫码付款</div>
+                        <div className="mt-0.5 text-[10px] text-muted-foreground">本地生成，仅包含公开收款地址</div>
+                      </div>
+                      <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-slate-50/70 p-4 text-sm">
+                        <div>
+                          <div className="mb-1.5 flex items-center justify-between gap-2">
+                            <span className="text-xs font-semibold text-slate-600">收款地址（{isTrc20Recharge ? "TRC20" : "BEP20"}）</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void copyRechargeText(recharge.paymentAddress ?? "")}
+                              className="h-7 rounded-lg bg-white px-2.5 text-xs font-semibold text-primary hover:bg-orange-50"
+                            >
+                              <Copy className="mr-1 h-3 w-3" />
+                              复制地址
+                            </Button>
+                          </div>
+                          <div className="break-all rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-xs leading-relaxed text-slate-900 select-all">
+                            {recharge.paymentAddress}
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 border-t border-slate-200/70 pt-2.5 text-xs">
+                          <Info label="网络" value={isTrc20Recharge ? "TRON Network (TRC20)" : "BNB Smart Chain (BEP20)"} />
+                          <Info label="Token 合约" value={recharge.paymentTokenContract ?? "—"} copyable={Boolean(recharge.paymentTokenContract)} onCopy={() => void copyRechargeText(recharge.paymentTokenContract ?? "")} />
+                          <Info label="支付截止时间" value={formatDate(recharge.expiresAt)} />
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-900">
+                          <span className="inline-flex items-center gap-1.5 font-medium">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                            首次使用 USDT 转账？
+                          </span>
+                          <Link href="/tutorials?topic=binance" className="inline-flex items-center gap-1 font-bold text-primary hover:underline">
+                            <BookOpen className="h-3.5 w-3.5" />
+                            查看币安买币与提现教程 →
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -788,12 +867,30 @@ function RechargePaymentPage({ rechargeNo, returnToParam = "" }: { rechargeNo: s
                           : "仅在自动识别延迟或客服要求时提交，正常充值无需填写。"}
                       </p>
                     </div>
-                    <input
-                      value={txHash}
-                      onChange={(event) => setTxHash(event.target.value)}
-                      placeholder={isTrc20Recharge ? "64 位十六进制 TRON 交易哈希（不含 0x）" : "0x 开头的 32 字节交易哈希"}
-                      className="h-11 w-full rounded-lg border border-border bg-white px-3 font-mono text-base md:text-sm outline-none focus:border-primary"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        value={txHash}
+                        onChange={(event) => setTxHash(event.target.value)}
+                        placeholder={isTrc20Recharge ? "64 位十六进制 TRON 交易哈希（不含 0x）" : "0x 开头的 32 字节交易哈希"}
+                        className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-white px-3 font-mono text-base md:text-sm outline-none focus:border-primary"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11 shrink-0 rounded-lg px-3 text-xs"
+                        onClick={async () => {
+                          try {
+                            const text = (await navigator.clipboard.readText()).trim();
+                            if (text) { setTxHash(text); toast.success("已粘贴交易哈希"); }
+                          } catch {
+                            toast.error("无法读取剪贴板，请手动粘贴");
+                          }
+                        }}
+                      >
+                        <ClipboardPaste className="mr-1.5 h-3.5 w-3.5" />
+                        粘贴
+                      </Button>
+                    </div>
                     {txHash && !txHashValid ? (
                       <div className="text-xs text-red-600">
                         {isTrc20Recharge
@@ -1566,7 +1663,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                   </div>
                   <ul className="mt-1.5 list-disc space-y-1 pl-4">
                     <li>数字卡密与账号属于一次性商品，收到后请第一时间登录或兑换核验。</li>
-                    <li>所有历史已购交付内容均可在左侧「我的订单」随时回查，无需担心关闭页面丢失。</li>
+                    <li>所有历史已购交付内容均可在左侧「订单查询」随时回查，无需担心关闭页面丢失。</li>
                     <li>如交付内容超过 1 分钟未刷新，请点击上方「刷新交付信息」，或携带订单编号联系在线客服。</li>
                   </ul>
                 </div>
@@ -1981,41 +2078,149 @@ function Bep20PaymentPanel({
         </div>
       ) : null}
 
-      {showTransferInstructions ? <div className="grid gap-4 md:grid-cols-[190px_minmax(0,1fr)]">
-        <div className="rounded-xl bg-white p-3 text-center">
-          <LocalAddressQr value={session.receiveAddress} />
-          <div className="mt-2 text-xs text-muted-foreground">本地生成，仅包含公开收款地址</div>
-        </div>
-        <div className="space-y-3">
-          <Info label="支付网络" value={session.network} />
-          <Info label="Chain ID" value={String(session.chainId)} />
-          <Info label="支付币种" value={session.asset} />
-          <Info label="订单金额" value={`${session.orderAmount} ${session.orderCurrency}`} />
-          <Info label="订单锁定汇率" value={`${session.exchangeRate} (${session.exchangeRateSource})`} />
-          <Info label="汇率锁定有效期" value={formatDate(session.exchangeRateExpiresAt)} />
-          <Info label="锁定应付 USDT" value={session.expectedAmount} strong copyable onCopy={() => onCopy(session.expectedAmount)} />
-          <Info label="收款地址" value={session.receiveAddress} copyable onCopy={() => onCopy(session.receiveAddress)} />
-          <Info label="支付截止时间" value={formatDate(session.expiresAt)} />
-          {timingVisibility.showConfirmationProgress ? (
-            <Info label="确认进度" value={`${session.confirmationCount ?? 0} / ${session.requiredConfirmations} 个区块确认`} />
-          ) : null}
+      {showTransferInstructions ? <div className="space-y-4">
+        {/* 顶部网络强警示 + 倒计时横幅 */}
+        <div className={cn(
+          "flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold",
+          timingVisibility.showCountdown && remainingSeconds <= 180
+            ? "border-rose-200 bg-rose-50 text-rose-800"
+            : "border-orange-200/80 bg-[#fff7ee] text-[#9a4d1f]"
+        )}>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-bold text-white">
+              BSC · BEP20
+            </span>
+            <span>仅支持 BEP20 网络转账，严禁 ERC20 / TRC20 跨链</span>
+          </div>
           {timingVisibility.showCountdown ? (
-            <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-muted-foreground">
+            <div className="inline-flex items-center gap-1.5 font-mono text-sm font-bold">
               <Clock3 className="h-4 w-4" />
-              剩余 {Math.floor(remainingSeconds / 60)} 分 {remainingSeconds % 60} 秒
+              <span>剩余 {Math.floor(remainingSeconds / 60)} 分 {String(remainingSeconds % 60).padStart(2, "0")} 秒</span>
             </div>
           ) : null}
         </div>
+
+        {/* 三步极速付款引导 */}
+        <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+          <div className="rounded-xl border border-orange-100 bg-white px-2 py-2">
+            <div className="font-bold text-primary">① 复制金额与地址</div>
+            <div className="mt-0.5 text-slate-500">按精确小数转账</div>
+          </div>
+          <div className="rounded-xl border border-orange-100 bg-white px-2 py-2">
+            <div className="font-bold text-primary">② BEP20 链转出</div>
+            <div className="mt-0.5 text-slate-500">提现手续费另计</div>
+          </div>
+          <div className="rounded-xl border border-orange-100 bg-white px-2 py-2">
+            <div className="font-bold text-primary">③ 粘贴 TxHash</div>
+            <div className="mt-0.5 text-slate-500">链上确认后秒发卡</div>
+          </div>
+        </div>
+
+        {/* 精确应付 USDT 高亮卡片 */}
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-200/90 bg-gradient-to-r from-[#fff8f0] via-[#fff2e3] to-white p-4 shadow-xs">
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-slate-500">锁定应付 USDT（实际到账须与下方完全一致）</div>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="font-mono text-2xl font-black tracking-tight text-[#d95f18] sm:text-3xl">
+                {session.expectedAmount}
+              </span>
+              <span className="text-sm font-bold text-slate-700">{session.asset || "USDT"}</span>
+            </div>
+            <div className="mt-1 text-[11px] text-slate-500">
+              订单金额 {session.orderAmount} {session.orderCurrency} · 锁定汇率 {session.exchangeRate}（{session.exchangeRateSource}）
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => onCopy(session.expectedAmount)}
+            className="h-9 rounded-xl bg-gradient-to-r from-[#df7334] to-[#c85f22] px-4 text-xs font-bold text-white shadow-sm hover:opacity-95"
+          >
+            <Copy className="mr-1.5 h-3.5 w-3.5" />
+            复制金额
+          </Button>
+        </div>
+
+        {/* 二维码 + 完整地址与链参数 */}
+        <div className="grid gap-4 md:grid-cols-[204px_minmax(0,1fr)]">
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200/80 bg-white p-3.5 text-center shadow-2xs">
+            <LocalAddressQr value={session.receiveAddress} />
+            <div className="mt-2 text-[11px] font-medium text-slate-600">币安 / 欧易 / 钱包扫码付款</div>
+            <div className="mt-0.5 text-[10px] text-muted-foreground">本地生成，仅包含公开收款地址</div>
+          </div>
+          <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 text-sm">
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-600">收款地址（BNB Smart Chain · BEP20）</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onCopy(session.receiveAddress)}
+                  className="h-7 rounded-lg bg-white px-2.5 text-xs font-semibold text-primary hover:bg-orange-50"
+                >
+                  <Copy className="mr-1 h-3 w-3" />
+                  复制地址
+                </Button>
+              </div>
+              <div className="break-all rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 font-mono text-xs leading-relaxed text-slate-900 select-all">
+                {session.receiveAddress}
+              </div>
+            </div>
+
+            <div className="space-y-2 border-t border-slate-100 pt-2.5 text-xs">
+              <Info label="支付网络" value={`${session.network} (Chain ID ${session.chainId})`} />
+              <Info label="支付币种" value={session.asset} />
+              <Info label="汇率锁定有效期" value={formatDate(session.exchangeRateExpiresAt)} />
+              <Info label="支付截止时间" value={formatDate(session.expiresAt)} />
+              {timingVisibility.showConfirmationProgress ? (
+                <Info label="确认进度" value={`${session.confirmationCount ?? 0} / ${session.requiredConfirmations} 个区块确认`} />
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-amber-50/70 px-3 py-2 text-[11px] text-amber-900">
+              <span className="inline-flex items-center gap-1.5 font-medium">
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                首次使用 USDT 付款？
+              </span>
+              <Link href="/tutorials?topic=binance" className="inline-flex items-center gap-1 font-bold text-primary hover:underline">
+                <BookOpen className="h-3.5 w-3.5" />
+                查看币安买币与提现教程 →
+              </Link>
+            </div>
+          </div>
+        </div>
       </div> : null}
 
-      {canSubmitTxHash ? <div className="space-y-2">
-        <label className="text-sm font-medium text-foreground">交易哈希 TxHash</label>
-        <input
-          value={txHash}
-          onChange={(event) => onTxHashChange(event.target.value)}
-          placeholder="0x 开头的 32 字节交易哈希"
-          className="h-11 w-full rounded-lg border border-border bg-white px-3 font-mono text-base md:text-sm outline-none focus:border-primary"
-        />
+      {canSubmitTxHash ? <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className="text-sm font-semibold text-foreground">提交交易哈希（TxHash）完成核验</label>
+          <span className="text-[11px] text-muted-foreground">在交易所提币详情中复制 0x 开头的 66 位哈希</span>
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={txHash}
+            onChange={(event) => onTxHashChange(event.target.value)}
+            placeholder="0x 开头的 32 字节交易哈希"
+            className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-white px-3 font-mono text-base md:text-sm outline-none focus:border-primary"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11 shrink-0 rounded-lg px-3 text-xs"
+            onClick={async () => {
+              try {
+                const text = (await navigator.clipboard.readText()).trim();
+                if (text) { onTxHashChange(text); toast.success("已粘贴交易哈希"); }
+              } catch {
+                toast.error("无法读取剪贴板，请手动粘贴");
+              }
+            }}
+          >
+            <ClipboardPaste className="mr-1.5 h-3.5 w-3.5" />
+            粘贴
+          </Button>
+        </div>
         {txHash && !txHashValid ? <div className="text-xs text-red-600">请输入合法的 0x 开头 64 位十六进制 TxHash。</div> : null}
       </div> : null}
 

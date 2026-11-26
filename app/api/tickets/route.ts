@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import {
   appendUserServerTicketReply,
@@ -47,10 +48,16 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const sizeError = checkRequestSize(request, 2 * 1024 * 1024);
+  if (sizeError) return sizeError;
+
   const auth = await getAuthenticatedUser();
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
+
+  const rateLimit = checkRateLimit("ticket_write", getUserRateLimitKey(auth.user.id, "ticket_write"));
+  if (!rateLimit.allowed) return rateLimit.response!;
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body || typeof body !== "object") {

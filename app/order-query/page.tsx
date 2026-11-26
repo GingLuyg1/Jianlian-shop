@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { ClipboardList, Headphones, KeyRound, Mail, RefreshCw, Search, ShieldCheck } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
+import TurnstileWidget from "@/components/security/TurnstileWidget";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
@@ -84,6 +85,10 @@ function OrderQueryContent() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<QueryTab>("email");
   const [email, setEmail] = useState("");
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const [turnstileEnabled, setTurnstileEnabled] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
 
   const [orderNo, setOrderNo] = useState("");
   const [queryToken, setQueryToken] = useState("");
@@ -110,6 +115,21 @@ function OrderQueryContent() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/order-query", { cache: "no-store" })
+      .then((res) => res.json().catch(() => null))
+      .then((payload: { turnstileEnabled?: boolean; turnstileSiteKey?: string } | null) => {
+        if (!active || !payload) return;
+        setTurnstileEnabled(Boolean(payload.turnstileEnabled));
+        setTurnstileSiteKey(String(payload.turnstileSiteKey || ""));
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
   async function handleEmailSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (loading || submitLockRef.current) return;
@@ -122,6 +142,10 @@ function OrderQueryContent() {
       setError("请输入下单时填写的有效联系邮箱。");
       return;
     }
+    if (turnstileEnabled && !turnstileToken) {
+      setError("请先完成下方 Cloudflare 人机验证后再查询。");
+      return;
+    }
 
     submitLockRef.current = true;
     setLoading(true);
@@ -132,6 +156,7 @@ function OrderQueryContent() {
         body: JSON.stringify({
           mode: "email",
           email: normalizedEmail,
+          turnstileToken: turnstileToken || undefined,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -143,6 +168,10 @@ function OrderQueryContent() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "订单查询失败，请稍后重试");
     } finally {
+      if (turnstileEnabled) {
+        setTurnstileToken("");
+        setTurnstileResetSignal((value) => value + 1);
+      }
       submitLockRef.current = false;
       setLoading(false);
     }
@@ -238,7 +267,7 @@ function OrderQueryContent() {
                   </div>
                   <div>
                     <div className="font-semibold text-slate-950">游客邮箱安全查单</div>
-                    <div className="text-xs text-slate-500">输入下单时绑定的收货/接收邮箱即可查看订单进度。</div>
+                    <div className="text-xs text-slate-500">输入下单时绑定的收货/接收邮箱，通过人机验证即可查看订单进度。</div>
                   </div>
                 </div>
 
@@ -256,10 +285,25 @@ function OrderQueryContent() {
                   />
                 </div>
 
-                <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-700">
-                  <ShieldCheck className="h-4 w-4 shrink-0" />
-                  <span>已启用安全频控保护（查询结果仅显示必要订单信息，不展示明文卡密）</span>
-                </div>
+                {turnstileSiteKey ? (
+                  <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-3">
+                    <div className="mb-2 text-xs font-medium text-slate-600">Cloudflare 人机验证</div>
+                    <TurnstileWidget
+                      siteKey={turnstileSiteKey}
+                      onVerify={(token) => {
+                        setTurnstileToken(token);
+                        setError("");
+                      }}
+                      onExpire={() => setTurnstileToken("")}
+                      resetSignal={turnstileResetSignal}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-700">
+                    <ShieldCheck className="h-4 w-4 shrink-0" />
+                    <span>已启用安全频控保护（查询结果仅显示必要订单信息，不展示明文卡密）</span>
+                  </div>
+                )}
 
                 {error ? (
                   <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

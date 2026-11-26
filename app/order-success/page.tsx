@@ -135,8 +135,8 @@ function OrderSuccessPageContent() {
             <p className="mb-6 text-sm leading-6 text-muted-foreground">
               {paymentStatus === "paid"
                 ? isShippingOrder
-                  ? "支付已确认，我们将尽快为您安排物流发货，您可在「我的订单」随时追踪进度。"
-                  : "支付已确认，卡密 / 账号内容将直接显示在下方并同步发送至您的接收邮箱，收到后请及时核验。"
+                  ? "支付已确认，我们将尽快为您安排物流发货，您可在「订单查询」随时追踪进度。"
+                  : "支付已确认，卡密 / 账号内容将直接显示在下方并同步发送至您的接收邮箱，请及时复制保存并核验。"
                 : "订单已创建，请尽快完成支付；支付完成后系统将自动发货并展示交付内容。"}
             </p>
 
@@ -215,7 +215,7 @@ function OrderSuccessPageContent() {
               <Button variant="outline" asChild>
                 <Link href="/account/orders">
                   <ClipboardList className="mr-2 h-4 w-4" />
-                  查看我的订单
+                  订单查询
                 </Link>
               </Button>
               <Button asChild>

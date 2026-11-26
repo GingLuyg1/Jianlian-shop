@@ -18,13 +18,19 @@ test("P0-1: guest checkout session + CF email order lookup + signup redirectTo",
   assert.doesNotMatch(orderQueryService, /delivery_content/);
 
   const orderQueryRoute = read("app/api/order-query/route.ts");
-  assert.doesNotMatch(orderQueryRoute, /verifyTurnstileToken/);
+  assert.match(orderQueryRoute, /verifyTurnstileToken/);
   assert.match(orderQueryRoute, /lookupGuestOrdersByEmail/);
 
   const orderQueryPage = read("app/order-query/page.tsx");
-  assert.doesNotMatch(orderQueryPage, /TurnstileWidget/);
+  assert.match(orderQueryPage, /TurnstileWidget/);
   assert.match(orderQueryPage, /游客邮箱查单/);
   assert.match(orderQueryPage, /仅凭订单号无法查看订单/);
+
+  const ordersPage = read("app/account/orders/page.tsx");
+  assert.match(ordersPage, /guest-orders-query-card[\s\S]*TurnstileWidget/);
+  const dialogIdx = ordersPage.indexOf("function OrderEmailQueryDialog");
+  assert.ok(dialogIdx > 0);
+  assert.doesNotMatch(ordersPage.slice(dialogIdx), /TurnstileWidget/);
 
   const checkoutPage = read("app/checkout/page.tsx");
   assert.match(checkoutPage, /\/api\/auth\/guest-session/);
