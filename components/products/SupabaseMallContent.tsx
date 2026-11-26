@@ -1007,14 +1007,6 @@ function CategoryPanel({
               isMobile && "!flex !flex-col !gap-2 !overflow-y-auto !overflow-x-hidden !space-y-0 !p-1"
             )}
           >
-            {!isMobile && categories.length > 0 ? (
-              <SecondarySlidingIndicator
-                containerRef={containerRef}
-                activeId={visualSelectionId}
-                ready={!isLoading && !error && Boolean(visualSelectionId)}
-                layoutKey={`${pageRoute}:${categories.map((c) => c.id).join(",")}:${expandedCategoryIds.join(",")}:${selectedSubcategory}`}
-              />
-            ) : null}
             {error ? (
               <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-center text-xs text-red-700">
                 失败 <button type="button" className="font-semibold underline" onClick={onRetry}>重试</button>
@@ -1111,6 +1103,14 @@ function CategoryPanel({
               </div>
               );
             }) : null}
+            {!isMobile && categories.length > 0 ? (
+              <SecondarySlidingIndicator
+                containerRef={containerRef}
+                activeId={visualSelectionId}
+                ready={!isLoading && !error && Boolean(visualSelectionId)}
+                layoutKey={`${pageRoute}:${categories.map((c) => c.id).join(",")}:${expandedCategoryIds.join(",")}:${selectedSubcategory}`}
+              />
+            ) : null}
           </div>
         </div>
       </CardContent>
@@ -1143,23 +1143,28 @@ function SubcategorySlidingList({
     const list = listRef.current;
     const indicator = indicatorRef.current;
     if (!list || !indicator) return;
-    if (activeIdx < 0 || !isExpanded) {
-      indicator.style.opacity = "0";
-      return;
-    }
-    const buttons = list.querySelectorAll<HTMLButtonElement>("button[data-sub-item]");
-    const target = buttons[activeIdx];
-    if (!target) {
-      indicator.style.opacity = "0";
-      return;
-    }
-    indicator.style.transform = `translate3d(0, ${target.offsetTop}px, 0)`;
-    indicator.style.height = `${target.offsetHeight}px`;
-    if (indicator.dataset.ready !== "true") {
-      indicator.getBoundingClientRect();
-      indicator.dataset.ready = "true";
-    }
-    indicator.style.opacity = "1";
+    const sync = () => {
+      if (activeIdx < 0 || !isExpanded) {
+        indicator.style.opacity = "0";
+        return;
+      }
+      const buttons = list.querySelectorAll<HTMLButtonElement>("button[data-sub-item]");
+      const target = buttons[activeIdx];
+      if (!target || target.offsetHeight <= 0) {
+        indicator.style.opacity = "0";
+        return;
+      }
+      indicator.style.transform = `translate3d(0, ${target.offsetTop}px, 0)`;
+      indicator.style.height = `${target.offsetHeight}px`;
+      if (indicator.dataset.ready !== "true") {
+        indicator.getBoundingClientRect();
+        indicator.dataset.ready = "true";
+      }
+      indicator.style.opacity = "1";
+    };
+    sync();
+    const frame = requestAnimationFrame(sync);
+    return () => cancelAnimationFrame(frame);
   }, [activeIdx, isExpanded, subItems.length]);
 
   return (
@@ -1170,11 +1175,6 @@ function SubcategorySlidingList({
         isExpanded ? "translate-y-0 scale-100 opacity-100" : "-translate-y-2 scale-[0.985] opacity-0"
       )}
     >
-      <span
-        ref={indicatorRef}
-        aria-hidden="true"
-        className="pointer-events-none absolute left-2.5 right-0 top-0 z-0 rounded-xl border border-orange-400/30 border-l-[3px] border-l-orange-500 bg-gradient-to-r from-[#ffebd8]/95 to-[#fff7ef]/80 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_2px_8px_rgba(249,115,22,0.12)] transition-[transform,height,opacity] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
-      />
       {subItems.map((sub, subIdx) => {
         const subActive = subIdx === activeIdx;
         return (
@@ -1205,6 +1205,11 @@ function SubcategorySlidingList({
           </button>
         );
       })}
+      <span
+        ref={indicatorRef}
+        aria-hidden="true"
+        className="pointer-events-none !mt-0 block absolute left-2.5 right-0 top-0 z-0 rounded-xl border border-orange-400/30 border-l-[3px] border-l-orange-500 bg-gradient-to-r from-[#ffebd8]/95 to-[#fff7ef]/80 opacity-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_2px_8px_rgba(249,115,22,0.12)] transition-[transform,height,opacity] duration-[320ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+      />
     </div>
   );
 }
