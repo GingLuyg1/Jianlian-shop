@@ -24,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { triggerWaterRippleTransition } from "@/lib/motion/water-ripple-transition";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 
 interface PublicTopInfoBarProps {
@@ -261,7 +262,18 @@ export default function PublicTopInfoBar({
                 className="h-8 min-w-[64px] rounded-xl border-orange-100 bg-white px-2.5 text-[12px] font-semibold shadow-sm shadow-orange-100/60 hover:bg-orange-50 sm:h-9 sm:min-w-[72px] sm:px-3 sm:text-[13px]"
                 asChild
               >
-                <Link href="/login">
+                <Link
+                  href="/login"
+                  onMouseEnter={() => router.prefetch("/login")}
+                  onClick={(event) => {
+                    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+                      return;
+                    }
+                    event.preventDefault();
+                    triggerWaterRippleTransition({ originEl: event.currentTarget });
+                    router.push("/login");
+                  }}
+                >
                   <LogIn className="mr-1 h-3 w-3" />
                   登录
                 </Link>
@@ -271,7 +283,18 @@ export default function PublicTopInfoBar({
                 className="h-8 min-w-[64px] rounded-xl px-2.5 text-[12px] font-semibold shadow-sm shadow-orange-200/70 sm:h-9 sm:min-w-[72px] sm:px-3 sm:text-[13px]"
                 asChild
               >
-                <Link href="/register">
+                <Link
+                  href="/register"
+                  onMouseEnter={() => router.prefetch("/register")}
+                  onClick={(event) => {
+                    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+                      return;
+                    }
+                    event.preventDefault();
+                    triggerWaterRippleTransition({ originEl: event.currentTarget });
+                    router.push("/register");
+                  }}
+                >
                   <UserPlus className="mr-1 h-3 w-3" />
                   注册
                 </Link>

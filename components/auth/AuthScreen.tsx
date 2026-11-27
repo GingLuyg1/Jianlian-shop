@@ -35,6 +35,7 @@ import {
 } from "@/lib/auth/password-policy";
 import { cn } from "@/lib/utils";
 import { createSafeUuid, safeLocalStorageGet, safeLocalStorageSet } from "@/lib/browser/safe-storage";
+import { triggerWaterRippleTransition } from "@/lib/motion/water-ripple-transition";
 import AlternateLoginMethods from "@/components/auth/AlternateLoginMethods";
 import EmailVerificationForm from "@/components/auth/EmailVerificationForm";
 import AnimatedCharacters from "@/components/auth/AnimatedCharacters";
@@ -139,168 +140,12 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
   const authMainRef = useRef<HTMLElement>(null);
   const submitBtnRef = useRef<HTMLButtonElement>(null);
 
-  const triggerSuccessWithButtonRipple = () => {
+  const triggerSuccessWithButtonRipple = (originEl?: HTMLElement | null) => {
     setLoginSuccess(true);
-
-    // 手机端不应用登录后的水幕涟漪转场效果，直接流畅进入目标页
-    if (typeof document === "undefined" || typeof window === "undefined") return;
-    const isMobileViewport =
-      window.innerWidth < 1024 ||
-      document.documentElement.dataset.mobilePreview === "true" ||
-      window.matchMedia?.("(pointer: coarse)").matches === true;
-    if (isMobileViewport) return;
-
-    // 严格按照打磨实验室黄金参数挂载全屏水幕涟漪转场到 document.body（全程 pointer-events: none，底层瞬间切入 100% 真实可交互首页）：
-    // - 扩散总时长 (Duration): 2.8s
-    // - 水幕羽化虚化度 (Blur): 40px
-    // - 冲击波环数 (Wave Rings): 2 环（从登录按钮精确边框轮廓向外泛起涟漪）
-    {
-      try {
-        const DURATION_MS = 2800;
-        const BLUR_PX = 40;
-        const WAVE_RINGS = 2;
-
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        let btnRect = {
-          left: vw * 0.72 - 170,
-          top: vh * 0.58 - 22,
-          width: 340,
-          height: 44,
-        };
-        if (submitBtnRef.current) {
-          const r = submitBtnRef.current.getBoundingClientRect();
-          if (r.width > 0 && r.height > 0) {
-            btnRect = { left: r.left, top: r.top, width: r.width, height: r.height };
-          }
-        }
-        const originX = btnRect.left + btnRect.width / 2;
-        const originY = btnRect.top + btnRect.height / 2;
-        const maxDist = Math.hypot(
-          Math.max(originX, vw - originX),
-          Math.max(originY, vh - originY)
-        );
-        const targetRadius = maxDist * 1.15;
-        const startRadius = Math.max(20, Math.min(btnRect.width, btnRect.height) * 0.52);
-
-        const existing = document.getElementById("jianlian-login-ripple-portal");
-        if (existing) existing.remove();
-
-        const host = document.createElement("div");
-        host.id = "jianlian-login-ripple-portal";
-        host.setAttribute("aria-hidden", "true");
-        host.style.cssText =
-          "position:fixed;inset:0;z-index:9999;pointer-events:none;overflow:hidden;";
-
-        // 1. 顶层 1:1 登录页水幕快照：全程 pointer-events: none，以 40px 柔焦羽化水幕在 2.8s 内从登录按钮向外融化揭开真实首页
-        let snapshotLayer: HTMLElement | null = null;
-        if (authMainRef.current) {
-          const cloned = authMainRef.current.cloneNode(true) as HTMLElement;
-          cloned.style.cssText =
-            "position:fixed;inset:0;width:100vw;height:100vh;margin:0;pointer-events:none;z-index:1;overflow:hidden;will-change:mask-image,-webkit-mask-image,opacity,transform;";
-          cloned.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
-          host.appendChild(cloned);
-          snapshotLayer = cloned;
-        }
-
-        // 2. 从登录按钮精确边框泛起的 2 环香槟白金光学冲击波
-        const ringBox = document.createElement("div");
-        ringBox.style.cssText =
-          "position:fixed;inset:0;pointer-events:none;z-index:2;overflow:hidden;";
-        host.appendChild(ringBox);
-
-        const finalDiameter = targetRadius * 2;
-        const ringBorder = "2.5px solid rgba(254, 243, 199, 0.92)";
-        const ringBoxShadow =
-          "0 0 50px 18px rgba(251, 191, 36, 0.45), inset 0 0 40px 12px rgba(255, 255, 255, 0.9)";
-
-        for (let i = 0; i < WAVE_RINGS; i++) {
-          const ring = document.createElement("div");
-          ring.style.cssText = [
-            "position:absolute",
-            `left:${originX}px`,
-            `top:${originY}px`,
-            `width:${btnRect.width}px`,
-            `height:${btnRect.height}px`,
-            "border-radius:12px",
-            `border:${ringBorder}`,
-            `box-shadow:${ringBoxShadow}`,
-            `filter:blur(${Math.max(1, BLUR_PX * 0.25)}px)`,
-            "transform:translate(-50%,-50%)",
-            "pointer-events:none",
-            "opacity:0",
-            "will-change:width,height,border-radius,opacity",
-          ].join(";");
-          ringBox.appendChild(ring);
-
-          const delayMs = i * 160;
-          const ringDurationMs = Math.round(DURATION_MS * 0.9);
-          ring.animate(
-            [
-              {
-                width: `${btnRect.width}px`,
-                height: `${btnRect.height}px`,
-                borderRadius: "12px",
-                opacity: 0.96,
-              },
-              {
-                width: `${finalDiameter * 0.45}px`,
-                height: `${finalDiameter * 0.45}px`,
-                borderRadius: "50%",
-                opacity: 0.78,
-                offset: 0.4,
-              },
-              {
-                width: `${finalDiameter * 1.08}px`,
-                height: `${finalDiameter * 1.08}px`,
-                borderRadius: "50%",
-                opacity: 0,
-              },
-            ],
-            {
-              duration: ringDurationMs,
-              delay: delayMs,
-              easing: "cubic-bezier(0.16, 1, 0.3, 1)",
-              fill: "forwards",
-            }
-          );
-        }
-
-        document.body.appendChild(host);
-
-        // 3. 60fps 逐帧平滑驱动 40px 羽化径向水幕（精确模拟 cubic-bezier(0.16, 1, 0.3, 1) 液态减速曲线）
-        const startTime = performance.now();
-        const easeLiquid = (t: number) => (t >= 1 ? 1 : 1 - Math.pow(2, -10 * t));
-
-        const step = (now: number) => {
-          const elapsed = now - startTime;
-          const raw = Math.min(1, Math.max(0, elapsed / DURATION_MS));
-          const eased = easeLiquid(raw);
-
-          if (snapshotLayer) {
-            const currentR = startRadius + (targetRadius - startRadius) * eased;
-            const currentBlur = BLUR_PX * (1 + eased);
-            const grad = `radial-gradient(circle at ${originX}px ${originY}px, transparent ${currentR.toFixed(1)}px, black ${(currentR + currentBlur).toFixed(1)}px)`;
-            snapshotLayer.style.webkitMaskImage = grad;
-            snapshotLayer.style.maskImage = grad;
-            snapshotLayer.style.transform = `scale(${(1 + 0.03 * eased).toFixed(4)})`;
-            snapshotLayer.style.opacity = raw > 0.78 ? String(Math.max(0, 1 - (raw - 0.78) / 0.22)) : "1";
-          }
-
-          if (raw < 1) {
-            window.requestAnimationFrame(step);
-          } else {
-            host.remove();
-          }
-        };
-
-        window.requestAnimationFrame(step);
-        // 安全清理兜底，绝不残留任何 DOM
-        window.setTimeout(() => {
-          if (host.isConnected) host.remove();
-        }, DURATION_MS + 350);
-      } catch {}
-    }
+    triggerWaterRippleTransition({
+      originEl: originEl ?? submitBtnRef.current,
+      snapshotEl: authMainRef.current,
+    });
   };
 
   // 当外部传入的 initialMode 变更时同步，并预热真实首页路由
@@ -310,7 +155,8 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
 
   useEffect(() => {
     try {
-      router.prefetch(redirectTo || "/");
+      router.prefetch("/");
+      if (redirectTo && redirectTo !== "/") router.prefetch(redirectTo);
     } catch {}
   }, [redirectTo, router]);
 
@@ -907,6 +753,17 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
         <div className="flex items-center justify-start">
           <Link
             href="/"
+            onClick={(event) => {
+              if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+                return;
+              }
+              event.preventDefault();
+              triggerWaterRippleTransition({
+                originEl: event.currentTarget,
+                snapshotEl: authMainRef.current,
+              });
+              router.push("/");
+            }}
             className="inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-orange-200/60 backdrop-blur transition-all hover:scale-[1.02] hover:bg-white hover:text-primary"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -1009,7 +866,15 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                   />
                   <button
                     type="button"
-                    onClick={() => switchMode("login")}
+                    onClick={(event) => {
+                      if (currentMode !== "login") {
+                        triggerWaterRippleTransition({
+                          originEl: event.currentTarget,
+                          ringsOnly: true,
+                        });
+                      }
+                      switchMode("login");
+                    }}
                     className={cn(
                       "relative z-10 flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors duration-200",
                       !isRegister
@@ -1021,7 +886,15 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => switchMode("register")}
+                    onClick={(event) => {
+                      if (currentMode !== "register") {
+                        triggerWaterRippleTransition({
+                          originEl: event.currentTarget,
+                          ringsOnly: true,
+                        });
+                      }
+                      switchMode("register");
+                    }}
                     className={cn(
                       "relative z-10 flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors duration-200",
                       isRegister

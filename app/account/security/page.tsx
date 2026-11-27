@@ -506,12 +506,12 @@ export default function AccountSecurityPage() {
       data-account-page="/account/security"
       data-account-ready={!loadingUser}
       aria-busy={loadingUser}
-      className={`${styles.page} flex min-h-0 min-w-0 flex-col gap-4`}
+      className={`${styles.page} flex min-h-0 min-w-0 flex-col gap-4 md:h-full md:overflow-hidden`}
     >
       {/* Top Security Panel with Header, Mode Switcher & 4-Metric Status Overview */}
       <Card className={`${glass.surface} ${styles.panel} shrink-0 overflow-hidden`}>
         <CardHeader
-          className={`${glass.hero} ${styles.pageHeader} flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between`}
+          className={`${glass.hero} ${styles.pageHeader} flex flex-col gap-3 !py-4 lg:flex-row lg:items-center lg:justify-between`}
         >
           <div className="flex min-w-0 items-center gap-3.5">
             <span className={`${glass.icon} ${styles.sectionIcon}`}>
@@ -666,13 +666,13 @@ export default function AccountSecurityPage() {
       </Card>
 
       {/* Main Two-Column Workspace: Left Form Panel + Right Security Guide & Checklist */}
-      <div className="grid min-w-0 items-stretch gap-4 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
+      <div className="grid min-h-0 min-w-0 flex-1 items-stretch gap-4 md:overflow-hidden xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.85fr)]">
         {/* LEFT COLUMN: Active Security Operation Form */}
-        <section className={`${glass.surface} ${styles.panel} flex flex-col p-5 sm:p-7 xl:min-h-[600px]`}>
+        <section className={`${glass.surface} ${styles.panel} flex min-h-0 flex-col p-5 sm:p-6 md:h-full md:overflow-hidden`}>
           {/* TAB 1: 更换绑定邮箱 (Ref 图2) */}
           {activeTab === "change-email" && (
-            <div className="flex flex-1 flex-col">
-              <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#efe3d5] pb-4">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="mb-4 flex shrink-0 items-start justify-between gap-4 border-b border-[#efe3d5] pb-3.5">
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-lg font-bold text-slate-900">更换绑定邮箱</h2>
@@ -684,7 +684,8 @@ export default function AccountSecurityPage() {
                 </span>
               </div>
 
-              <form onSubmit={handleSubmitChangeEmail} autoComplete="off" className="flex flex-1 flex-col space-y-5">
+              <form onSubmit={handleSubmitChangeEmail} autoComplete="off" className="flex min-h-0 flex-1 flex-col">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
                 {/* 1. 当前绑定邮箱 (点击可复制到剪贴板，匹配参考图2) */}
                 <div className={styles.field}>
                   <div className="flex items-center justify-between">
@@ -923,8 +924,9 @@ export default function AccountSecurityPage() {
                     {emailErrors.form}
                   </div>
                 )}
+                </div>
 
-                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-3">
+                <div className="mt-auto flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#efe3d5]/80 pt-3.5">
                   <Button
                     type="submit"
                     disabled={savingEmail}
@@ -947,8 +949,8 @@ export default function AccountSecurityPage() {
 
           {/* TAB 2: 邮箱改密码 (Ref 图3) */}
           {activeTab === "email-password" && (
-            <div className="flex flex-1 flex-col">
-              <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#efe3d5] pb-4">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="mb-4 flex shrink-0 items-start justify-between gap-4 border-b border-[#efe3d5] pb-3.5">
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-lg font-bold text-slate-900">邮箱改密码</h2>
@@ -960,7 +962,8 @@ export default function AccountSecurityPage() {
                 </span>
               </div>
 
-              <form onSubmit={handleSubmitEmailPwd} autoComplete="off" className="flex flex-1 flex-col space-y-5">
+              <form onSubmit={handleSubmitEmailPwd} autoComplete="off" className="flex min-h-0 flex-1 flex-col">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
                 {/* Hidden username anchor to prevent browser password manager from autofilling the OTP input */}
                 <input
                   type="text"
@@ -1149,8 +1152,9 @@ export default function AccountSecurityPage() {
                     {emailPwdErrors.form}
                   </div>
                 )}
+                </div>
 
-                <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-3">
+                <div className="mt-auto flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#efe3d5]/80 pt-3.5">
                   <Button
                     type="submit"
                     disabled={savingEmailPwd}
@@ -1179,8 +1183,8 @@ export default function AccountSecurityPage() {
 
           {/* TAB 3: 原密码改密码 (Ref 图4) */}
           {activeTab === "old-password" && (
-            <div className="flex flex-1 flex-col">
-              <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#efe3d5] pb-4">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="mb-4 flex shrink-0 items-start justify-between gap-4 border-b border-[#efe3d5] pb-3.5">
                 <div>
                   <div className="flex items-center gap-2">
                     <h2 className="text-lg font-bold text-slate-900">原密码改密码</h2>
@@ -1192,7 +1196,8 @@ export default function AccountSecurityPage() {
                 </span>
               </div>
 
-              <form onSubmit={handleSubmitOldPwd} autoComplete="off" className="flex flex-1 flex-col space-y-5">
+              <form onSubmit={handleSubmitOldPwd} autoComplete="off" className="flex min-h-0 flex-1 flex-col">
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
                 <input
                   type="text"
                   name="username"
@@ -1320,8 +1325,9 @@ export default function AccountSecurityPage() {
                     {oldPwdErrors.form}
                   </div>
                 )}
+                </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                <div className="mt-auto flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[#efe3d5]/80 pt-3.5">
                   <Button
                     type="submit"
                     disabled={savingOldPwd}
@@ -1350,10 +1356,10 @@ export default function AccountSecurityPage() {
         </section>
 
         {/* RIGHT COLUMN: Contextual Step-by-Step Guide & Security Protection Checklist */}
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex min-h-0 min-w-0 flex-col gap-4 md:h-full">
           {/* Card B: Security Best Practices & Quick Navigation */}
-          <section className={`${glass.surface} ${styles.panel} flex flex-1 flex-col p-5 sm:p-6 xl:min-h-[600px]`}>
-            <div className="mb-4 flex items-center justify-between border-b border-[#efe3d5]/70 pb-3.5">
+          <section className={`${glass.surface} ${styles.panel} flex min-h-0 flex-1 flex-col p-5 sm:p-6 md:h-full md:overflow-hidden`}>
+            <div className="mb-4 flex shrink-0 items-center justify-between border-b border-[#efe3d5]/70 pb-3.5">
               <div className="flex items-center gap-3">
                 <span className={`${glass.icon} flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100/70 text-[#d86e31] shadow-sm`}>
                   <ShieldAlert className="h-5 w-5" strokeWidth={1.8} />
@@ -1369,7 +1375,7 @@ export default function AccountSecurityPage() {
               </span>
             </div>
 
-            <div className="space-y-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
               <div className="flex items-start gap-3 rounded-xl border border-[#f3e5d8] bg-[#fffbf6] p-3 transition-colors hover:border-[#e8d2be] hover:bg-white sm:p-3.5">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange-100/70 text-[#c26227]">
                   <Globe className="h-4 w-4" />
@@ -1407,7 +1413,7 @@ export default function AccountSecurityPage() {
               </div>
             </div>
 
-            <div className="mt-auto flex flex-wrap items-center justify-between gap-2.5 border-t border-[#efe3d5] pt-4">
+            <div className="mt-auto flex shrink-0 flex-wrap items-center justify-between gap-2.5 border-t border-[#efe3d5] pt-3.5">
               <Link
                 href="/account/privacy"
                 className="inline-flex items-center gap-1.5 rounded-lg bg-orange-50/80 px-3 py-1.5 text-xs font-semibold text-[#b85d23] ring-1 ring-inset ring-orange-200/60 transition hover:bg-orange-100"

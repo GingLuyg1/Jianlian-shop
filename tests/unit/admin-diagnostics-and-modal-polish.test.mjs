@@ -101,4 +101,18 @@ test("admin categories full-count fetch, two-line modal hint, centered icon, sha
   assert.match(seo, /MERCHANT_PRODUCT_NAME_MAX_LENGTH = 150/);
   assert.match(seo, /export function normalizeMerchantProductName/);
   assert.match(seo, /name:\s*safeProductName/);
+
+  const ripple = file("lib/motion/water-ripple-transition.ts");
+  const authScreen = file("components/auth/AuthScreen.tsx");
+  const topBar = file("components/layout/PublicTopInfoBar.tsx");
+  assert.match(ripple, /export function triggerWaterRippleTransition/);
+  assert.match(ripple, /const DURATION_MS = 2800/);
+  assert.match(ripple, /const BLUR_PX = 40/);
+  assert.match(ripple, /const WAVE_RINGS = 2/);
+  assert.ok((authScreen.match(/triggerWaterRippleTransition\(/g) ?? []).length >= 4);
+  assert.ok((topBar.match(/triggerWaterRippleTransition\(/g) ?? []).length >= 2);
+
+  const securityPage = file("app/account/security/page.tsx");
+  assert.match(securityPage, /data-account-page="\/account\/security"[\s\S]*md:h-full md:overflow-hidden/);
+  assert.doesNotMatch(securityPage, /xl:min-h-\[600px\]/);
 });

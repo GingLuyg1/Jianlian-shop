@@ -273,7 +273,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <div ref={contentRef} className={cn(`${center.content} ${center.contentFrame} min-w-0 overflow-visible md:min-h-0 md:overflow-y-auto`, isMobile && "!h-auto !overflow-visible")}><AccountEmailContext.Provider value={email}>{children}</AccountEmailContext.Provider></div>
+          <div ref={contentRef} className={cn(`${center.content} ${center.contentFrame} min-w-0 overflow-visible md:h-full md:min-h-0 md:overflow-y-auto`, isMobile && "!h-auto !overflow-visible")}><AccountEmailContext.Provider value={email}>{children}</AccountEmailContext.Provider></div>
         </div>
       </div>
     </PublicLayout>

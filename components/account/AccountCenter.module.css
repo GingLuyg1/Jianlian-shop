@@ -114,6 +114,7 @@
   .apiTab { padding: 9px 14px; }
   .apiPage { min-height: auto; }
 }
+:global(html[data-mobile-preview="true"]) .page { height: auto !important; overflow: visible !important; }
 :global(html[data-mobile-preview="true"]) .overviewStats { grid-template-columns: minmax(0, 1fr); }
 :global(html[data-mobile-preview="true"]) .vipPanel { padding: 16px; }
 :global(html[data-mobile-preview="true"]) .vipSummary { align-items: flex-start; padding: 14px; gap: 10px; flex-wrap: wrap; }
