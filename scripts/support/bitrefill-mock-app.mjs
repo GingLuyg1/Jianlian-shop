@@ -31,6 +31,9 @@ function actualPaymentService(root, deliver) {
 }
 
 export async function createMockShop({ backend, root }) {
+  const entry = await loadActualLocalDeliveryEntry(root);
+  const { payOrderWithBalance } = actualPaymentService(root, (client, orderId, trigger, onStage) =>
+    entry.deliverDigitalOrder(client, orderId, trigger, onStage, bitrefill));
   const service = createMockService(backend), supplier = await createMockSupplier();
   const capabilities = Object.fromEntries(["mock-customer", "mock-other", "mock-admin", "mock-webhook"].map((role) => [role, randomBytes(32).toString("hex")]));
   const bitrefill = createLocalBitrefillFulfillment({ transport: supplier.transport,
@@ -49,9 +52,6 @@ export async function createMockShop({ backend, root }) {
         refundState: item.refunded ? "refunded" : "none", disputeState: "none" };
     }, loadSupplierBalance: async () => ({ source: "synthetic_balance", state: "sufficient", currency: "USD", availableAmount: "100.00" }) });
   const dispatch = (orderId) => dispatchLocalPaidSuppliers({ service, orderId, bitrefill });
-  const entry = await loadActualLocalDeliveryEntry(root);
-  const { payOrderWithBalance } = actualPaymentService(root, (client, orderId, trigger, onStage) =>
-    entry.deliverDigitalOrder(client, orderId, trigger, onStage, bitrefill));
   let origin;
   const server = createServer(async (request, response) => {
     try {
