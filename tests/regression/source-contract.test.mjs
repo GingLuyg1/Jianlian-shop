@@ -1300,7 +1300,7 @@ test("high-risk APIs use shared rate limit and request size guards", () => {
   for (const route of guardedRoutes) {
     const source = file(route);
     assert.match(source, /checkRateLimit/, `${route} must call checkRateLimit`);
-    assert.match(source, /checkRequestSize/, `${route} must call checkRequestSize`);
+    assert.match(source, /checkRequestSize|readBoundedJsonBody/, `${route} must call checkRequestSize`);
   }
 
   // V6 deliberately removes the customer write operation altogether. Require
@@ -2018,7 +2018,8 @@ test("BEP20 terminal timing and secure delivery refresh share one guarded presen
   assert.match(deliveryPolling, /PAYMENT_DELIVERY_POLL_TIMEOUT_MS = 24000/);
   assert.match(deliveryPolling, /if \(remainingMs <= 0\) return \{ kind: "timeout" \}/);
   assert.match(secureDelivery, /重新加载交付信息/);
-  assert.match(secureDelivery, /支付成功，交付内容仍在准备中/);
+  assert.match(secureDelivery, /已付款，交付仍在处理中/);
+  assert.match(secureDelivery, /已付款 · 需要人工核对/);
   assert.match(secureDelivery, /查看我的订单/);
   assert.match(secureDelivery, /显示完整内容/);
   assert.match(secureDelivery, /navigator\.clipboard\.writeText\(content\)/);
@@ -3041,7 +3042,7 @@ test("system error monitoring is service-only, deduplicated, sanitized, and best
   assert.match(pageView, /}, 202\)/);
   assert.doesNotMatch(pageView, /recordSystemError|recordApiError|upsert_system_error_event/);
   assert.match(pageView, /return json\(\{ ok: false, error: "访问标识无效" \}, 400\)/);
-  assert.match(pageView, /MAX_BODY_BYTES\) return json\([\s\S]{0,80}, 413\)/);
+  assert.match(pageView, /readBoundedJsonBody[\s\S]*request, MAX_BODY_BYTES\)/);
 });
 
 test("page-view baseline matches the privacy-minimized service-role ingest contract", () => {
@@ -3089,8 +3090,8 @@ test("page-view baseline matches the privacy-minimized service-role ingest contr
   assert.match(route, /}, 202\)/);
   assert.match(route, /MAX_BODY_BYTES = 4096/);
   assert.match(route, /rawVisitorKey\.length > 128/);
-  assert.match(route, /SENSITIVE_QUERY_KEYS/);
-  assert.match(route, /if \(value\.length > 80\) return/);
+  assert.doesNotMatch(tracker, /useSearchParams|location\.search/);
+  assert.match(route, /return pathname\.slice\(0, 512\)/);
   assert.match(route, /url\.hostname\.slice\(0, 120\)/);
   assert.match(route, /user_agent_hash: userAgent \? hash\(userAgent\)/);
   assert.match(route, /ip_hash: ip \? hash\(ip\)/);

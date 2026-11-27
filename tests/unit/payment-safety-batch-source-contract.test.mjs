@@ -41,10 +41,13 @@ test("expired recharge and order presentations block payment actions", () => {
   const sessions = source("lib/payments/payment-session-service.ts");
   assert.match(payment, /if \(expired\) return <ExpiredRechargeNotice/);
   assert.match(payment, /!\["closed", "expired", "failed"\]\.includes\(String\(order\?\.status/);
-  assert.match(payment, /if \(createStarted\.current \|\| completed \|\| expired\)/);
+  assert.match(payment, /if \(completed \|\| expired\) \{\s*setLoading\(false\);\s*return;\s*\}[\s\S]{0,450}fetchWithTimeout\("\/api\/payments\/create"/);
   assert.match(sessions, /\["cancelled", "closed", "expired", "refunded", "failed"\]\.includes\(record\.status\)/);
   assert.match(sessions, /normalizeSessionStatus\(latest\.status\) === "expired" \|\| isExpiredAt\(latest\.expires_at\)/);
-  assert.match(payment, /sessionPaymentBlocked[\s\S]*不能继续扫码、打开付款入口或创建替代支付单/);
+  for (const artifact of ["qrCodeValue", "walletAddress", "paymentUrl", "submitForm", "deepLinkUrl"]) {
+    assert.ok(payment.includes(`!sessionPaymentBlocked && session.${artifact}`), artifact);
+  }
+  assert.match(payment, /\{sessionPaymentBlocked \? \([\s\S]{0,320}不能继续扫码或付款/);
   assert.match(source("lib/payments/payment-callback-service.ts"), /CALLBACK_RECHARGE_PAID_AFTER_EXPIRY/);
 });
 

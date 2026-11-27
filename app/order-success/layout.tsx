@@ -8,3 +8,5 @@ export const metadata: Metadata = {
 export default function OrderSuccessLayout({ children }: { children: React.ReactNode }) {
   return children;
 }
+
+export const dynamic = "force-dynamic";

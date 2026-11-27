@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { ChevronDown, ListFilter, MoreHorizontal, X, Loader2, Plus, RefreshCw, Search } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Portal as HoverCardPortal } from "@radix-ui/react-hover-card";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import {
@@ -2217,42 +2218,49 @@ function ModalFrame({
   size?: string;
   title: string;
 }) {
+  const opener = useRef<HTMLElement | null>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   if (!open) return null;
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-2 backdrop-blur-sm sm:p-6"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !isSaving) onClose();
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && !isSaving) onClose();
-      }}
-      tabIndex={-1}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className={cn(
-          "relative flex max-h-[calc(100dvh-48px)] w-full flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl",
-          size
-        )}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-orange-100 bg-gradient-to-br from-orange-50 to-white px-5 py-4">
-          <h2 className="text-lg font-semibold text-slate-950">{title}</h2>
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={onClose}
-            className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-50"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
+    <DialogPrimitive.Root open onOpenChange={(next) => { if (!next && !isSaving) onClose(); }}>
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-950/35 backdrop-blur-sm" />
+        <DialogPrimitive.Content
+          aria-describedby={undefined}
+          className={cn(
+            "fixed left-1/2 top-1/2 z-50 flex max-h-[calc(100dvh-48px)] w-[calc(100%-16px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl sm:w-[calc(100%-48px)]",
+            size
+          )}
+          onOpenAutoFocus={(event) => {
+            opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            event.preventDefault();
+            heading.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            if (opener.current?.isConnected) opener.current.focus();
+          }}
+          onEscapeKeyDown={(event) => { if (isSaving) event.preventDefault(); }}
+          onPointerDownOutside={(event) => { if (isSaving) event.preventDefault(); }}
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-orange-100 bg-gradient-to-br from-orange-50 to-white px-5 py-4">
+            <DialogPrimitive.Title ref={heading} tabIndex={-1} className="text-lg font-semibold text-slate-950">
+              {title}
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Close
+              type="button"
+              disabled={isSaving}
+              aria-label="关闭弹窗"
+              className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:pointer-events-none disabled:opacity-50"
+            >
+              <X className="h-5 w-5" aria-hidden="true" />
+            </DialogPrimitive.Close>
+          </div>
+          {children}
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }
 

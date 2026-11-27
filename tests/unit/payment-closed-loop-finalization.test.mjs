@@ -135,16 +135,18 @@ for (const channel of ["alipay", "wechat"]) {
 test("both existing styled dialogs show exact customer-service copy; limit precedes create", () => {
   for (const path of ["components/account/AccountRechargeContent.tsx", "app/checkout/page.tsx"]) {
     const code = source(path);
-    assert.match(code, /2000/);
-    assert.match(code, /联系客服/);
-    assert.match(code, /<Dialog open=\{amountLimitDialogOpen\}/);
-    assert.match(code, /openPublicSupport/);
+    const dialog = code.match(/<Dialog open=\{amountLimitDialogOpen\}[\s\S]*?<\/Dialog>/)?.[0];
+    assert.ok(dialog, path);
+    assert.match(dialog, /支付宝\/微信单笔支付金额大于1000元，请联系人工客服处理。/);
+    assert.match(dialog, /openPublicSupport\(\); \}\}>联系客服/);
     assert.doesNotMatch(code, /\b(?:alert|confirm)\(/);
   }
   const recharge = source("components/account/AccountRechargeContent.tsx");
-  assert.ok(recharge.indexOf("if (channelOverLimit)") < recharge.indexOf('fetch("/api/recharges",'));
+  const rechargeGuard = recharge.indexOf("if (channelOverLimit)");
+  assert.ok(rechargeGuard >= 0 && rechargeGuard < recharge.indexOf('fetchWithTimeout("/api/recharges",'));
   const checkout = source("app/checkout/page.tsx");
-  assert.ok(checkout.indexOf("if (paymentOverLimit)") < checkout.indexOf('fetch("/api/orders"'));
+  const checkoutGuard = checkout.indexOf("if (paymentOverLimit)");
+  assert.ok(checkoutGuard >= 0 && checkoutGuard < checkout.indexOf('fetchWithTimeout("/api/orders",'));
 });
 
 test("actual checkout submit handler opens the limit dialog with zero create calls", async () => {
@@ -161,9 +163,10 @@ test("actual checkout submit handler opens the limit dialog with zero create cal
   }).outputText;
   let creates = 0; const events = [];
   const blocked = () => {creates++; throw Error("CREATE_FORBIDDEN");};
-  const makeSubmit = (productLoading) => new Function("fetch", "setAmountLimitDialogOpen", "productLoading", `
+  const makeSubmit = (productLoading) => new Function("fetchWithTimeout", "setAmountLimitDialogOpen", "productLoading", `
     const productRow = {}, submitLoading=false, submissionGuardRef={current:{isActive:()=>false}},
-      hasSku=false, selectedSku=null, isPurchasable=true, legalLoading=false,
+      hasSku=false, selectedSku=null, isPurchasable=true, hasSelectedPaymentMethod=true,
+      pendingBalanceOrder=null, legalLoading=false,
       legalError=null, agreementsReady=true, confirmed=true, selectedPaymentUnavailable=false,
       paymentOverLimit=true;
     ${body}

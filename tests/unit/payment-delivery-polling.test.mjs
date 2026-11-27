@@ -71,3 +71,8 @@ test("delivery polling performs reads only and never invokes a payment callback"
   assert.equal(result.kind, "delivered");
   assert.equal(paymentCalls, 0);
 });
+
+test("manual review stops polling without reporting delivery", async () => {
+  const result = await pollForPaymentDelivery({ load: async () => "manual_review" });
+  assert.deepEqual(result, { kind: "manual_review" });
+});

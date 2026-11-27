@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { writeAdminAuditLog } from "@/lib/admin/audit-log-service";
-import { getServerAdminContext } from "@/lib/auth/require-admin";
+import { getServerAdminContext, hasAdminCapability } from "@/lib/auth/require-admin";
 import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
 import { sendEmail } from "@/lib/email/provider";
 import { expireUnpaidOrder } from "@/lib/orders/order-expiration";
@@ -75,7 +75,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   let auditAdmin: AuditAdmin | undefined;
 
   try {
-    const admin = await getServerAdminContext();
+    const admin = await getServerAdminContext("orders.write");
     if (!admin.ok) {
       await writeAdminAuditLog({
         request,
@@ -305,6 +305,13 @@ export async function POST(request: Request, context: RouteContext) {
           send_email?: boolean;
         }
       | null;
+
+    const requiredCapability = body?.action === "ship_logistics" || body?.action === "expire_unpaid_order"
+      ? "orders.write"
+      : "delivery.manual";
+    if (!hasAdminCapability(admin.adminAuthorization, requiredCapability)) {
+      return NextResponse.json({ error: "无此模块的操作权限" }, { status: 403 });
+    }
 
     if (body?.action === "ship_logistics") {
       const orderId = (await context.params).orderId;

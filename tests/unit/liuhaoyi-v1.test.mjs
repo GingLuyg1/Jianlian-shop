@@ -335,7 +335,7 @@ test("前端以渠道能力限制法币金额，balance 和 usdt_bep20 不套用
   const checkout = source("app/checkout/page.tsx");
   const recharge = source("components/account/AccountRechargeContent.tsx");
   assert.match(checkout, /selectedPaymentChannel\?\.maximumAmount/);
-  assert.match(checkout, /orderAmount > paymentMaximum/);
+  assert.match(checkout, /const paymentOverLimit = selectedPaymentChannel\?\.currency === "CNY"[\s\S]{0,180}effectiveOrderAmount > paymentMaximum/);
   assert.match(recharge, /selectedChannel\?\.maximumAmount/);
   assert.match(recharge, /summary\.payableAmount > maximumAmount/);
   assert.match(recharge, /Boolean\(summary && typeof maximumAmount/);

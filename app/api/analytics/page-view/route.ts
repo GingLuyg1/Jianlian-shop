@@ -1,12 +1,12 @@
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 
+import { checkRateLimit, getRequestSourceKey, readBoundedJsonBody } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 import { createRequestId, logServerEvent } from "@/lib/monitoring/logger";
 
-const EXCLUDED_PREFIXES = ["/admin", "/api", "/_next", "/assets", "/favicon", "/robots.txt", "/sitemap", "/health"];
-const SENSITIVE_QUERY_KEYS = ["token", "access_token", "refresh_token", "code", "password", "payment", "session", "signature", "sign", "key"];
+const EXCLUDED_PREFIXES = ["/order-query", "/payment", "/order-success", "/account", "/admin", "/api", "/_next", "/assets", "/favicon", "/robots.txt", "/sitemap", "/health"];
 const MAX_BODY_BYTES = 4096;
 const DUPLICATE_WINDOW_MS = 2500;
 const BOT_USER_AGENT_PATTERN =
@@ -54,16 +54,7 @@ function sanitizePath(input: unknown) {
   const pathname = url.pathname || "/";
   if (EXCLUDED_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`))) return null;
 
-  const safeParams = new URLSearchParams();
-  url.searchParams.forEach((value, key) => {
-    const normalizedKey = key.toLowerCase();
-    if (SENSITIVE_QUERY_KEYS.some((sensitiveKey) => normalizedKey.includes(sensitiveKey))) return;
-    if (value.length > 80) return;
-    safeParams.set(key, value);
-  });
-
-  const query = safeParams.toString();
-  return `${pathname}${query ? `?${query}` : ""}`.slice(0, 512);
+  return pathname.slice(0, 512);
 }
 
 function sanitizeReferrerHost(input: unknown) {
@@ -93,24 +84,22 @@ function getClientIp(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { checkRateLimit, getRequestSourceKey } = await import("@/lib/security/rate-limit");
   const rateLimit = checkRateLimit("catalog_read", `pv:${getRequestSourceKey(request)}`);
   if (!rateLimit.allowed) return json({ ok: true, skipped: true, reason: "rate_limited" });
-
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (contentLength > MAX_BODY_BYTES) return json({ ok: false, error: "统计请求过大" }, 413);
 
   const userAgent = request.headers.get("user-agent") ?? "";
   if (!userAgent || BOT_USER_AGENT_PATTERN.test(userAgent)) {
     return json({ ok: true, skipped: true, reason: "bot" });
   }
 
-  const body = (await request.json().catch(() => ({}))) as {
+  const parsed = await readBoundedJsonBody<{
     path?: unknown;
     referrer?: unknown;
     visitorKey?: unknown;
     sessionKey?: unknown;
-  };
+  } | null>(request, MAX_BODY_BYTES);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data ?? {};
 
   const pagePath = sanitizePath(body.path);
   if (!pagePath) return json({ ok: true, skipped: true });

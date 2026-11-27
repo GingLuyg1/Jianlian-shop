@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 
 import { hashOrderQueryToken, verifyOrderQueryToken } from "@/lib/orders/order-query-service";
-import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
+import { checkRateLimit, readBoundedJsonBody, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +12,6 @@ export async function POST(request: Request) {
   if (!hasSupabaseServerConfig()) {
     return NextResponse.json({ error: "订单系统暂时不可用" }, { status: 503 });
   }
-  const sizeError = checkRequestSize(request, 8 * 1024);
-  if (sizeError) return sizeError;
-
   const supabase = getSupabaseServerClient();
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
@@ -24,7 +21,9 @@ export async function POST(request: Request) {
   const limit = checkRateLimit("order_lookup", getUserRateLimitKey(user.id, "order_bind"));
   if (!limit.allowed) return limit.response!;
 
-  const body = (await request.json().catch(() => null)) as { orderNo?: string; queryToken?: string; confirm?: boolean } | null;
+  const parsed = await readBoundedJsonBody<{ orderNo?: string; queryToken?: string; confirm?: boolean } | null>(request, 8 * 1024);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
   const orderNo = String(body?.orderNo ?? "").trim();
   const queryToken = String(body?.queryToken ?? "").trim();
   if (!body?.confirm || !orderNo || !queryToken) {
@@ -54,16 +53,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, orderNo: row.order_no, bound: true });
   }
 
-  const { error: updateError } = await supabase
+  const { data: boundOrder, error: updateError } = await supabase
     .from("orders")
     .update({ user_id: user.id, order_query_token_revoked_at: new Date().toISOString() })
     .eq("id", row.id)
     .is("user_id", null)
-    .eq("order_query_token_hash", hashOrderQueryToken(queryToken));
+    .eq("order_query_token_hash", hashOrderQueryToken(queryToken))
+    .is("order_query_token_revoked_at", null)
+    .select("id")
+    .maybeSingle();
 
   if (updateError) {
     return NextResponse.json({ error: "订单绑定失败，请稍后重试" }, { status: 500 });
   }
 
+  if (!boundOrder) return NextResponse.json({ error: GENERIC_ERROR }, { status: 409 });
   return NextResponse.json({ ok: true, orderNo: row.order_no, bound: true });
 }

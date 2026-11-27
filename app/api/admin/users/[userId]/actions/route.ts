@@ -83,8 +83,7 @@ export async function POST(request: Request, context: RouteContext) {
         afterSummary: after,
         metadata: { rpc: data },
       });
-      if (!audit.ok) return json({ error: "账户状态已处理，但审计日志写入失败，请联系技术处理。" }, { status: 500 });
-      return json({ ok: true, result: data, profile: after });
+      return committedAction(requestId, data, after, audit.ok);
     }
 
     if (action === "update_risk_status") {
@@ -113,8 +112,7 @@ export async function POST(request: Request, context: RouteContext) {
         afterSummary: after,
         metadata: { rpc: data },
       });
-      if (!audit.ok) return json({ error: "风险状态已处理，但审计日志写入失败，请联系技术处理。" }, { status: 500 });
-      return json({ ok: true, result: data, profile: after });
+      return committedAction(requestId, data, after, audit.ok);
     }
 
     if (action === "adjust_balance") {
@@ -149,8 +147,7 @@ export async function POST(request: Request, context: RouteContext) {
         afterSummary: { balance: after?.balance ?? null, adjustmentType, direction, amount },
         metadata: { rpc: data },
       });
-      if (!audit.ok) return json({ error: "余额调整已处理，但审计日志写入失败，请联系技术处理。" }, { status: 500 });
-      return json({ ok: true, result: data, profile: after });
+      return committedAction(requestId, data, after, audit.ok);
     }
 
     return json({ error: "不支持的用户管理操作。" }, { status: 400 });
@@ -172,6 +169,17 @@ export async function POST(request: Request, context: RouteContext) {
       { status: isUserManagementCompatibilityError(error) ? 503 : 400 }
     );
   }
+}
+
+function committedAction(requestId: string, result: unknown, profile: unknown, auditOk: boolean) {
+  return json({
+    ok: true,
+    committed: true,
+    requestId,
+    result,
+    profile,
+    ...(auditOk ? {} : { auditWarning: "操作已生效，审计记录待核对。请保留请求编号，避免重复提交。" }),
+  });
 }
 
 async function loadProfile(supabase: any, userId: string) {

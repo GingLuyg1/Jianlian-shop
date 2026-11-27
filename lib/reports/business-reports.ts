@@ -84,6 +84,9 @@ async function safeSelectAll(
       rows.push(...batch);
       if (batch.length < end - offset + 1) break;
     }
+    if (rows.length >= maxRows) {
+      errors[label] = "已达到报表读取上限，请缩短时间范围后重试";
+    }
     return rows;
   } catch (error) {
     errors[label] = normalizeReportError(error, `${label}读取失败`);
@@ -432,17 +435,22 @@ function csvAmount(value: unknown, currency: unknown) {
   return normalized === null ? "" : formatAmountWithCurrency(normalized, currencyValue(currency));
 }
 
-export function buildCsv(type: string, report: Awaited<ReturnType<typeof loadBusinessReport>>) {
+function maskReportEmail(value: unknown) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text ? `${text[0]}***` : "";
+}
+
+export function buildCsv(type: string, report: Awaited<ReturnType<typeof loadBusinessReport>>, showCustomerEmail = false) {
   const rows: unknown[][] = [];
   if (type === "orders") {
     rows.push(["订单号", "用户邮箱", "订单状态", "支付状态", "订单金额", "币种", "创建时间（Asia/Shanghai）"]);
-    report.raw.orders.forEach((row) => rows.push([row.order_no, row.customer_email, row.status, row.payment_status, csvAmount(row.total_amount, row.currency), currencyValue(row.currency), csvDate(row.created_at)]));
+    report.raw.orders.forEach((row) => rows.push([row.order_no, showCustomerEmail ? row.customer_email : maskReportEmail(row.customer_email), row.status, row.payment_status, csvAmount(row.total_amount, row.currency), currencyValue(row.currency), csvDate(row.created_at)]));
   } else if (type === "payments") {
     rows.push(["支付单号", "业务单号", "渠道", "状态", "应付金额", "实收金额", "币种", "支付时间（Asia/Shanghai）"]);
     report.raw.payments.forEach((row) => rows.push([row.payment_no, row.orders?.order_no, row.channel ?? row.payment_method, row.status, csvAmount(row.payable_amount ?? row.amount, row.currency), csvAmount(row.received_amount, row.currency), currencyValue(row.currency), csvDate(row.paid_at)]));
   } else if (type === "recharges") {
     rows.push(["充值单号", "用户", "渠道", "状态", "申请金额", "入账金额", "币种", "创建时间（Asia/Shanghai）"]);
-    report.raw.recharges.forEach((row) => rows.push([row.recharge_no, row.user_email, row.channel_code ?? row.channel, row.status, csvAmount(row.requested_amount ?? row.amount, row.currency), csvAmount(row.credited_amount, row.currency), currencyValue(row.currency), csvDate(row.created_at)]));
+    report.raw.recharges.forEach((row) => rows.push([row.recharge_no, showCustomerEmail ? row.user_email : maskReportEmail(row.user_email), row.channel_code ?? row.channel, row.status, csvAmount(row.requested_amount ?? row.amount, row.currency), csvAmount(row.credited_amount, row.currency), currencyValue(row.currency), csvDate(row.created_at)]));
   } else if (type === "refunds") {
     rows.push(["退款单号", "订单号", "状态", "退款方式", "申请金额", "批准金额", "币种", "完成时间（Asia/Shanghai）"]);
     report.raw.refunds.forEach((row) => rows.push([row.refund_no, row.orders?.order_no, row.status, row.refund_method, csvAmount(row.requested_amount, row.currency), csvAmount(row.approved_amount, row.currency), currencyValue(row.currency), csvDate(row.completed_at)]));

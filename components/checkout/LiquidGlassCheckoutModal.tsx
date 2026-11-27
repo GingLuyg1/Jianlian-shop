@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { createPortal } from "react-dom";
+import * as Dialog from "@radix-ui/react-dialog";
 import { toast } from "sonner";
 
 import { CheckoutModalProvider } from "./CheckoutModalContext";
@@ -84,6 +84,8 @@ export default function LiquidGlassCheckoutModal({
   const [shareCopied, setShareCopied] = useState(false);
   const closeTimerRef = useRef<number | null>(null);
   const shareTimerRef = useRef<number | null>(null);
+  const shellRef = useRef<HTMLDivElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -130,6 +132,8 @@ export default function LiquidGlassCheckoutModal({
     if (!productId || typeof window === "undefined") return;
     try {
       const url = new URL(window.location.href);
+      url.search = "";
+      url.hash = "";
       url.searchParams.set("p", productId);
       const copied = await copyShareText(url.toString());
       if (copied) {
@@ -147,20 +151,6 @@ export default function LiquidGlassCheckoutModal({
       toast.error("生成分享链接失败，请稍后重试");
     }
   }, [productId]);
-
-  useEffect(() => {
-    if (!productId) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        // Ignore ESC if a nested Radix dialog (e.g. terms / payment dialog) is open
-        const nestedDialog = document.querySelector('[role="dialog"][data-state="open"]');
-        if (nestedDialog) return;
-        requestClose(false);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [productId, requestClose]);
 
   const contextValue = useMemo(
     () =>
@@ -181,33 +171,38 @@ export default function LiquidGlassCheckoutModal({
 
   if (!mounted || !productId || !contextValue) return null;
 
-  return createPortal(
-    <div
-      data-testid="liquid-glass-checkout-backdrop"
-      className={cn(styles.backdrop, closing && styles.backdropClosing)}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          requestClose(false);
-        }
-      }}
-      role="presentation"
-    >
-      <div
-        data-testid="liquid-glass-checkout-modal"
-        className={cn(styles.shell, closing && styles.shellClosing)}
-        role="dialog"
-        aria-modal="true"
-        aria-label="商品选购与下单"
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div className={styles.dragHandle} aria-hidden="true" />
-        <div className={cn(styles.body, "sidebar-scroll")}>
-          <CheckoutModalProvider value={contextValue}>
-            <CheckoutExperience key={productId} />
-          </CheckoutModalProvider>
+  return (
+    <Dialog.Root open>
+      <Dialog.Portal>
+        <div data-testid="liquid-glass-checkout-backdrop" className={cn(styles.backdrop, closing && styles.backdropClosing)}>
+          <Dialog.Content
+            ref={shellRef}
+            data-testid="liquid-glass-checkout-modal"
+            className={cn(styles.shell, closing && styles.shellClosing)}
+            aria-describedby={undefined}
+            tabIndex={-1}
+            onOpenAutoFocus={(event) => {
+              openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+              event.preventDefault();
+              shellRef.current?.focus();
+            }}
+            onCloseAutoFocus={(event) => {
+              event.preventDefault();
+              if (openerRef.current?.isConnected) openerRef.current.focus();
+            }}
+            onEscapeKeyDown={(event) => { event.preventDefault(); requestClose(false); }}
+            onPointerDownOutside={(event) => { event.preventDefault(); requestClose(false); }}
+          >
+            <Dialog.Title className="sr-only">商品选购与下单</Dialog.Title>
+            <div className={styles.dragHandle} aria-hidden="true" />
+            <div className={cn(styles.body, "sidebar-scroll")}>
+              <CheckoutModalProvider value={contextValue}>
+                <CheckoutExperience key={productId} />
+              </CheckoutModalProvider>
+            </div>
+          </Dialog.Content>
         </div>
-      </div>
-    </div>,
-    document.body
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

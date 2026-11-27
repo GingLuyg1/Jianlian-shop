@@ -13,6 +13,12 @@ type AdminAuthorization = {
   permissions: Record<string, unknown>;
 };
 
+type AdminCapability = "orders.write" | "delivery.manual" | "inventory.write" | "reports.export";
+
+export function hasAdminCapability(authorization: AdminAuthorization | null, capability: AdminCapability) {
+  return authorization?.status === "active" && (authorization.admin_level === "super_admin" || authorization.permissions?.[capability] === true);
+}
+
 function isAdminProfile(profile: AdminProfile | null | undefined) {
   return profile?.role === "admin";
 }
@@ -41,7 +47,7 @@ async function loadAdminAuthorization(supabase: SupabaseClient, userId: string) 
   };
 }
 
-export async function getServerAdminContext(): Promise<
+export async function getServerAdminContext(requiredCapability?: AdminCapability): Promise<
   | { ok: true; supabase: SupabaseClient; user: User; profile: AdminProfile; adminAuthorization: AdminAuthorization | null }
   | { ok: false; status: 401 | 403 | 500; message: string }
 > {
@@ -89,7 +95,12 @@ export async function getServerAdminContext(): Promise<
     }
   }
 
-  return { ok: true, supabase, user, profile: profile as AdminProfile, adminAuthorization: authorizationResult.authorization };
+  const authorization = authorizationResult.authorization;
+  if (requiredCapability && !hasAdminCapability(authorization, requiredCapability)) {
+    return { ok: false, status: 403, message: "无此模块的操作权限" };
+  }
+
+  return { ok: true, supabase, user, profile: profile as AdminProfile, adminAuthorization: authorization };
 }
 
 export async function getServerSuperAdminContext(): Promise<
