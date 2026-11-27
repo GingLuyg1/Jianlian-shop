@@ -149,6 +149,7 @@ export type ProductFilters = {
   page?: number;
   pageSize?: number;
   lite?: boolean;
+  all?: boolean;
 };
 
 export type ProductListResult = {
@@ -545,6 +546,7 @@ export async function listProducts({
   page = 1,
   pageSize = 10,
   lite = false,
+  all = false,
 }: ProductFilters): Promise<ProductListResult> {
   const params = new URLSearchParams();
   if (search.trim()) params.set("search", search.trim());
@@ -560,6 +562,7 @@ export async function listProducts({
   if (inventoryVerification !== "all") params.set("inventoryVerification", inventoryVerification);
   if (fulfillmentHealth !== "all") params.set("fulfillmentHealth", fulfillmentHealth);
   if (lite) params.set("lite", "1");
+  if (all) params.set("all", "1");
   params.set("sortBy", sortBy);
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));

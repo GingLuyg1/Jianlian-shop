@@ -1240,39 +1240,17 @@ function CheckoutPageContent() {
     }
   };
 
-  const modalActionRow = isModal ? (
+  const modalActionRow = isModal && modalCtx?.onClose ? (
     <div data-testid="checkout-modal-right-actions" className="flex shrink-0 items-center justify-end gap-2">
-      {modalCtx?.onShare ? (
-        <button
-          type="button"
-          onClick={modalCtx.onShare}
-          className={modalStyles.shareActionBtn}
-          aria-label="分享商品链接"
-        >
-          {modalCtx.shareCopied ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-emerald-600" />
-              <span className="text-emerald-700">已复制链接</span>
-            </>
-          ) : (
-            <>
-              <Share2 className="h-3.5 w-3.5" />
-              <span>分享商品</span>
-            </>
-          )}
-        </button>
-      ) : null}
-      {modalCtx?.onClose ? (
-        <button
-          type="button"
-          onClick={modalCtx.onClose}
-          className={modalStyles.closeCircle}
-          aria-label="关闭弹窗"
-          title="关闭并返回列表"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      ) : null}
+      <button
+        type="button"
+        onClick={modalCtx.onClose}
+        className={modalStyles.closeCircle}
+        aria-label="关闭弹窗"
+        title="关闭并返回列表"
+      >
+        <X className="h-4 w-4" />
+      </button>
     </div>
   ) : null;
 
@@ -1337,14 +1315,37 @@ function CheckoutPageContent() {
                 ) : null}
 
                 <div className="shrink-0">
-                  <label className="mb-1 block text-xs font-medium">
-                    <span className="text-red-500">*</span>联系邮箱
-                    {isShippingProduct && (
-                      <span className="ml-1 text-[11px] font-normal text-muted-foreground">
-                        （用于接收订单及物流发货单号）
-                      </span>
-                    )}
-                  </label>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <label className="block text-xs font-medium">
+                      <span className="text-red-500">*</span>联系邮箱
+                      {isShippingProduct && (
+                        <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                          （用于接收订单及物流发货单号）
+                        </span>
+                      )}
+                    </label>
+                    {isModal && modalCtx?.onShare ? (
+                      <button
+                        type="button"
+                        onClick={modalCtx.onShare}
+                        data-testid="checkout-share-button"
+                        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-orange-200/80 bg-orange-50/70 px-2.5 text-[11px] font-medium text-slate-700 transition-colors hover:border-primary/40 hover:bg-orange-100/70 hover:text-primary"
+                        aria-label="分享商品链接"
+                      >
+                        {modalCtx.shareCopied ? (
+                          <>
+                            <Check className="h-3 w-3 text-emerald-600" />
+                            <span className="text-emerald-700">已复制链接</span>
+                          </>
+                        ) : (
+                          <>
+                            <Share2 className="h-3 w-3" />
+                            <span>分享商品</span>
+                          </>
+                        )}
+                      </button>
+                    ) : null}
+                  </div>
                   <Input
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
@@ -1968,8 +1969,8 @@ function ProductDetailCard({
           </div>
         ) : null}
 
-        <div className={cn("grid shrink-0 gap-4 sm:gap-6 lg:grid-cols-[220px_minmax(0,1fr)]", isMobile && "!grid-cols-1 !gap-3.5")}>
-          <div className="relative aspect-square w-full max-w-[160px] mx-auto overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 shadow-sm sm:max-w-[220px]">
+        <div className={cn("grid shrink-0 gap-4 sm:gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center", isMobile && "!grid-cols-1 !gap-3.5")}>
+          <div className="relative mx-auto aspect-square w-full max-w-[160px] self-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 shadow-sm sm:max-w-[220px]">
             <ProductArtwork product={product} />
           </div>
 
@@ -1988,7 +1989,7 @@ function ProductDetailCard({
               return (
                 <div
                   className={cn(
-                    "mt-4 grid w-full gap-3 rounded-xl border border-border bg-white p-3.5 sm:mt-8 sm:gap-4 sm:p-5",
+                    "mt-3.5 grid w-full gap-3 rounded-xl border border-border bg-white p-3.5 sm:mt-5 sm:gap-4 sm:p-5",
                     isGiftCardProduct ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2"
                   )}
                 >

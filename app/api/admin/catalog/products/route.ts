@@ -127,6 +127,10 @@ export async function GET(request: Request) {
   const to = from + pageSize - 1;
   const operationalScan = hasOperationalScanFilters(filters);
   const liteMode = !operationalScan && url.searchParams.get("lite") === "1";
+  const fetchAllInCategory =
+    liteMode &&
+    url.searchParams.get("all") === "1" &&
+    ((Boolean(categoryId) && categoryId !== "all") || categoryIds.length > 0);
 
   const selectFields = (
     getSupabaseServiceRoleClient()
@@ -191,7 +195,7 @@ export async function GET(request: Request) {
   let count: number | null = null;
   let productQueryCount = 1;
 
-  if (operationalScan) {
+  if (operationalScan || fetchAllInCategory) {
     const scanResult = await selectAllPaginated<Record<string, unknown>>(
       (rangeFrom, rangeTo) =>
         buildProductsQuery().range(rangeFrom, rangeTo) as unknown as PromiseLike<{

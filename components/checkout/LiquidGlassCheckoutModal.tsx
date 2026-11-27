@@ -111,7 +111,12 @@ export default function LiquidGlassCheckoutModal({
     (force = false) => {
       if (!productId || closing) return;
       if (backdropLocked && !force) {
-        toast.info("正在处理订单或存在待支付订单，如需退出请点击右上角关闭按钮。");
+        toast.info(
+          <div className="leading-relaxed">
+            <div>正在处理订单或存在待支付订单；</div>
+            <div>如需退出请点击右上角关闭按钮。</div>
+          </div>
+        );
         return;
       }
       setClosing(true);

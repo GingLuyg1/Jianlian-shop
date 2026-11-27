@@ -194,10 +194,16 @@ function SkuOperationalDiagnostics({ diagnostic }: { diagnostic?: SkuOperational
                 {diagnostic.effective_delivery_type !== "automatic" || diagnostic.fulfillment_source === "local_inventory"
                   ? "不适用"
                   : diagnostic.supplier.bound
-                    ? "已绑定"
+                    ? `已绑定${diagnostic.supplier.provider ? `（${diagnostic.supplier.provider === "kuajingzy" ? "跨境资源网" : diagnostic.supplier.provider === "daju" ? "大橘" : diagnostic.supplier.provider === "bitrefill" ? "Bitrefill" : diagnostic.supplier.provider}）` : ""}`
                     : "未绑定"}
               </span>
             </div>
+            {diagnostic.supplier.bound && diagnostic.supplier_stock.quantity !== null ? (
+              <div className="flex justify-between">
+                <span>上游库存快照：</span>
+                <span className="font-medium text-slate-800">{diagnostic.supplier_stock.quantity} 件</span>
+              </div>
+            ) : null}
             <div className="flex justify-between"><span>库存状态：</span><span className="font-medium text-slate-800">{supplierStockLabel[diagnostic.supplier_stock.state]}</span></div>
             <div className="flex justify-between"><span>上架条件：</span><span className={cn("font-medium", diagnostic.activation.ready ? "text-emerald-600" : "text-red-600")}>{diagnostic.activation.ready ? "符合要求" : "不符合"}</span></div>
           </div>

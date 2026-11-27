@@ -303,6 +303,7 @@ function AdminCategoriesPageInner() {
   const [productSearch, setProductSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [productStatus, setProductStatusFilter] = useState<ProductStatus | "all">("all");
+  const [visibleProductLimit, setVisibleProductLimit] = useState(100);
   const [loadingCategories, setLoadingCategories] = useState(true);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -412,6 +413,7 @@ function AdminCategoriesPageInner() {
           page: 1,
           pageSize: 100,
           lite: true,
+          all: true,
         });
         if (seq !== productReqSeqRef.current) return;
         productsCacheRef.current.set(cacheKey, { products: result.products, count: result.count });
@@ -441,6 +443,10 @@ function AdminCategoriesPageInner() {
   }, [loadCategories]);
 
   useEffect(() => {
+    setVisibleProductLimit(100);
+  }, [selectedProductCategoryId, selectedSubcategoryFilter, debouncedSearch, productStatus]);
+
+  useEffect(() => {
     void loadProducts();
   }, [loadProducts]);
 
@@ -466,6 +472,7 @@ function AdminCategoriesPageInner() {
               page: 1,
               pageSize: 100,
               lite: true,
+              all: true,
             });
             if (!cancelled) {
               productsCacheRef.current.set(key, { products: res.products, count: res.count });
@@ -1174,7 +1181,7 @@ function AdminCategoriesPageInner() {
                   <div className="text-center">更新时间</div>
                   <div className="text-center">操作</div>
                 </div>
-                {displayedProducts.map((product) => (
+                {displayedProducts.slice(0, visibleProductLimit).map((product) => (
                   <div
                     key={product.id}
                     onDragOver={(event) => {
@@ -1275,6 +1282,31 @@ function AdminCategoriesPageInner() {
                     </div>
                   </div>
                 ))}
+                {displayedProducts.length > visibleProductLimit ? (
+                  <div className="flex items-center justify-center gap-2 bg-slate-50/50 px-4 py-3 text-xs text-slate-600">
+                    <span>
+                      已展示 {visibleProductLimit} / {displayedProducts.length} 个商品
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs"
+                      onClick={() => setVisibleProductLimit((prev) => prev + 100)}
+                    >
+                      再加载 100 个
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2.5 text-xs text-blue-700 hover:bg-blue-50"
+                      onClick={() => setVisibleProductLimit(displayedProducts.length)}
+                    >
+                      显示全部 ({displayedProducts.length})
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
