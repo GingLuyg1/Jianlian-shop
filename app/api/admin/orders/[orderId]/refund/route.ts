@@ -7,7 +7,7 @@ import { checkRateLimit, getAdminRateLimitKey } from "@/lib/security/rate-limit"
 export const dynamic = "force-dynamic";
 
 type RouteContext = {
-  params: { orderId: string };
+  params: Promise<{ orderId: string }>;
 };
 
 function mapDirectRefundError(rawMessage: string): { message: string; status: number } {
@@ -33,7 +33,7 @@ export async function POST(request: Request, context: RouteContext) {
   const limit = checkRateLimit("admin_write", getAdminRateLimitKey(admin.user.id, "order_direct_refund"));
   if (!limit.allowed) return limit.response!;
 
-  const { orderId } = context.params;
+  const { orderId } = await context.params;
   if (!orderId || !/^[0-9a-f-]{36}$/i.test(orderId)) {
     return NextResponse.json({ error: "无效的订单 ID。" }, { status: 400 });
   }
