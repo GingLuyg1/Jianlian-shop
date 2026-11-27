@@ -47,7 +47,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSlidingIndicator } from "@/components/ui/use-sliding-indicator";
 import { cn } from "@/lib/utils";
-import { safeLocalStorageGet, safeLocalStorageSet } from "@/lib/browser/safe-storage";
+import { safeLocalStorageGet, safeLocalStorageRemove } from "@/lib/browser/safe-storage";
 
 const tabs = [
   { value: "overview", label: "概览" },
@@ -151,89 +151,81 @@ export default function AccountApiPage() {
       ? `${window.location.origin}/api/v1`
       : "https://www.jianlian.shop/api/v1";
 
-  // 读取或同步商户 API 状态（严格与后台「代理与分销 - API管理 / API申请记录」保持实时同步，收回权限后必须重新申请）
-  const syncMerchantApiState = useCallback(() => {
+  // 从服务端数据库同步真实商户 API 状态（彻底脱离 localStorage，确保与后台「代理与分销」实时一致）
+  const syncMerchantApiState = useCallback(async () => {
     if (typeof window === "undefined") return;
+
+    // 清理早期版本遗留在浏览器本地的测试缓存
     const userEmail = email || "developer@example.com";
-    const statusKey = `jianlian_mch_app_status_${userEmail}`;
-    const keyKey = `jianlian_developer_key_${userEmail}`;
-    const appIdKey = `jianlian_mch_app_id_${userEmail}`;
-    const ipKey = `jianlian_mch_whitelist_${userEmail}`;
+    safeLocalStorageRemove(`jianlian_mch_app_status_${userEmail}`);
+    safeLocalStorageRemove(`jianlian_developer_key_${userEmail}`);
+    safeLocalStorageRemove(`jianlian_mch_app_id_${userEmail}`);
+    safeLocalStorageRemove(`jianlian_mch_whitelist_${userEmail}`);
+    safeLocalStorageRemove("jianlian_admin_api_applications");
 
-    const savedStatus = safeLocalStorageGet(statusKey);
-    const savedKey = safeLocalStorageGet(keyKey);
-    const savedAppId = safeLocalStorageGet(appIdKey);
-    const savedIps = safeLocalStorageGet(ipKey);
-
-    let adminRecord: ApiApplicationRecord | undefined;
     try {
-      const raw = safeLocalStorageGet("jianlian_admin_api_applications");
-      const list: ApiApplicationRecord[] = raw ? JSON.parse(raw) : [];
-      adminRecord = list.find((item) => item && item.email === userEmail);
-    } catch {}
+      const res = await fetch("/api/account/agent-api", { cache: "no-store" });
+      if (!res.ok) {
+        setApiStatus("unapplied");
+        setWasRevoked(false);
+        setAppId("");
+        setApiKey("");
+        setWhitelistIps([]);
+        return;
+      }
+      const payload = (await res.json().catch(() => null)) as {
+        status?: MerchantApiStatus;
+        wasRevoked?: boolean;
+        application?: {
+          appId?: string;
+          appSecretPrefix?: string;
+        } | null;
+        whitelistIps?: string[];
+      } | null;
 
-    // 1. 若后台已回收或被移除，强制回到未开通/重新申请状态
-    if (
-      savedStatus === "revoked" ||
-      savedStatus === "unapplied" ||
-      adminRecord?.status === "revoked" ||
-      adminRecord?.status === "rejected"
-    ) {
+      const nextStatus = payload?.status ?? "unapplied";
+      if (nextStatus === "approved") {
+        setApiStatus("approved");
+        setWasRevoked(false);
+        setViewingDocsWhileUnapproved(false);
+        setAppId(payload?.application?.appId ?? "");
+        // 若刚重置过密钥保留本次明文，否则使用服务端脱敏前缀
+        setApiKey((prev) =>
+          prev && prev.startsWith("jl_live_") && !prev.includes("****")
+            ? prev
+            : payload?.application?.appSecretPrefix ?? ""
+        );
+        setWhitelistIps(Array.isArray(payload?.whitelistIps) ? payload!.whitelistIps! : []);
+        return;
+      }
+
+      if (nextStatus === "pending") {
+        setApiStatus("pending");
+        setWasRevoked(false);
+        setAppId("");
+        setApiKey("");
+        setWhitelistIps([]);
+        return;
+      }
+
       setApiStatus("unapplied");
-      setWasRevoked(savedStatus === "revoked" || adminRecord?.status === "revoked");
+      setWasRevoked(payload?.wasRevoked === true);
       setAppId("");
       setApiKey("");
       setWhitelistIps([]);
-      return;
+    } catch {
+      // 网络波动时维持当前视图，等待下次同步
     }
-
-    // 2. 审核中状态
-    if (savedStatus === "pending" || adminRecord?.status === "pending") {
-      setApiStatus("pending");
-      setWasRevoked(false);
-      return;
-    }
-
-    // 3. 仅当已明确通过审批时展示已开通开发者面板
-    if (savedStatus === "approved" || adminRecord?.status === "approved") {
-      const resolvedAppId = adminRecord?.appId || savedAppId || `MCH_${Math.abs(hashString(userEmail)).toString().slice(0, 8).padEnd(8, "0")}`;
-      const resolvedKey = adminRecord?.appSecret || savedKey || generateApiKey();
-      let parsedIpsList: string[] = [];
-      if (savedIps) {
-        try {
-          const parsedIps = JSON.parse(savedIps);
-          parsedIpsList = Array.isArray(parsedIps) ? parsedIps.filter((ip) => ip && ip !== "124.220.100.12") : [];
-        } catch {
-          parsedIpsList = savedIps !== "124.220.100.12" ? [savedIps] : [];
-        }
-      } else if (adminRecord?.serverIps?.length) {
-        parsedIpsList = adminRecord.serverIps;
-      }
-      setApiStatus("approved");
-      setWasRevoked(false);
-      setViewingDocsWhileUnapproved(false);
-      setAppId(resolvedAppId);
-      setApiKey(resolvedKey);
-      setWhitelistIps(parsedIpsList);
-      return;
-    }
-
-    // 4. 默认未开通：要求提交接入申请
-    setApiStatus("unapplied");
-    setWasRevoked(false);
-    setAppId("");
-    setApiKey("");
-    setWhitelistIps([]);
   }, [email]);
 
   useEffect(() => {
-    syncMerchantApiState();
-    const onSync = () => syncMerchantApiState();
-    window.addEventListener("storage", onSync);
+    void syncMerchantApiState();
+    const onSync = () => {
+      void syncMerchantApiState();
+    };
     window.addEventListener("focus", onSync);
     window.addEventListener("jianlian-admin-badges-updated", onSync);
     return () => {
-      window.removeEventListener("storage", onSync);
       window.removeEventListener("focus", onSync);
       window.removeEventListener("jianlian-admin-badges-updated", onSync);
     };
@@ -330,8 +322,8 @@ export default function AccountApiPage() {
     return hash;
   }
 
-  // 提交 API 接入申请
-  const handleSubmitApplication = (e: React.FormEvent) => {
+  // 提交真实 API 接入申请（写入数据库，后台代理与分销中心实时可见）
+  const handleSubmitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!merchantName.trim()) {
       toast.error("请输入商户/企业或个人主体名称");
@@ -343,44 +335,46 @@ export default function AccountApiPage() {
     }
 
     setSubmittingApply(true);
-    const userEmail = email || "developer@example.com";
-    const statusKey = `jianlian_mch_app_status_${userEmail}`;
+    try {
+      const ipsParsed = applyIps
+        .split(/[\n,;\s]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
 
-    const ipsParsed = applyIps
-      .split(/[\n,;\s]+/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    const newRecord: ApiApplicationRecord = {
-      id: `APP_${Date.now()}`,
-      email: userEmail,
-      merchantName: merchantName.trim(),
-      businessScenario: businessScenario.trim(),
-      serverIps: ipsParsed,
-      contact: contactInfo.trim() || userEmail,
-      status: "pending",
-      appliedAt: new Date().toISOString(),
-    };
-
-    setTimeout(() => {
-      if (typeof window !== "undefined") {
-        safeLocalStorageSet(statusKey, "pending");
-        try {
-          const raw = safeLocalStorageGet("jianlian_admin_api_applications");
-          const list: ApiApplicationRecord[] = raw ? JSON.parse(raw).filter((item: ApiApplicationRecord) => item && item.email !== userEmail) : [];
-          list.unshift(newRecord);
-          safeLocalStorageSet("jianlian_admin_api_applications", JSON.stringify(list));
-          window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
-        } catch {}
+      const res = await fetch("/api/account/agent-api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "apply",
+          merchantName: merchantName.trim(),
+          businessScenario: businessScenario.trim(),
+          serverIps: ipsParsed,
+          contact: contactInfo.trim() || email || "",
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as { ok?: boolean; error?: string } | null;
+      if (!res.ok || payload?.ok === false) {
+        throw new Error(payload?.error || "API 申请提交失败，请稍后重试");
       }
       setApiStatus("pending");
-      setSubmittingApply(false);
+      setWasRevoked(false);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("jianlian-admin-badges-updated"));
+      }
       toast.success("API 申请已成功提交，平台管理员审核中！");
-    }, 600);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "API 申请提交失败");
+    } finally {
+      setSubmittingApply(false);
+    }
   };
 
   const handleCopyKey = () => {
     if (!apiKey) return;
+    if (apiKey.includes("****")) {
+      toast.info("当前仅展示脱敏密钥前缀；如需获取完整明文密钥，请点击「重置密钥」重新签发。");
+      return;
+    }
     navigator.clipboard?.writeText(apiKey).then(() => {
       setCopiedKey(true);
       toast.success("商户密钥 (AppSecret) 已复制");
@@ -405,20 +399,34 @@ export default function AccountApiPage() {
     }).catch(() => toast.error("复制失败，请手动复制"));
   };
 
-  const handleResetKey = () => {
-    const fresh = generateApiKey();
-    setApiKey(fresh);
-    if (typeof window !== "undefined") {
-      const userEmail = email || "developer@example.com";
-      const storageKey = `jianlian_developer_key_${userEmail}`;
-      safeLocalStorageSet(storageKey, fresh);
+  const handleResetKey = async () => {
+    try {
+      const res = await fetch("/api/account/agent-api", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reset_secret" }),
+      });
+      const payload = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        issuedSecret?: string;
+        error?: string;
+      } | null;
+      if (!res.ok || !payload?.issuedSecret) {
+        throw new Error(payload?.error || "商户密钥重置失败");
+      }
+      setApiKey(payload.issuedSecret);
+      setShowKey(true);
+      toast.success("商户密钥已重置并立即生效，请及时复制保存（离开页面后仅展示脱敏前缀）");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "商户密钥重置失败");
     }
-    toast.success("商户密钥已重置并立即生效");
   };
 
   const maskedKey = apiKey
-    ? `${apiKey.slice(0, 10)}${"•".repeat(20)}${apiKey.slice(-4)}`
-    : "正在生成开发者凭证...";
+    ? apiKey.includes("****")
+      ? apiKey
+      : `${apiKey.slice(0, 10)}${"•".repeat(20)}${apiKey.slice(-4)}`
+    : "正在读取开发者凭证...";
 
   // 实时计算今日真实统计指标
   const apiMetrics = useMemo(() => {

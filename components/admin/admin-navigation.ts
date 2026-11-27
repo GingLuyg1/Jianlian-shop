@@ -106,6 +106,7 @@ export const adminNavigationItems: readonly AdminNavigationItem[] = [
     children: [
       { label: "用户管理", href: "/admin/users" },
       { label: "代理与分销", href: "/admin/agents" },
+      { label: "隐私与导出", href: "/admin/privacy-requests" },
       { label: "邮件通知", href: "/admin/notifications/email-deliveries" },
     ],
   },
@@ -150,7 +151,10 @@ export function isAdminNavigationLinkActive(
     return isPathActive(pathname, "/admin/finance") || isPathActive(pathname, "/admin/reports");
   }
   if (href === "/admin/users") {
-    return isPathActive(pathname, "/admin/users") || isPathActive(pathname, "/admin/privacy-requests");
+    return isPathActive(pathname, "/admin/users");
+  }
+  if (href === "/admin/privacy-requests") {
+    return isPathActive(pathname, "/admin/privacy-requests");
   }
   if (href === "/admin/system") {
     return pathname === "/admin/system";

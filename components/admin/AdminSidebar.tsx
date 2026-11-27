@@ -16,7 +16,7 @@ import {
 } from "./admin-navigation";
 import { toggleNavigationGroup } from "./admin-navigation-state.mjs";
 import { clearLegacyLocalTickets } from "@/lib/tickets/types";
-import { fetchAdminTicketSummary, invalidateAdminTicketSummaryCache } from "@/lib/admin/ticket-summary-client";
+import { invalidateAdminTicketSummaryCache } from "@/lib/admin/ticket-summary-client";
 
 const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
@@ -34,48 +34,60 @@ export default function AdminSidebar() {
   const [pendingBadges, setPendingBadges] = useState<{
     apiApplications: number;
     tickets: number;
+    privacyRequests: number;
+    refunds: number;
   }>({
     apiApplications: 0,
     tickets: 0,
+    privacyRequests: 0,
+    refunds: 0,
   });
 
   const navRef = useRef<HTMLElement>(null);
   const indicatorRef = useRef<HTMLSpanElement>(null);
 
-  const syncPendingBadges = useCallback(async (force = false) => {
+  const syncPendingBadges = useCallback(async () => {
     if (typeof window === "undefined") return;
     clearLegacyLocalTickets();
-    let apiPending = 0;
-    let ticketPending = 0;
-
-    const [agentsRes, ticketsCounts] = await Promise.allSettled([
-      fetch("/api/admin/agents?summary=1", { cache: "no-store" }),
-      fetchAdminTicketSummary({ force }),
-    ]);
-
-    if (agentsRes.status === "fulfilled" && agentsRes.value.ok) {
-      const payload = (await agentsRes.value.json().catch(() => null)) as { pendingApplications?: number } | null;
-      apiPending = Number(payload?.pendingApplications ?? 0);
+    try {
+      const res = await fetch("/api/admin/pending-badges", { cache: "no-store" });
+      if (!res.ok) return;
+      const payload = (await res.json().catch(() => null)) as {
+        apiApplications?: number;
+        tickets?: number;
+        privacyRequests?: number;
+        refunds?: number;
+      } | null;
+      if (!payload) return;
+      setPendingBadges({
+        apiApplications: Number(payload.apiApplications ?? 0),
+        tickets: Number(payload.tickets ?? 0),
+        privacyRequests: Number(payload.privacyRequests ?? 0),
+        refunds: Number(payload.refunds ?? 0),
+      });
+    } catch {
+      // Fail quietly; keep previous counts until next refresh.
     }
-    if (ticketsCounts.status === "fulfilled" && ticketsCounts.value) {
-      ticketPending = Number(ticketsCounts.value.processing ?? 0);
-    }
-
-    setPendingBadges({
-      apiApplications: apiPending,
-      tickets: ticketPending,
-    });
   }, []);
 
   useEffect(() => {
-    void syncPendingBadges(false);
+    void syncPendingBadges();
     const onRefresh = () => {
       invalidateAdminTicketSummaryCache();
-      void syncPendingBadges(true);
+      void syncPendingBadges();
     };
+    const onFocus = () => {
+      void syncPendingBadges();
+    };
+    const timer = window.setInterval(() => {
+      void syncPendingBadges();
+    }, 60_000);
     window.addEventListener("jianlian-admin-badges-updated", onRefresh);
+    window.addEventListener("focus", onFocus);
     return () => {
+      window.clearInterval(timer);
       window.removeEventListener("jianlian-admin-badges-updated", onRefresh);
+      window.removeEventListener("focus", onFocus);
     };
   }, [syncPendingBadges]);
 
@@ -139,14 +151,16 @@ export default function AdminSidebar() {
   }, [pathname, productView, agentTab, openSections]);
 
   const getGroupBadgeCount = (key: AdminNavigationGroupKey) => {
-    if (key === "trade") return pendingBadges.tickets;
-    if (key === "users") return pendingBadges.apiApplications;
+    if (key === "trade") return pendingBadges.tickets + pendingBadges.refunds;
+    if (key === "users") return pendingBadges.apiApplications + pendingBadges.privacyRequests;
     return 0;
   };
 
   const getChildBadgeCount = (href: string) => {
     if (href === "/admin/agents" || href === "/admin/agents?tab=applications") return pendingBadges.apiApplications;
+    if (href === "/admin/privacy-requests") return pendingBadges.privacyRequests;
     if (href === "/admin/tickets") return pendingBadges.tickets;
+    if (href === "/admin/refunds") return pendingBadges.refunds;
     return 0;
   };
 

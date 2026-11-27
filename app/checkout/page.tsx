@@ -1527,20 +1527,6 @@ function CheckoutPageContent() {
                   balanceInsufficient={!isGuestUser && balanceSummary.kind === "ready" && !balanceSummary.sufficient}
                   disabled={productLoading || submitLoading}
                 />
-                {!isGuestUser && balanceShortfallNotice && balanceSummary.kind === "ready" && !balanceSummary.sufficient ? (
-                  <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg border border-orange-200/80 bg-orange-50/80 px-2.5 py-1.5 text-[11px] leading-4 text-orange-800">
-                    <span>
-                      当前余额 ¥{formatCnyFromCents(balanceSummary.balanceCents)} 不足，已自动切换为其他可用支付方式
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => router.push(rechargeReturnTo)}
-                      className="shrink-0 font-semibold text-primary underline underline-offset-2"
-                    >
-                      去充值
-                    </button>
-                  </div>
-                ) : null}
                 {selectedPaymentUnavailable ? (
                   <p className="mt-1.5 text-xs text-amber-700">
                     该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
@@ -2139,8 +2125,8 @@ function ProductDetailCard({
                 product.category === "gift-cards" ||
                 categoryId === "94319387-0291-4e58-b9fd-e25fbdfbfaf1" ||
                 categorySlug === "balance" ||
-                /礼品卡|充值卡|话费充值|sim\s*卡服务|gift-?card|recharge-?card/i.test(
-                  `${product.categoryLabel ?? ""} ${categorySlug}`
+                /礼品卡|充值卡|话费充值|sim\s*卡服务|gift-?card|recharge-?card|itunes/i.test(
+                  `${product.categoryLabel ?? ""} ${categorySlug} ${product.name ?? ""} ${product.slug ?? ""}`
                 );
               return (
                 <div

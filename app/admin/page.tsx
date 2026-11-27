@@ -905,7 +905,9 @@ export default function AdminDashboardPage() {
   const [dateFilter, setDateFilter] = useState<DashboardDateFilterValue>(() => getPresetDateRange("today"));
   const [detailProduct, setDetailProduct] = useState<ProductDetailModalData | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<string | null>(null);
-  const [productSortBy, setProductSortBy] = useState<"amount" | "orders" | "stock" | "conversionRate" | "price">("amount");
+  const [productSortBy, setProductSortBy] = useState<
+    "amount" | "orders" | "stock" | "exposureClickRate" | "conversionRate" | "price"
+  >("amount");
   const [productSortOrder, setProductSortOrder] = useState<"desc" | "asc">("desc");
   const [productPage, setProductPage] = useState(1);
   const [productPageSize, setProductPageSize] = useState(15);
@@ -1165,14 +1167,33 @@ export default function AdminDashboardPage() {
       salesByProduct.set(key, cur);
     }
     const clicksByToken = new Map<string, number>();
+    const uniqueClickVisitorsByToken = new Map<string, Set<string>>();
+    const allExposureVisitors = new Set<string>();
+    const addUniqueClick = (token: string, visitorKey: string) => {
+      let set = uniqueClickVisitorsByToken.get(token);
+      if (!set) {
+        set = new Set<string>();
+        uniqueClickVisitorsByToken.set(token, set);
+      }
+      set.add(visitorKey);
+    };
     for (const v of visits) {
       const p = v.page_path ?? "";
+      const vk = String(v.visitor_key ?? "").trim();
+      if (vk) allExposureVisitors.add(vk);
       if (!p) continue;
       const m1 = p.match(/\/products\/([^/?#]+)/);
-      if (m1?.[1]) clicksByToken.set(m1[1], (clicksByToken.get(m1[1]) ?? 0) + 1);
+      if (m1?.[1]) {
+        clicksByToken.set(m1[1], (clicksByToken.get(m1[1]) ?? 0) + 1);
+        if (vk) addUniqueClick(m1[1], vk);
+      }
       const m2 = p.match(/[?&](?:p|product)=([^&#]+)/);
-      if (m2?.[1]) clicksByToken.set(m2[1], (clicksByToken.get(m2[1]) ?? 0) + 1);
+      if (m2?.[1]) {
+        clicksByToken.set(m2[1], (clicksByToken.get(m2[1]) ?? 0) + 1);
+        if (vk) addUniqueClick(m2[1], vk);
+      }
     }
+    const totalExposureUv = allExposureVisitors.size;
     const seenProductIds = new Set<string>();
     const rows = data.rawSeries.products.map((product) => {
       seenProductIds.add(product.id);
@@ -1180,6 +1201,17 @@ export default function AdminDashboardPage() {
       const clicks =
         (product.slug ? (clicksByToken.get(product.slug) ?? 0) : 0) +
         (product.id !== product.slug ? (clicksByToken.get(product.id) ?? 0) : 0);
+      const uniqueClickSet = new Set<string>();
+      if (product.slug) {
+        uniqueClickVisitorsByToken.get(product.slug)?.forEach((vk) => uniqueClickSet.add(vk));
+      }
+      if (product.id && product.id !== product.slug) {
+        uniqueClickVisitorsByToken.get(product.id)?.forEach((vk) => uniqueClickSet.add(vk));
+      }
+      const uniqueClickVisitors = uniqueClickSet.size;
+      const numericExposureClickRate =
+        totalExposureUv > 0 ? Math.min(100, (uniqueClickVisitors / totalExposureUv) * 100) : -1;
+      const exposureClickRate = totalExposureUv > 0 ? `${numericExposureClickRate.toFixed(1)}%` : "—";
       const numericConversionRate = clicks > 0 ? (stats.orders / clicks) * 100 : -1;
       const conversionRate = clicks > 0 ? `${numericConversionRate.toFixed(1)}%` : "—";
       const effectiveStock = Number((product as { effective_stock?: number | null }).effective_stock ?? product.stock ?? 0);
@@ -1193,6 +1225,10 @@ export default function AdminDashboardPage() {
         stock: Number.isFinite(effectiveStock) ? effectiveStock : 0,
         status: product.status,
         clicks,
+        uniqueClickVisitors,
+        totalExposureUv,
+        numericExposureClickRate,
+        exposureClickRate,
         numericConversionRate,
         conversionRate,
       };
@@ -1201,6 +1237,9 @@ export default function AdminDashboardPage() {
     Array.from(salesByProduct.entries()).forEach(([productId, stats]) => {
       if (seenProductIds.has(productId)) return;
       const clicks = clicksByToken.get(productId) ?? 0;
+      const uniqueClickVisitors = uniqueClickVisitorsByToken.get(productId)?.size ?? 0;
+      const numericExposureClickRate =
+        totalExposureUv > 0 ? Math.min(100, (uniqueClickVisitors / totalExposureUv) * 100) : -1;
       const numericConversionRate = clicks > 0 ? (stats.orders / clicks) * 100 : -1;
       rows.push({
         id: productId,
@@ -1212,6 +1251,10 @@ export default function AdminDashboardPage() {
         stock: 0,
         status: "active",
         clicks,
+        uniqueClickVisitors,
+        totalExposureUv,
+        numericExposureClickRate,
+        exposureClickRate: totalExposureUv > 0 ? `${numericExposureClickRate.toFixed(1)}%` : "—",
         numericConversionRate,
         conversionRate: clicks > 0 ? `${numericConversionRate.toFixed(1)}%` : "—",
       });
@@ -1227,6 +1270,9 @@ export default function AdminDashboardPage() {
       }
       if (productSortBy === "stock") {
         return (a.stock - b.stock) * mul || (a.amount - b.amount) * mul || a.name.localeCompare(b.name, "zh-CN") * mul;
+      }
+      if (productSortBy === "exposureClickRate") {
+        return (a.numericExposureClickRate - b.numericExposureClickRate) * mul || (a.uniqueClickVisitors - b.uniqueClickVisitors) * mul || (a.amount - b.amount) * mul || a.name.localeCompare(b.name, "zh-CN") * mul;
       }
       if (productSortBy === "conversionRate") {
         return (a.numericConversionRate - b.numericConversionRate) * mul || (a.clicks - b.clicks) * mul || (a.orders - b.orders) * mul || a.name.localeCompare(b.name, "zh-CN") * mul;
@@ -1946,7 +1992,9 @@ export default function AdminDashboardPage() {
                     aria-label="排序维度"
                     value={productSortBy}
                     onChange={(e) => {
-                      setProductSortBy(e.target.value as "amount" | "orders" | "stock" | "conversionRate" | "price");
+                      setProductSortBy(
+                        e.target.value as "amount" | "orders" | "stock" | "exposureClickRate" | "conversionRate" | "price"
+                      );
                       setProductPage(1);
                     }}
                     className="h-7 rounded-md border border-slate-200 bg-white px-2 text-xs text-slate-700"
@@ -1954,6 +2002,7 @@ export default function AdminDashboardPage() {
                     <option value="amount">按销售额</option>
                     <option value="orders">按订单量</option>
                     <option value="stock">按库存</option>
+                    <option value="exposureClickRate">按曝光点击率</option>
                     <option value="conversionRate">按点击转化率</option>
                     <option value="price">按售价</option>
                   </select>
@@ -1995,7 +2044,7 @@ export default function AdminDashboardPage() {
                       <Table>
                         <TableHeader>
                           <TableRow className="text-xs">
-                            <TableHead className="min-w-[180px] whitespace-nowrap text-left">商品标题</TableHead>
+                            <TableHead className="min-w-[160px] whitespace-nowrap text-left">商品标题</TableHead>
                             <TableHead
                               className={cn(
                                 "cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900",
@@ -2079,6 +2128,27 @@ export default function AdminDashboardPage() {
                             <TableHead
                               className={cn(
                                 "cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900",
+                                productSortBy === "exposureClickRate" && "font-semibold text-blue-700"
+                              )}
+                              title="去重曝光点击率（该商品去重点击访客数 / 时段去重曝光访客数）"
+                              onClick={() => {
+                                if (productSortBy === "exposureClickRate") {
+                                  setProductSortOrder((p) => (p === "desc" ? "asc" : "desc"));
+                                } else {
+                                  setProductSortBy("exposureClickRate");
+                                  setProductSortOrder("desc");
+                                }
+                                setProductPage(1);
+                              }}
+                            >
+                              曝光点击率
+                              <span className={cn("ml-1 text-[10px]", productSortBy === "exposureClickRate" ? "text-blue-600" : "text-slate-400")}>
+                                {productSortBy === "exposureClickRate" ? (productSortOrder === "asc" ? "▲" : "▼") : "▲▼"}
+                              </span>
+                            </TableHead>
+                            <TableHead
+                              className={cn(
+                                "cursor-pointer whitespace-nowrap text-right select-none transition-colors hover:text-slate-900",
                                 productSortBy === "conversionRate" && "font-semibold text-blue-700"
                               )}
                               onClick={() => {
@@ -2110,6 +2180,12 @@ export default function AdminDashboardPage() {
                               <TableCell className="text-right font-semibold tabular-nums text-blue-700">{formatMoney(row.amount)}</TableCell>
                               <TableCell className="text-right tabular-nums">
                                 <span className={row.stock <= 5 ? "font-semibold text-amber-600" : "text-slate-700"}>{row.stock}</span>
+                              </TableCell>
+                              <TableCell
+                                className="text-right tabular-nums text-slate-700"
+                                title={`去重曝光点击率：${row.uniqueClickVisitors} 位去重点击访客 / ${row.totalExposureUv} 位去重曝光访客`}
+                              >
+                                {row.exposureClickRate}
                               </TableCell>
                               <TableCell className="text-right tabular-nums text-slate-700">{row.conversionRate}</TableCell>
                               <TableCell className="text-center">

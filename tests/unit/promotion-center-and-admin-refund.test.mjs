@@ -100,4 +100,44 @@ test("both third-party completion and balance payment hook safe referral commiss
   assert.match(migration, /business_type\s*=\s*'promotion'|'promotion'/i);
   assert.match(migration, /'refund'/i);
   assert.match(migration, /set status = 'cancelled'/i);
+  assert.match(migration, /as \$fn\$/i);
+  assert.doesNotMatch(migration, /E'\\n/);
+});
+
+test("checkout removes balance shortfall notice and hides gift card sales by product name/slug too", () => {
+  const checkout = file("app/checkout/page.tsx");
+  assert.doesNotMatch(checkout, /不足，已自动切换为其他可用支付方式/);
+  assert.match(checkout, /gift-\?card\|recharge-\?card\|itunes/);
+  assert.match(checkout, /\$\{product\.name \?\? ""\} \$\{product\.slug \?\? ""\}/);
+});
+
+test("account API page syncs with real server agent_applications, sidebar shows group & child pending badges, and dashboard adds exposure click rate left of conversion rate", () => {
+  const accountApiPage = file("app/account/api/page.tsx");
+  const accountApiRoute = file("app/api/account/agent-api/route.ts");
+  const badgesRoute = file("app/api/admin/pending-badges/route.ts");
+  const adminNav = file("components/admin/admin-navigation.ts");
+  const adminSidebar = file("components/admin/AdminSidebar.tsx");
+  const adminDashboard = file("app/admin/page.tsx");
+
+  assert.match(accountApiPage, /\/api\/account\/agent-api/);
+  assert.match(accountApiPage, /safeLocalStorageRemove\("jianlian_admin_api_applications"\)/);
+  assert.match(accountApiRoute, /\.from\("agent_applications"\)/);
+  assert.match(accountApiRoute, /\.from\("agent_ip_whitelists"\)/);
+
+  assert.match(badgesRoute, /requireApiAdmin/);
+  assert.match(badgesRoute, /agent_applications/);
+  assert.match(badgesRoute, /privacy_requests/);
+  assert.match(badgesRoute, /refund_requests/);
+
+  assert.match(adminNav, /label: "隐私与导出", href: "\/admin\/privacy-requests"/);
+  assert.match(adminSidebar, /\/api\/admin\/pending-badges/);
+  assert.match(adminSidebar, /pendingBadges\.tickets \+ pendingBadges\.refunds/);
+  assert.match(adminSidebar, /pendingBadges\.apiApplications \+ pendingBadges\.privacyRequests/);
+  assert.match(adminSidebar, /href === "\/admin\/privacy-requests"/);
+  assert.match(adminSidebar, /href === "\/admin\/refunds"/);
+
+  assert.match(adminDashboard, /uniqueClickVisitorsByToken/);
+  assert.match(adminDashboard, /allExposureVisitors/);
+  assert.match(adminDashboard, /曝光点击率[\s\S]{0,900}点击转化率/);
+  assert.match(adminDashboard, /<option value="exposureClickRate">按曝光点击率<\/option>/);
 });

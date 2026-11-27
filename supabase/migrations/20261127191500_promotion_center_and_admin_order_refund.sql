@@ -19,7 +19,7 @@ returns public.referral_commissions
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_jwt_role text := coalesce(current_setting('request.jwt.claim.role', true), '');
   v_order public.orders;
@@ -146,7 +146,7 @@ begin
 
   return v_commission;
 end;
-$$;
+$fn$;
 
 revoke all on function public.sync_referral_commission_for_order(uuid, numeric) from public;
 grant execute on function public.sync_referral_commission_for_order(uuid, numeric) to authenticated, service_role;
@@ -160,7 +160,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_user_id uuid := auth.uid();
   v_profile public.profiles;
@@ -286,7 +286,7 @@ begin
     'commission_count', v_count
   );
 end;
-$$;
+$fn$;
 
 revoke all on function public.transfer_promotion_commission_to_balance(text, numeric) from public;
 grant execute on function public.transfer_promotion_commission_to_balance(text, numeric) to authenticated;
@@ -305,7 +305,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_admin_id uuid := auth.uid();
   v_order public.orders;
@@ -494,7 +494,7 @@ begin
   );
 
   v_new_refunded := round((coalesce(v_order.refunded_amount, 0) + v_amount)::numeric, 6);
-  v_full_refund := v_new_refunded >= round(coalesce(v_order.total_amount, 0)::numeric, 6);
+  v_full_refund := (v_new_refunded >= round(coalesce(v_order.total_amount, 0)::numeric, 6));
 
   update public.orders
   set refunded_amount = v_new_refunded,
@@ -503,7 +503,7 @@ begin
       payment_status = case when v_full_refund then 'refunded' else payment_status end,
       admin_note = case
         when nullif(btrim(coalesce(admin_note, '')), '') is null then '[退款] ' || v_reason
-        else admin_note || E'\n[退款] ' || v_reason
+        else admin_note || chr(10) || '[退款] ' || v_reason
       end,
       updated_at = now()
   where id = v_order.id;
@@ -534,15 +534,20 @@ begin
     'refund_no', v_refund_no,
     'order_id', v_order.id,
     'order_no', v_order.order_no,
+    'refund_amount', v_amount,
     'refunded_amount', v_amount,
+    'total_refunded', v_new_refunded,
     'total_refunded_amount', v_new_refunded,
+    'fully_refunded', v_full_refund,
     'full_refund', v_full_refund,
+    'order_status', case when v_full_refund then 'refunded' else v_order.status end,
+    'payment_status', case when v_full_refund then 'refunded' else v_order.payment_status end,
     'balance_before', v_before_balance,
     'balance_after', v_after_balance,
     'transaction_no', v_tx_no
   );
 end;
-$$;
+$fn$;
 
 revoke all on function public.super_admin_direct_order_refund(uuid, numeric, text, text) from public;
 grant execute on function public.super_admin_direct_order_refund(uuid, numeric, text, text) to authenticated;
