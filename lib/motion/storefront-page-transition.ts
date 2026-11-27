@@ -8,11 +8,13 @@ type PlainNavClickEvent = {
 };
 
 /**
- * 帮助中心（使用教程、工单中心）与「我的」（账号充值、推广中心、订单查询、个人中心）
- * 统一路由退出 / 进入转场动画控制。
- * 退场约 170ms，同时并发 prefetch 目标页面，丝滑衔接目标页入场动效。
+ * 方案 D · 方向感联动滑移（Directional Slide）：
+ * - 退场缓冲 400ms（与演示台滑块 400ms 及侧边栏滑块同频），同时并发 prefetch 抢跑加载目标页面；
+ * - 入场 760ms cubic-bezier(0.16, 1, 0.3, 1)，根据侧边栏菜单上下顺序智能决定上滑/下滑方向。
  */
-export const STOREFRONT_PAGE_EXIT_DURATION_MS = 170;
+export const STOREFRONT_PAGE_EXIT_DURATION_MS = 400;
+
+export type StorefrontPageDirection = "down" | "up";
 
 const ANIMATED_PAGE_PREFIXES = [
   "/tutorials",
@@ -45,17 +47,41 @@ export function getStorefrontPageTransitionGroup(pathname: string | null | undef
   return clean || "other";
 }
 
+function getStorefrontSidebarRank(pathname: string | null | undefined): number {
+  const clean = (pathname ?? "").split("?")[0];
+  if (clean === "/") return 0;
+  if (clean === "/products/all" || clean.startsWith("/products/all/")) return 1;
+  if (clean.startsWith("/products/sim-cards")) return 2;
+  if (clean.startsWith("/products/gift-cards")) return 3;
+  if (clean.startsWith("/products/digital-accounts")) return 4;
+  if (clean.startsWith("/products/ai-membership")) return 5;
+  if (clean === "/tutorials" || clean.startsWith("/tutorials/")) return 10;
+  if (clean === "/faq" || clean.startsWith("/faq/")) return 11;
+  if (clean === "/products/account-recharge" || clean.startsWith("/products/account-recharge/")) return 20;
+  if (clean === "/promotion" || clean.startsWith("/promotion/")) return 21;
+  if (clean === "/account/orders" || clean.startsWith("/account/orders/")) return 22;
+  if (clean === "/account" || clean.startsWith("/account/")) return 23;
+  return 15;
+}
+
 let exitNavigateTimer: ReturnType<typeof setTimeout> | null = null;
 let exitSafetyResetTimer: ReturnType<typeof setTimeout> | null = null;
+let lastTransitionDirection: StorefrontPageDirection = "down";
 
-function setStageExiting(exiting: boolean) {
+export function getLastStorefrontPageDirection(): StorefrontPageDirection {
+  return lastTransitionDirection;
+}
+
+function setStageExiting(exiting: boolean, direction?: StorefrontPageDirection) {
   if (typeof document === "undefined") return;
   const stage = document.querySelector<HTMLElement>('[data-storefront-page-stage="true"]');
   if (!stage) return;
   if (exiting) {
     stage.setAttribute("data-page-exiting", "true");
+    stage.setAttribute("data-page-direction", direction ?? lastTransitionDirection);
   } else {
     stage.removeAttribute("data-page-exiting");
+    stage.removeAttribute("data-page-direction");
   }
 }
 
@@ -86,7 +112,7 @@ export function startStorefrontPageExit(
   // 同页面或同一导航模块内不做退场延迟
   if (currentPath === targetPath || currentGroup === targetGroup) return false;
 
-  // 仅当离开或进入「帮助中心 / 我的」目标页面时触发优雅退场衔接
+  // 仅当离开或进入「帮助中心 / 我的」目标页面时触发方向感联动滑移
   if (!isAnimatedStorefrontPagePath(currentPath) && !isAnimatedStorefrontPagePath(targetPath)) {
     return false;
   }
@@ -103,14 +129,19 @@ export function startStorefrontPageExit(
   if (exitNavigateTimer) clearTimeout(exitNavigateTimer);
   if (exitSafetyResetTimer) clearTimeout(exitSafetyResetTimer);
 
-  // 在退场动画播放期间提前抢跑加载目标路由资源
+  const currentRank = getStorefrontSidebarRank(currentPath);
+  const targetRank = getStorefrontSidebarRank(targetPath);
+  const direction: StorefrontPageDirection = targetRank >= currentRank ? "down" : "up";
+  lastTransitionDirection = direction;
+
+  // 在 400ms 退场缓冲期间提前抢跑预加载目标页面资源
   try {
     prefetch?.();
   } catch {
     // ignore prefetch failures
   }
 
-  setStageExiting(true);
+  setStageExiting(true, direction);
 
   exitNavigateTimer = setTimeout(() => {
     exitNavigateTimer = null;
@@ -121,7 +152,7 @@ export function startStorefrontPageExit(
   exitSafetyResetTimer = setTimeout(() => {
     exitSafetyResetTimer = null;
     setStageExiting(false);
-  }, 1800);
+  }, 2400);
 
   return true;
 }

@@ -20,6 +20,7 @@ import { OPEN_PUBLIC_SUPPORT_EVENT } from "@/lib/support/open-public-support";
 import { clearCatalogRoutePending, getCatalogRoutePending, rebaseCatalogRoutePending, startCatalogPopstate } from "@/lib/motion/catalog-route-exit";
 import {
   clearStorefrontPageExit,
+  getLastStorefrontPageDirection,
   getStorefrontPageTransitionGroup,
   isAnimatedStorefrontPagePath,
 } from "@/lib/motion/storefront-page-transition";
@@ -309,7 +310,10 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
             <div
               key={getStorefrontPageTransitionGroup(pathname)}
               className={cn(
-                "storefront-page-enter w-full",
+                getLastStorefrontPageDirection() === "up"
+                  ? "storefront-page-enter-up"
+                  : "storefront-page-enter-down",
+                "w-full",
                 viewportLocked && !isMobile && "flex h-full min-h-0 flex-col",
               )}
             >

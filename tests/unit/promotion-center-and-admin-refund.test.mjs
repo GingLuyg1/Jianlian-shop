@@ -175,13 +175,16 @@ test("help center and my-account storefront pages share smooth enter/exit route 
   for (const path of ["/tutorials", "/faq", "/products/account-recharge", "/promotion", "/account/orders", "/account"]) {
     assert.ok(transitionMod.includes(`"${path}"`), `Missing transition path: ${path}`);
   }
-  assert.match(transitionMod, /STOREFRONT_PAGE_EXIT_DURATION_MS = 170/);
+  assert.match(transitionMod, /STOREFRONT_PAGE_EXIT_DURATION_MS = 400/);
+  assert.match(transitionMod, /getStorefrontSidebarRank/);
   assert.match(layout, /data-storefront-page-stage="true"/);
-  assert.match(layout, /storefront-page-enter/);
+  assert.match(layout, /storefront-page-enter-down/);
+  assert.match(layout, /storefront-page-enter-up/);
   assert.match(sidebar, /startStorefrontPageExit/);
   assert.match(mobileMenu, /startStorefrontPageExit/);
-  assert.match(globalsCss, /@keyframes storefront-page-enter/);
-  assert.match(globalsCss, /\[data-storefront-page-stage="true"\]\[data-page-exiting="true"\]/);
+  assert.match(globalsCss, /@keyframes storefront-page-enter-down/);
+  assert.match(globalsCss, /@keyframes storefront-page-enter-up/);
+  assert.match(globalsCss, /\[data-storefront-page-stage="true"\]\[data-page-exiting="true"\]\[data-page-direction="up"\]/);
 });
 
 test("dashboard trend rounds money to 2 decimals and secondary/sub categories use hover marquee for truncated text", () => {
