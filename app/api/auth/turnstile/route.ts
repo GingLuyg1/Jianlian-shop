@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { checkRateLimit, checkRequestSize, getRequestSourceKey } from "@/lib/security/rate-limit";
+import { checkRateLimit, checkRequestSize, getClientIp, getRequestSourceKey } from "@/lib/security/rate-limit";
 import {
   getTurnstileSiteKey,
   isTurnstileConfigured,
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as { token?: unknown } | null;
   const token = typeof body?.token === "string" ? body.token : "";
-  const result = await verifyTurnstileToken(token, getRequestSourceKey(request));
+  const result = await verifyTurnstileToken(token, getClientIp(request));
 
   if (!result.ok) {
     return json(

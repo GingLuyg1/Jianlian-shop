@@ -5,6 +5,7 @@ import { createKuajingZyProductionRuntime } from "@/lib/providers/kuajingzy/purc
 import { reconcileBitrefillOrder } from "@/lib/providers/bitrefill/live-fulfillment";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import { checkRateLimit, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { assertUserBusinessAllowed, isAccountRestrictionError } from "@/lib/users/account-guard";
 
 export const dynamic = "force-dynamic";
@@ -90,6 +91,11 @@ export async function GET(_request: Request, context: RouteContext) {
 
     if (userError || !user) {
       return json({ error: "请先登录" }, { status: 401 });
+    }
+
+    const deliveryRate = checkRateLimit("payment_status_query", getUserRateLimitKey(user.id, "order_delivery"));
+    if (!deliveryRate.allowed) {
+      return deliveryRate.response!;
     }
 
     try {

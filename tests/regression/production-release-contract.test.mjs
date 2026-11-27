@@ -73,7 +73,7 @@ test("production release script enforces immutable release and recovery gates", 
   assert.doesNotMatch(script, /rm\s+-rf/);
 
   assert.match(ecosystem, /name: "jianlian-shop"/);
-  assert.match(ecosystem, /args: "start -p 3001"/);
+  assert.match(ecosystem, /args: "start -H 127\.0\.0\.1 -p 3001"/);
   assert.match(ecosystem, /cwd: releaseDir/);
   assert.doesNotMatch(ecosystem, /SUPABASE|DAJU|SECRET|API_KEY/);
 });
