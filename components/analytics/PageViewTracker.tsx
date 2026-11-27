@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   createSafeUuid,
   safeLocalStorageGet,
@@ -15,7 +15,7 @@ const SESSION_KEY = "jianlian_analytics_session";
 const LAST_EVENT_KEY = "jianlian_analytics_last_event";
 const SESSION_TTL_MS = 30 * 60 * 1000;
 const DEDUPE_BUCKET_MS = 2500;
-const EXCLUDED_PREFIXES = ["/admin", "/api", "/_next", "/assets", "/favicon", "/robots.txt", "/sitemap", "/health"];
+const EXCLUDED_PREFIXES = ["/order-query", "/payment", "/order-success", "/account", "/admin", "/api", "/_next", "/assets", "/favicon", "/robots.txt", "/sitemap", "/health"];
 const EXCLUDED_EXTENSIONS = /\.(?:css|js|map|png|jpe?g|gif|svg|webp|ico|txt|xml|json)$/i;
 
 function getOrCreateStorageValue(key: string) {
@@ -48,7 +48,6 @@ function getOrCreateSessionKey() {
 
 export default function PageViewTracker() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (!pathname) return;
@@ -56,8 +55,7 @@ export default function PageViewTracker() {
     if (EXCLUDED_EXTENSIONS.test(pathname)) return;
     if (document.visibilityState === "hidden") return;
 
-    const query = searchParams.toString();
-    const path = `${pathname}${query ? `?${query}` : ""}`;
+    const path = pathname;
     const eventKey = `${path}:${Math.floor(Date.now() / DEDUPE_BUCKET_MS)}`;
     if (safeSessionStorageGet(LAST_EVENT_KEY) === eventKey) return;
     safeSessionStorageSet(LAST_EVENT_KEY, eventKey);
@@ -68,7 +66,7 @@ export default function PageViewTracker() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           path,
-          referrer: document.referrer || "",
+          referrer: document.referrer ? new URL(document.referrer).origin : "",
           visitorKey: getOrCreateStorageValue(VISITOR_KEY),
           sessionKey: getOrCreateSessionKey(),
         }),
@@ -77,7 +75,7 @@ export default function PageViewTracker() {
       .catch(() => {
         // Analytics must never block the storefront.
       });
-  }, [pathname, searchParams]);
+  }, [pathname]);
 
   return null;
 }

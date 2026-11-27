@@ -41,7 +41,7 @@ function sanitizeDeliverError(error: unknown) {
 export async function POST(request: Request, context: RouteContext) {
   let auditAdmin: AuditAdmin | undefined;
   try {
-    const admin = await getServerAdminContext();
+    const admin = await getServerAdminContext("delivery.manual");
     if (!admin.ok) {
       await writeAdminAuditLog({
         request,

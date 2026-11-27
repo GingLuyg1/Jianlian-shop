@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
-import { checkRateLimit, checkRequestSize, getRequestSourceKey } from "@/lib/security/rate-limit";
+import { checkRateLimit, readBoundedJsonBody, getRequestSourceKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
@@ -23,13 +23,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "服务配置未就绪，请稍后重试" }, { status: 503 });
     }
 
-    const sizeError = checkRequestSize(request, 4 * 1024);
-    if (sizeError) return sizeError;
-
     const ipRateLimit = checkRateLimit("order_create", `guest_session:ip:${getRequestSourceKey(request)}`);
     if (!ipRateLimit.allowed) return ipRateLimit.response!;
 
-    const body = (await request.json().catch(() => null)) as { email?: string } | null;
+    const parsed = await readBoundedJsonBody<{ email?: string } | null>(request, 4 * 1024);
+    if (!parsed.ok) return parsed.response;
+    const body = parsed.data;
     const contactEmail = String(body?.email ?? "").trim().toLowerCase();
     if (!contactEmail || !isValidEmail(contactEmail) || contactEmail.length > 160) {
       return NextResponse.json({ error: "请输入有效的接收邮箱后再下单" }, { status: 400 });

@@ -250,7 +250,7 @@ export async function issueOrderQueryShortLink(
     })
     .eq("id", orderId);
 
-  const url = `${SITE_BASE_URL}/order-query?orderNo=${encodeURIComponent(orderNo)}&token=${encodeURIComponent(token)}`;
+  const url = `${SITE_BASE_URL}/order-query?orderNo=${encodeURIComponent(orderNo)}#token=${encodeURIComponent(token)}`;
   return { token, url };
 }
 

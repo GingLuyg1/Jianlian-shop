@@ -96,6 +96,8 @@ function OrderQueryContent() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<QueryTab>("email");
   const [email, setEmail] = useState("");
+  const [sentEmail, setSentEmail] = useState("");
+  const [emailCode, setEmailCode] = useState("");
   const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
   const [turnstileEnabled, setTurnstileEnabled] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
@@ -146,12 +148,20 @@ function OrderQueryContent() {
       searchParams.get("order") ||
       ""
     ).trim();
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
     const initialToken = (
+      fragment.get("token") ||
       searchParams.get("token") ||
       searchParams.get("queryToken") ||
       ""
     ).trim();
     const initialEmail = (searchParams.get("email") || "").trim();
+    if (initialToken || initialEmail) {
+      const clean = new URL(window.location.href);
+      for (const key of ["token", "queryToken", "email", "orderNo", "order_no", "order"]) clean.searchParams.delete(key);
+      if (fragment.has("token")) clean.hash = "";
+      window.history.replaceState(window.history.state, "", clean.pathname + clean.search + clean.hash);
+    }
     if (initialOrderNo) {
       setOrderNo((prev) => prev || initialOrderNo);
       if (initialToken) setQueryToken((prev) => prev || initialToken);
@@ -188,12 +198,17 @@ function OrderQueryContent() {
     setOrders([]);
     setHasSearched(false);
 
-    const normalizedEmail = email.trim();
+    const normalizedEmail = email.trim().toLowerCase();
+    const verifying = sentEmail === normalizedEmail;
+    if (verifying && !/^\d{6}$/.test(emailCode.trim())) {
+      setError("请输入 6 位邮箱验证码。");
+      return;
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       setError("请输入下单时填写的有效联系邮箱。");
       return;
     }
-    if (turnstileEnabled && !turnstileToken) {
+    if (!verifying && turnstileEnabled && !turnstileToken) {
       setError("请先完成下方 Cloudflare 人机验证后再查询。");
       return;
     }
@@ -205,15 +220,21 @@ function OrderQueryContent() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          mode: "email",
+          mode: verifying ? "email" : "email_request",
           email: normalizedEmail,
-          turnstileToken: turnstileToken || undefined,
+          ...(verifying ? { emailCode } : { turnstileToken }),
         }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data.error || "订单查询失败，请稍后重试");
       }
+      if (!verifying) {
+        setSentEmail(normalizedEmail);
+        return;
+      }
+      setEmailCode("");
+      setSentEmail("");
       setOrders(Array.isArray(data.orders) ? data.orders : []);
       setHasSearched(true);
     } catch (err) {
@@ -304,7 +325,7 @@ function OrderQueryContent() {
                   </div>
                   <div>
                     <div className="font-semibold text-slate-950">游客邮箱安全查单</div>
-                    <div className="text-xs text-slate-500">输入下单时绑定的收货/接收邮箱，通过人机验证即可查看订单进度。</div>
+                    <div className="text-xs text-slate-500">验证下单时填写的邮箱后，即可查看订单进度。</div>
                   </div>
                 </div>
 
@@ -316,13 +337,23 @@ function OrderQueryContent() {
                     id="guest-query-email"
                     type="email"
                     value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    onChange={(event) => { setEmail(event.target.value); setSentEmail(""); setEmailCode(""); }}
+                    disabled={loading}
                     placeholder="请输入下单时填写的邮箱地址"
                     autoComplete="email"
                   />
                 </div>
 
-                {turnstileSiteKey ? (
+                {sentEmail ? (
+                  <div className="space-y-2">
+                    <label htmlFor="guest-query-code" className="block text-sm font-medium">邮箱验证码</label>
+                    <Input id="guest-query-code" value={emailCode} onChange={(event) => setEmailCode(event.target.value)}
+                      inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required disabled={loading} />
+                    <p className="text-xs text-slate-600" role="status">验证码已发送，请查收邮件。</p>
+                    <Button type="button" variant="ghost" size="sm" disabled={loading}
+                      onClick={() => { setSentEmail(""); setEmailCode(""); setError(""); }}>重新获取验证码</Button>
+                  </div>
+                ) : turnstileSiteKey ? (
                   <div className="rounded-xl border border-orange-100 bg-orange-50/30 p-3">
                     <div className="mb-2 text-xs font-medium text-slate-600">Cloudflare 人机验证</div>
                     <TurnstileWidget
@@ -338,7 +369,7 @@ function OrderQueryContent() {
                 ) : (
                   <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-700">
                     <ShieldCheck className="h-4 w-4 shrink-0" />
-                    <span>已启用安全频控保护（查询结果仅显示必要订单信息，不展示明文卡密）</span>
+                    <span>邮箱验证暂不可用时，可使用订单号与查询凭证。</span>
                   </div>
                 )}
 
@@ -350,7 +381,7 @@ function OrderQueryContent() {
 
                 <Button className="w-full" type="submit" disabled={loading}>
                   {loading ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <Search className="mr-2 h-4 w-4" />}
-                  {loading ? "查询中..." : "查询邮箱订单"}
+                  {loading ? "处理中…" : sentEmail ? "验证邮箱并查询" : "发送邮箱验证码"}
                 </Button>
                 <Button asChild variant="outline" className="w-full">
                   <Link href="/login?redirect=/account/orders">登录后查看完整订单与卡密</Link>

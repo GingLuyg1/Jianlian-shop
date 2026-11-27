@@ -124,6 +124,8 @@ export default function MyOrdersPage() {
 
   // Inline guest email form state (when unauthenticated) — keeps CF Turnstile here only (not inside popup)
   const [guestEmailInput, setGuestEmailInput] = useState("");
+  const [guestCodeSent, setGuestCodeSent] = useState(false);
+  const [guestEmailCode, setGuestEmailCode] = useState("");
   const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
   const [turnstileEnabled, setTurnstileEnabled] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState("");
@@ -252,7 +254,11 @@ export default function MyOrdersPage() {
       setGuestError("请输入下单时填写的有效邮箱地址。");
       return;
     }
-    if (turnstileEnabled && !turnstileToken) {
+    if (guestCodeSent && !/^\d{6}$/.test(guestEmailCode.trim())) {
+      setGuestError("请输入 6 位邮箱验证码。");
+      return;
+    }
+    if (!guestCodeSent && turnstileEnabled && !turnstileToken) {
       setGuestError("请先完成下方 Cloudflare 人机验证后再查询。");
       return;
     }
@@ -262,15 +268,18 @@ export default function MyOrdersPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          mode: "email",
+          mode: guestCodeSent ? "email" : "email_request",
           email: normalized,
-          turnstileToken: turnstileToken || undefined,
+          ...(guestCodeSent ? { emailCode: guestEmailCode } : { turnstileToken }),
         }),
       });
       const payload = (await response.json().catch(() => null)) as { orders?: GuestLookupOrder[]; error?: string } | null;
       if (!response.ok) {
         throw new Error(payload?.error || "订单查询失败，请稍后重试");
       }
+      if (!guestCodeSent) { setGuestCodeSent(true); return; }
+      setGuestCodeSent(false);
+      setGuestEmailCode("");
       setGuestInitialEmail(normalized);
       setGuestInitialOrders(Array.isArray(payload?.orders) ? payload!.orders : []);
       setQueryOpen(true);
@@ -342,7 +351,7 @@ export default function MyOrdersPage() {
                     <div>
                       <h2 className="text-base font-bold text-slate-900">游客免登录邮箱查单</h2>
                       <p className="mt-0.5 text-xs text-slate-500">
-                        输入下单时绑定的收货/接收邮箱，查询匹配订单列表与实时进度。
+                        验证下单时填写的邮箱后，查看订单列表与进度。
                       </p>
                     </div>
                   </div>
@@ -359,16 +368,28 @@ export default function MyOrdersPage() {
                           value={guestEmailInput}
                           onChange={(e) => {
                             setGuestEmailInput(e.target.value);
+                            setGuestCodeSent(false);
+                            setGuestEmailCode("");
                             if (guestError) setGuestError("");
                           }}
                           placeholder="请输入下单时填写的邮箱地址"
                           className="h-11 bg-white pl-9"
                           autoComplete="email"
+                          disabled={guestSearching}
                         />
                       </div>
                     </div>
 
-                    {turnstileSiteKey ? (
+                    {guestCodeSent ? (
+                      <div className="space-y-2">
+                        <label htmlFor="orders-guest-code" className="text-sm font-medium">邮箱验证码</label>
+                        <Input id="orders-guest-code" value={guestEmailCode} onChange={(event) => setGuestEmailCode(event.target.value)}
+                          inputMode="numeric" autoComplete="one-time-code" maxLength={6} pattern="[0-9]{6}" required disabled={guestSearching} />
+                        <p className="text-xs text-slate-600" role="status">验证码已发送，请查收邮件。</p>
+                        <Button type="button" variant="ghost" size="sm" disabled={guestSearching}
+                          onClick={() => { setGuestCodeSent(false); setGuestEmailCode(""); setGuestError(""); }}>重新获取验证码</Button>
+                      </div>
+                    ) : turnstileSiteKey ? (
                       <div className="rounded-xl border border-orange-100 bg-orange-50/35 p-3">
                         <div className="mb-1.5 text-xs font-medium text-slate-600">Cloudflare 人机验证</div>
                         <TurnstileWidget
@@ -384,7 +405,7 @@ export default function MyOrdersPage() {
                     ) : (
                       <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs text-emerald-700">
                         <ShieldCheck className="h-4 w-4 shrink-0" />
-                        <span>已启用安全频控保护，查询结果弹窗支持一键查看订单详情</span>
+                        <span>邮箱验证暂不可用时，可前往查单页使用订单号与查询凭证</span>
                       </div>
                     )}
 
@@ -397,7 +418,7 @@ export default function MyOrdersPage() {
                     <div className="flex flex-col gap-2.5 sm:flex-row">
                       <Button type="submit" className="h-11 flex-1 rounded-xl font-semibold" disabled={guestSearching}>
                         <Search className="mr-2 h-4 w-4" />
-                        {guestSearching ? "查询中..." : "查询订单"}
+                        {guestSearching ? "处理中…" : guestCodeSent ? "验证邮箱并查询" : "发送邮箱验证码"}
                       </Button>
                       <Button type="button" variant="outline" className="h-11 rounded-xl" onClick={openPublicSupport}>
                         <Headphones className="mr-1.5 h-4 w-4" />
@@ -643,31 +664,10 @@ function OrderEmailQueryDialog({
       }
 
       if (!isSignedInMember) {
-        setLoading(true);
-        setError("");
-        try {
-          const response = await fetchWithTimeout("/api/order-query", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              mode: "email",
-              email: emailToQuery,
-            }),
-          });
-          const result = (await response.json().catch(() => null)) as { orders?: GuestLookupOrder[]; error?: string } | null;
-          if (!isCurrent()) return;
-          if (!response.ok) throw new Error(result?.error ?? "订单查询失败");
-          const list = Array.isArray(result?.orders) ? result!.orders : [];
-          setGuestOrders(list);
-          setCount(list.length);
-        } catch (queryError) {
-          if (!isCurrent()) return;
-          setError(getOrderErrorMessage(queryError, "订单查询失败，请稍后重试"));
-          setGuestOrders([]);
-          setCount(0);
-        } finally {
-          if (isCurrent()) { setLoading(false); queryRequest.current = null; }
-        }
+        setError("查询其他邮箱请返回上一页重新验证。");
+        setGuestOrders([]);
+        setCount(0);
+        queryRequest.current = null;
         return;
       }
 

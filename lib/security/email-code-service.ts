@@ -1,7 +1,7 @@
 import { randomInt, timingSafeEqual } from "crypto";
 import { sendEmail } from "@/lib/email/provider";
 
-export type VerificationPurpose = "current_email_verify" | "new_email_verify" | "password_reset";
+export type VerificationPurpose = "current_email_verify" | "new_email_verify" | "password_reset" | "order_lookup";
 
 interface CodeEntry {
   code: string;
@@ -47,6 +47,10 @@ const PURPOSE_LABELS: Record<VerificationPurpose, { title: string; desc: string 
   new_email_verify: {
     title: "更换绑定邮箱 - 新邮箱绑定验证",
     desc: "您正在申请将本邮箱绑定至简联账号，请使用下方验证码完成绑定：",
+  },
+  order_lookup: {
+    title: "订单查询邮箱验证",
+    desc: "请使用下方验证码验证下单邮箱并查看订单：",
   },
   password_reset: {
     title: "重置登录密码验证",
@@ -142,14 +146,16 @@ export async function generateAndSendEmailCode(
       idempotencyKey: `code-${purpose}-${normalizedEmail}-${now}`,
     });
 
-    if (sendResult.status === "failed") {
-      console.error("[EmailCodeService] Failed to send email via provider:", sendResult.errorMessage);
+    if (sendResult.status !== "sent") {
+      if (codeStore.get(key)?.code === code) codeStore.delete(key);
+      console.error("[EmailCodeService] Failed to send email via provider");
       return { ok: false, message: `邮件发送失败：${sendResult.errorMessage || "请稍后重试"}` };
     }
 
     return { ok: true, message: "验证码已成功发送至邮箱，请查收" };
-  } catch (err: any) {
-    console.error("[EmailCodeService] Error sending email:", err);
+  } catch {
+    if (codeStore.get(key)?.code === code) codeStore.delete(key);
+    console.error("[EmailCodeService] Error sending email");
     return { ok: false, message: "发送邮件验证码异常，请稍后重试" };
   }
 }

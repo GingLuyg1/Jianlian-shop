@@ -100,7 +100,7 @@ export function SecureOrderDelivery({
   const [requested, setRequested] = useState(false);
   const [error, setError] = useState(false);
   const [manualSupportMessage, setManualSupportMessage] = useState("");
-  const [pollOutcome, setPollOutcome] = useState<"idle" | "polling" | "timeout" | "error" | "delivered">("idle");
+  const [pollOutcome, setPollOutcome] = useState<"idle" | "polling" | "timeout" | "error" | "delivered" | "manual_review">("idle");
   const [visibleIds, setVisibleIds] = useState<Record<string, boolean>>({});
   const activeRequestRef = useRef<{ orderNo: string; controller: AbortController } | null>(null);
   const deliveredNotifiedRef = useRef(false);
@@ -140,9 +140,9 @@ export function SecureOrderDelivery({
       }
       if (result?.status === "manual_review" || result?.needs_support) {
         setManualSupportMessage(
-          result.message || "自动发货未能及时完成，请携带订单号联系在线客服或提交工单优先补发。"
+          result.message || "订单已付款，交付需要人工核对。请携带订单号联系在线客服或提交工单。"
         );
-        return "delivered" as const;
+        return "manual_review" as const;
       }
       setManualSupportMessage("");
       return "pending" as const;
@@ -187,7 +187,7 @@ export function SecureOrderDelivery({
     setPollOutcome("polling");
     void pollForPaymentDelivery({ load: loadDelivery, signal: controller.signal }).then((result) => {
       if (controller.signal.aborted || result.kind === "cancelled") return;
-      if (result.kind === "delivered" || result.kind === "timeout" || result.kind === "error") {
+      if (result.kind === "delivered" || result.kind === "timeout" || result.kind === "error" || result.kind === "manual_review") {
         setPollOutcome(result.kind);
       }
     });
@@ -269,8 +269,8 @@ export function SecureOrderDelivery({
           })}
         </div>
       ) : manualSupportMessage ? (
-        <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-amber-900">
-          <div className="font-semibold">订单已确认支付，等待人工优先补发</div>
+        <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50/90 p-4 text-amber-900" role="status">
+          <div className="font-semibold">已付款 · 需要人工核对</div>
           <p className="text-xs leading-5 text-amber-800 sm:text-sm">{manualSupportMessage}</p>
           <div className="flex flex-wrap gap-2 pt-1">
             <Button type="button" size="sm" onClick={openPublicSupport} className="rounded-xl text-xs">
@@ -284,9 +284,9 @@ export function SecureOrderDelivery({
         </div>
       ) : (
         <div className="space-y-3 rounded-lg bg-slate-50 p-3 text-muted-foreground">
-          <div>
+          <div role="status">
             {pollOutcome === "timeout"
-              ? "支付成功，交付内容仍在准备中。如等待较久可点击刷新或联系在线客服。"
+              ? "已付款，交付仍在处理中。请携带订单号联系在线客服，或稍后刷新查看。"
               : deliveredHint
                 ? "正在同步交付内容……"
                 : ["manual", "manual_delivery"].includes(String(deliveryType ?? ""))

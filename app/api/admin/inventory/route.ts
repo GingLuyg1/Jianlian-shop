@@ -218,7 +218,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerAdminContext("inventory.write");
   if (!admin.ok) {
     await writeAdminAuditLog({
       request,
@@ -372,7 +372,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const admin = await getServerAdminContext();
+  const admin = await getServerAdminContext("inventory.write");
   if (!admin.ok) {
     await writeAdminAuditLog({
       request,

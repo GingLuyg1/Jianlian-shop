@@ -1,9 +1,9 @@
-import { randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { getServerSuperAdminContext } from "@/lib/auth/require-admin";
 import { syncBitrefillCostsAndRates } from "@/lib/providers/bitrefill/cost-sync-service";
-import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
+import { checkRateLimit, readBoundedJsonBody, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
@@ -15,52 +15,30 @@ function json(body: unknown, status = 200) {
   return response;
 }
 
-function hasValidInternalCronBearer(request: Request) {
-  const auth = String(request.headers.get("authorization") ?? "").trim();
-  if (!auth.startsWith("Bearer ")) return false;
-  const provided = auth.slice(7).trim();
-  if (!provided) return false;
-  const candidates = [
-    process.env.INTERNAL_CRON_SECRET,
-    process.env.INTERNAL_JOB_SECRET,
-    process.env.CRON_SECRET,
-  ]
-    .map((value) => String(value ?? "").trim())
-    .filter(Boolean);
-  const a = Buffer.from(provided);
-  return candidates.some((expected) => {
-    const b = Buffer.from(expected);
-    return a.length === b.length && timingSafeEqual(a, b);
-  });
-}
-
 export async function GET(request: Request) {
   const requestId = randomUUID();
-  const isCron = hasValidInternalCronBearer(request);
-  if (!isCron) {
-    const admin = await getServerSuperAdminContext();
-    if (!admin.ok) {
-      return json({ error: admin.message, code: "BITREFILL_ADMIN_REQUIRED", requestId }, admin.status);
-    }
+  const admin = await getServerSuperAdminContext();
+  if (!admin.ok) {
+    return json({ error: admin.message, code: "BITREFILL_ADMIN_REQUIRED", requestId }, admin.status);
   }
   const service = getSupabaseServiceRoleClient();
   if (!service) {
     return json({ error: "数据库服务未就绪", code: "SERVICE_UNAVAILABLE", requestId }, 503);
   }
   const url = new URL(request.url);
-  const requestedMode = url.searchParams.get("mode") === "apply" && isCron ? "apply" : "dry_run";
-  const updateRetailPrice = isCron && url.searchParams.get("updateRetailPrice") === "1";
+
+  const updateRetailPrice = url.searchParams.get("updateRetailPrice") === "1";
   const markupPercent = url.searchParams.get("markupPercent") ? Number(url.searchParams.get("markupPercent")) : undefined;
   const capBufferPercent = url.searchParams.get("capBufferPercent") ? Number(url.searchParams.get("capBufferPercent")) : undefined;
   const maxPriceDriftPercent = url.searchParams.get("maxPriceDriftPercent") ? Number(url.searchParams.get("maxPriceDriftPercent")) : undefined;
   try {
     const report = await syncBitrefillCostsAndRates(service, {
-      mode: requestedMode,
+      mode: "dry_run",
       updateRetailPrice,
       markupPercent,
       capBufferPercent,
       maxPriceDriftPercent,
-      notifyOnAnomaly: true,
+      notifyOnAnomaly: false,
     });
     return json({ ok: true, requestId, ...report });
   } catch (error) {
@@ -78,8 +56,6 @@ export async function POST(request: Request) {
   if (!admin.ok) {
     return json({ error: admin.message, code: "BITREFILL_ADMIN_REQUIRED", requestId }, admin.status);
   }
-  const sizeError = checkRequestSize(request, 8 * 1024);
-  if (sizeError) return sizeError;
   const rate = checkRateLimit("admin_write", getUserRateLimitKey(admin.user.id, "bitrefill_cost_sync"));
   if (!rate.allowed) return rate.response!;
 
@@ -88,14 +64,16 @@ export async function POST(request: Request) {
     return json({ error: "数据库服务未就绪", code: "SERVICE_UNAVAILABLE", requestId }, 503);
   }
 
-  const body = (await request.json().catch(() => ({}))) as {
+  const parsed = await readBoundedJsonBody<{
     mode?: "dry_run" | "apply";
     updateRetailPrice?: boolean;
     capBufferPercent?: number;
     markupPercent?: number;
     maxPriceDriftPercent?: number;
     notifyOnAnomaly?: boolean;
-  };
+  }>(request, 8 * 1024);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
 
   try {
     const report = await syncBitrefillCostsAndRates(service, {
@@ -104,7 +82,7 @@ export async function POST(request: Request) {
       capBufferPercent: body.capBufferPercent,
       markupPercent: body.markupPercent,
       maxPriceDriftPercent: body.maxPriceDriftPercent,
-      notifyOnAnomaly: body.notifyOnAnomaly !== false,
+      notifyOnAnomaly: body.mode === "apply" && body.notifyOnAnomaly !== false,
     });
     return json({ ok: true, requestId, ...report });
   } catch (error) {

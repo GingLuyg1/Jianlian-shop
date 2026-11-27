@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
+import { checkRateLimit, readBoundedJsonBody, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import {
   appendUserServerTicketReply,
@@ -48,9 +48,6 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const sizeError = checkRequestSize(request, 2 * 1024 * 1024);
-  if (sizeError) return sizeError;
-
   const auth = await getAuthenticatedUser();
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -59,7 +56,9 @@ export async function POST(request: Request) {
   const rateLimit = checkRateLimit("ticket_write", getUserRateLimitKey(auth.user.id, "ticket_write"));
   if (!rateLimit.allowed) return rateLimit.response!;
 
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const parsed = await readBoundedJsonBody<Record<string, unknown> | null>(request, 2 * 1024 * 1024);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.data;
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "请求参数无效" }, { status: 400 });
   }
