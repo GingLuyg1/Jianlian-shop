@@ -1386,12 +1386,15 @@ function CategoryButton({
             <Icon className="h-5 w-5" />
           </div>
         )}
-        <span className={cn(
-          "mt-1.5 line-clamp-2 w-full break-words text-center text-xs leading-snug",
-          active ? "font-bold text-primary" : "font-semibold text-slate-800"
-        )}>
-          {category.name}
-        </span>
+        <HoverMarqueeText
+          text={category.name}
+          autoScroll
+          enabled={isMobile}
+          className={cn(
+            "mt-1.5 w-full text-center text-xs leading-snug",
+            active ? "font-bold text-primary" : "font-semibold text-slate-800"
+          )}
+        />
       </button>
     );
   }
@@ -1530,6 +1533,7 @@ function ProductPanel({
 }) {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [routeStalled, setRouteStalled] = useState(false);
+  const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false });
   const { isMobile } = useMobileStorefront();
   useEffect(() => {
     setRouteStalled(false);
@@ -1542,6 +1546,27 @@ function ProductPanel({
     contentKey: loadedProductKey,
     resetKey: activeCategory?.id,
   });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || isMobile) {
+      setScrollEdges({ top: false, bottom: false });
+      return;
+    }
+    const updateEdges = () => {
+      const top = el.scrollTop > 8;
+      const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 8;
+      setScrollEdges((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+    };
+    updateEdges();
+    el.addEventListener("scroll", updateEdges, { passive: true });
+    const ro = new ResizeObserver(updateEdges);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateEdges);
+      ro.disconnect();
+    };
+  }, [containerRef, products.length, isMobile, loadedProductKey]);
   const routeMatchesCategory = !routeCategoryKey || activeCategory?.slug === routeCategoryKey || activeCategory?.id === routeCategoryKey;
   const resultReady = !isLoading && !routePendingTarget && !!activeCategory &&
     selectedCategoryId === activeCategory.id && loadedCategoryId === activeCategory.id &&
@@ -1642,6 +1667,16 @@ function ProductPanel({
           <ProductEmptyState search={appliedSearch} onResetFilters={onResetFilters} />
         ) : (
           <div className={cn("relative min-h-[260px] flex-1 lg:min-h-0 lg:overflow-hidden", isMobile && "!overflow-visible")}>
+            {!isMobile ? (
+              <div
+                aria-hidden="true"
+                data-testid="products-scroll-fade-top"
+                className={cn(
+                  "pointer-events-none absolute inset-x-0 top-0 z-20 h-10 bg-gradient-to-b from-[#fffdfa] via-[#fffdfa]/85 to-transparent transition-opacity duration-300 ease-out",
+                  scrollEdges.top ? "opacity-100" : "opacity-0"
+                )}
+              />
+            ) : null}
             <div ref={containerRef} data-wheel-container="products" className={cn("relative min-h-0 space-y-2.5 px-1 py-1 lg:scroll-fade-y lg:h-full lg:overflow-y-auto lg:px-1.5 lg:pr-2 lg:sidebar-scroll", isMobile && "!h-auto !overflow-visible !px-0 !space-y-1.5")}>
               {currentProducts.map((product, index) => (
                 <div key={`${loadedProductKey || activeCategory?.id || "list"}-${product.id}`} data-wheel-item={product.id} className="catalog-wheel-item">
@@ -1666,6 +1701,16 @@ function ProductPanel({
                 </div>
               ))}
             </div>
+            {!isMobile ? (
+              <div
+                aria-hidden="true"
+                data-testid="products-scroll-fade-bottom"
+                className={cn(
+                  "pointer-events-none absolute inset-x-0 bottom-0 z-20 h-12 bg-gradient-to-t from-[#fffdfa] via-[#fffdfa]/88 to-transparent transition-opacity duration-300 ease-out",
+                  scrollEdges.bottom ? "opacity-100" : "opacity-0"
+                )}
+              />
+            ) : null}
           </div>
         )}
 
@@ -1802,7 +1847,10 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, hideS
     ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;
 
+  const [hovered, setHovered] = useState(false);
+
   const handleCardHover = () => {
+    setHovered(true);
     rememberProductCardPreview(product);
   };
 
@@ -1843,11 +1891,8 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, hideS
         <div className="flex min-w-0 items-center gap-2.5">
           <CatalogProductIcon product={product} category={category} isMobile={isMobile} priority={priority} />
           <div className="min-w-0 flex-1 text-left">
-            <div
-              data-selection-title
-              className="line-clamp-1 text-[13.5px] font-bold leading-tight text-slate-900"
-            >
-              {product.name}
+            <div data-selection-title className="min-w-0 text-[13.5px] font-bold leading-tight text-slate-900">
+              <HoverMarqueeText text={product.name} autoScroll enabled={isMobile} />
             </div>
             {product.description ? (
               <div className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-slate-500">
@@ -1891,15 +1936,17 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, hideS
       data-catalog-card
       data-selected={selected ? "true" : undefined}
       onMouseEnter={handleCardHover}
+      onMouseLeave={() => setHovered(false)}
       onFocus={handleCardHover}
+      onBlur={() => setHovered(false)}
       onClick={handleCardClick}
       className={cn(compactProductRowClassName, selectionMotion.item, catalogMotion.card, "group")}
     >
       <div className="flex h-full min-w-0 items-center gap-3 sm:gap-5">
         <CatalogProductIcon product={product} category={category} priority={priority} />
         <div className="min-w-0 flex-1 text-left">
-          <div data-selection-title className="line-clamp-1 text-sm font-semibold text-slate-700 sm:text-base">
-            {product.name}
+          <div data-selection-title className="min-w-0 text-sm font-semibold text-slate-700 sm:text-base">
+            <HoverMarqueeText text={product.name} hovered={hovered} enabled={!isMobile} />
           </div>
           {product.description ? (
             <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground sm:mt-1">

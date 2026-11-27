@@ -984,7 +984,7 @@ function TutorialsPageContent() {
               setHeaderOverlayOpen(false);
             }
           }}
-          className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : ""}`}
+          className={`${tutorial.scroll} overflow-y-auto ${isMobile ? "!overflow-visible !p-3.5" : "scroll-fade-y"}`}
           tabIndex={0}
           role="region"
           aria-label={`${topic.label}正文`}

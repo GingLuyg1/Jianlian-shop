@@ -7,24 +7,28 @@ import { cn } from "@/lib/utils";
 type HoverMarqueeTextProps = {
   text: string;
   hovered?: boolean;
+  /** When true (e.g. mobile), truncated text auto-scrolls slowly without needing hover */
+  autoScroll?: boolean;
   enabled?: boolean;
   className?: string;
-  /** Scroll speed in pixels per second (default 38px/s for smooth, readable motion) */
+  /** Scroll speed in pixels per second (PC hover default 38px/s; mobile autoScroll uses gentler pace) */
   speedPxPerSec?: number;
 };
 
 /**
- * 细腻的 PC 端截断文本悬停自动滚动组件：
- * - 未溢出时完全静止，与普通 truncate 文本一致；
- * - 发生截断且鼠标移入所属选项时，轻停 140ms 后按真实溢出像素柔和滚至末尾，短暂停顿后缓回起点循环；
- * - 鼠标移开时 300ms 丝滑回弹至起点并恢复省略号。
+ * 细腻的截断文本自动滚动组件：
+ * - 未发生截断溢出时完全静止，与普通 truncate 文本一致；
+ * - PC 端鼠标移入所属选项卡片/行时，轻停 140ms 后按真实溢出像素柔和滚至末尾，短暂停顿后缓回起点循环；
+ * - 手机端开启 autoScroll 时，若文字被截断则自动以更温和的速度缓慢循环滚动，无需悬停；
+ * - 滚动期间边缘带柔光透明羽化遮罩，停止时 300ms 丝滑回弹至起点恢复省略号。
  */
 export default function HoverMarqueeText({
   text,
   hovered = false,
+  autoScroll = false,
   enabled = true,
   className,
-  speedPxPerSec = 38,
+  speedPxPerSec,
 }: HoverMarqueeTextProps) {
   const containerRef = useRef<HTMLSpanElement>(null);
   const measureRef = useRef<HTMLSpanElement>(null);
@@ -33,8 +37,11 @@ export default function HoverMarqueeText({
   const [durationMs, setDurationMs] = useState(0);
   const [scrolling, setScrolling] = useState(false);
 
+  const shouldRun = enabled && (hovered || autoScroll);
+  const effectiveSpeed = speedPxPerSec ?? (autoScroll && !hovered ? 24 : 38);
+
   useEffect(() => {
-    if (!enabled || !hovered) {
+    if (!shouldRun) {
       setScrolling(false);
       setDurationMs(300);
       setOffsetPx(0);
@@ -49,58 +56,69 @@ export default function HoverMarqueeText({
       return;
     }
 
-    const box = containerRef.current;
-    const inner = measureRef.current;
-    if (!box || !inner) return;
-
-    const delta = Math.ceil(inner.scrollWidth - box.clientWidth);
-    if (delta <= 2) {
-      setOverflowPx(0);
-      setScrolling(false);
-      setOffsetPx(0);
-      return;
-    }
-
-    const travelPx = delta + 10;
-    const forwardMs = Math.max(950, Math.min(4600, Math.round((travelPx / speedPxPerSec) * 1000)));
-    const returnMs = Math.max(680, Math.round(forwardMs * 0.65));
-    const endPauseMs = 720;
-    const startPauseMs = 520;
-
-    setOverflowPx(travelPx);
     let cancelled = false;
     const timers: Array<ReturnType<typeof setTimeout>> = [];
 
-    const runCycle = (initialDelay: number) => {
-      const t1 = setTimeout(() => {
-        if (cancelled) return;
-        setScrolling(true);
-        setDurationMs(forwardMs);
-        setOffsetPx(travelPx);
+    const startMeasurementAndCycle = () => {
+      if (cancelled) return;
+      const box = containerRef.current;
+      const inner = measureRef.current;
+      if (!box || !inner) return;
 
-        const t2 = setTimeout(() => {
+      const delta = Math.ceil(inner.scrollWidth - box.clientWidth);
+      if (delta <= 2) {
+        setOverflowPx(0);
+        setScrolling(false);
+        setOffsetPx(0);
+        return;
+      }
+
+      const travelPx = delta + 12;
+      const forwardMs = Math.max(
+        autoScroll && !hovered ? 1600 : 950,
+        Math.min(autoScroll && !hovered ? 7500 : 4800, Math.round((travelPx / effectiveSpeed) * 1000))
+      );
+      const returnMs = Math.max(760, Math.round(forwardMs * 0.68));
+      const endPauseMs = autoScroll && !hovered ? 1100 : 720;
+      const startPauseMs = autoScroll && !hovered ? 1200 : 520;
+      const initialDelay = autoScroll && !hovered ? 750 : 140;
+
+      setOverflowPx(travelPx);
+
+      const runCycle = (delay: number) => {
+        const t1 = setTimeout(() => {
           if (cancelled) return;
-          setDurationMs(returnMs);
-          setOffsetPx(0);
+          setScrolling(true);
+          setDurationMs(forwardMs);
+          setOffsetPx(travelPx);
 
-          const t3 = setTimeout(() => {
+          const t2 = setTimeout(() => {
             if (cancelled) return;
-            runCycle(startPauseMs);
-          }, returnMs + 80);
-          timers.push(t3);
-        }, forwardMs + endPauseMs);
-        timers.push(t2);
-      }, initialDelay);
-      timers.push(t1);
+            setDurationMs(returnMs);
+            setOffsetPx(0);
+
+            const t3 = setTimeout(() => {
+              if (cancelled) return;
+              runCycle(startPauseMs);
+            }, returnMs + 100);
+            timers.push(t3);
+          }, forwardMs + endPauseMs);
+          timers.push(t2);
+        }, delay);
+        timers.push(t1);
+      };
+
+      runCycle(initialDelay);
     };
 
-    runCycle(140);
+    const rafId = window.requestAnimationFrame(startMeasurementAndCycle);
 
     return () => {
       cancelled = true;
+      window.cancelAnimationFrame(rafId);
       timers.forEach((id) => clearTimeout(id));
     };
-  }, [enabled, hovered, speedPxPerSec, text]);
+  }, [autoScroll, effectiveSpeed, hovered, shouldRun, text]);
 
   const showMask = scrolling && overflowPx > 0;
 

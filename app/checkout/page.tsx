@@ -187,11 +187,43 @@ const GPT_RECHARGE_PRODUCT_ID = "ai-gpt-cdk-tr-plus-1m";
 const GROK_RECHARGE_PRODUCT_ID = "ai-grok-cdk-in-super-1m";
 const GIFFGAFF_TOPUP_PRODUCT_ID = "gift-giffgaff-topup";
 
-function isGiffgaffSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+type ProductMatchTarget = {
+  id?: string;
+  name?: string;
+  slug?: string | null;
+  category?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+function isTopupOrPinCardProduct(product: ProductMatchTarget) {
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   const id = (product.id || "").toLowerCase();
-  const isGiffgaff =
+  const categorySlug = String(product.metadata?.categorySlug ?? "").trim().toLowerCase();
+  const categoryId = String(product.metadata?.categoryId ?? "").trim();
+  return (
+    product.category === "gift-cards" ||
+    categoryId === "94319387-0291-4e58-b9fd-e25fbdfbfaf1" ||
+    categorySlug === "balance" ||
+    slug.startsWith("bitrefill-") ||
+    slug.includes("topup") ||
+    slug.includes("-pin-") ||
+    slug.endsWith("-pin") ||
+    id.includes("topup") ||
+    id === GIFFGAFF_TOPUP_PRODUCT_ID ||
+    id === "e00553bf-a2da-48c7-9bdc-9b897b18b2fd" ||
+    id === "5e4025b0-9a14-4827-87a2-f7f3e0e79734" ||
+    id === "b2878f67-344a-40e4-af59-b32b6db21d29" ||
+    /话费充值|充值卡|pin\s*卡密|礼品卡|sim\s*卡服务/i.test(name)
+  );
+}
+
+function isGiffgaffSimProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
+  const name = (product.name || "").toLowerCase();
+  const slug = (product.slug || "").toLowerCase();
+  const id = (product.id || "").toLowerCase();
+  return (
     name.includes("giffgaff") ||
     slug.includes("giffgaff") ||
     id === "3b973a67-20ad-4f91-a538-4f9a83b3d560" ||
@@ -199,24 +231,19 @@ function isGiffgaffSimProduct(product: { id?: string; name?: string; slug?: stri
     id === "8c4776d9-17e3-40af-a1e0-0101f55516dc" ||
     slug === "sim-001" ||
     slug === "sim-002" ||
-    slug === "sim-003";
-  const isTopup =
-    id === GIFFGAFF_TOPUP_PRODUCT_ID ||
-    id === "e00553bf-a2da-48c7-9bdc-9b897b18b2fd" ||
-    id === "5e4025b0-9a14-4827-87a2-f7f3e0e79734" ||
-    id === "b2878f67-344a-40e4-af59-b32b6db21d29" ||
-    name.includes("充值") ||
-    slug.includes("topup");
-  return isGiffgaff && !isTopup;
+    slug === "sim-003"
+  );
 }
 
-function isHahaSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isHahaSimProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return name.includes("haha") || slug.includes("haha");
 }
 
-function isTMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isTMobileProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return (
@@ -226,49 +253,57 @@ function isTMobileProduct(product: { id?: string; name?: string; slug?: string |
   );
 }
 
-function isUltraMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isUltraMobileProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return name.includes("ultra") || slug.includes("ultra");
 }
 
-function isLucky2Product(product: { id?: string; name?: string; slug?: string | null }) {
+function isLucky2Product(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return name.includes("lucky") || slug.includes("lucky");
 }
 
-function isAirMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isAirMobileProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return name.includes("air mobile") || slug.includes("air-mobile");
 }
 
-function isEncMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isEncMobileProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return (name.includes("enc") || slug.includes("enc")) && !name.includes("air") && !slug.includes("air");
 }
 
-function isOrangeSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isOrangeSimProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return name.includes("orange") || slug.includes("orange");
 }
 
-function isVodafoneSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isVodafoneSimProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return name.includes("vodafone") || slug.includes("vodafone");
 }
 
-function isMovistarSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isMovistarSimProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return name.includes("movistar") || slug.includes("movistar");
 }
 
-function isEuropeanSimProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isEuropeanSimProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return (
@@ -284,7 +319,8 @@ function isEuropeanSimProduct(product: { id?: string; name?: string; slug?: stri
   );
 }
 
-function isRakutenMobileProduct(product: { id?: string; name?: string; slug?: string | null }) {
+function isRakutenMobileProduct(product: ProductMatchTarget) {
+  if (isTopupOrPinCardProduct(product)) return false;
   const name = (product.name || "").toLowerCase();
   const slug = (product.slug || "").toLowerCase();
   return name.includes("rakuten") || slug.includes("rakuten") || name.includes("乐天");
@@ -2108,7 +2144,7 @@ function ProductDetailCard({
         ) : null}
 
         <div className={cn("grid shrink-0 gap-4 sm:gap-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center", isMobile && "!grid-cols-1 !gap-3.5")}>
-          <div className="relative mx-auto aspect-square w-full max-w-[160px] self-center overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 shadow-sm sm:max-w-[220px]">
+          <div className="relative mx-auto aspect-square w-full max-w-[160px] self-center overflow-visible sm:max-w-[220px]">
             <ProductArtwork product={product} />
           </div>
 
@@ -3961,25 +3997,100 @@ function SkuSelector({
   );
 }
 
+function resolveArtworkGlowColor(product: Product): string {
+  const token = `${product.name ?? ""} ${product.id ?? ""} ${String(product.metadata?.slug ?? "")}`.toLowerCase();
+  if (token.includes("t-mobile") || token.includes("tmobile")) return "rgba(226, 0, 116, 0.34)";
+  if (token.includes("vodafone") || token.includes("rakuten")) return "rgba(230, 0, 0, 0.30)";
+  if (token.includes("gpt") || token.includes("openai") || token.includes("giffgaff")) return "rgba(16, 163, 127, 0.30)";
+  if (token.includes("claude")) return "rgba(217, 119, 87, 0.34)";
+  if (token.includes("gemini") || token.includes("telegram") || token.includes("apple") || token.includes("itunes") || token.includes("movistar")) {
+    return "rgba(37, 99, 235, 0.30)";
+  }
+  if (token.includes("ultra") || token.includes("grok")) return "rgba(124, 58, 237, 0.32)";
+  return "rgba(234, 88, 12, 0.28)";
+}
+
 function ProductArtwork({ product }: { product: Product }) {
   const imageSrc = getProductImage(product);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0, gx: 50, gy: 50, active: false });
+  const glowColor = resolveArtworkGlowColor(product);
 
-  if (imageSrc) {
-    return (
-      <img
-        src={imageSrc}
-        alt={product.name}
-        fetchPriority="high"
-        decoding="async"
-        className="h-full w-full rounded-2xl object-cover"
-      />
-    );
-  }
+  const handlePointerMove = (event: React.MouseEvent<HTMLDivElement>) => {
+    const el = stageRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const px = (event.clientX - rect.left) / Math.max(1, rect.width);
+    const py = (event.clientY - rect.top) / Math.max(1, rect.height);
+    const ry = (px - 0.5) * 14;
+    const rx = (0.5 - py) * 14;
+    setTilt({ rx, ry, gx: Math.round(px * 100), gy: Math.round(py * 100), active: true });
+  };
+
+  const handlePointerLeave = () => {
+    setTilt({ rx: 0, ry: 0, gx: 50, gy: 50, active: false });
+  };
 
   const Icon = getProductFallbackIcon(product);
+
   return (
-    <div className="flex h-full w-full items-center justify-center rounded-2xl bg-primary/10">
-      <Icon className="h-20 w-20 text-primary" />
+    <div
+      ref={stageRef}
+      data-testid="product-artwork-stage"
+      onMouseMove={handlePointerMove}
+      onMouseLeave={handlePointerLeave}
+      className="group/art relative h-full w-full select-none [perspective:900px]"
+    >
+      {/* Ambient colored glow backdrop (inspired by premium 3D product showcases) */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-[10%] -z-0 rounded-full blur-2xl transition-all duration-500 ease-out"
+        style={{
+          background: `radial-gradient(closest-side, ${glowColor}, transparent 75%)`,
+          opacity: tilt.active ? 0.92 : 0.58,
+          transform: tilt.active ? "scale(1.12)" : "scale(1)",
+        }}
+      />
+
+      {/* Interactive 3D tilted badge card with spring pop entrance & specular glass sheen */}
+      <div
+        className="product-artwork-pop relative z-10 h-full w-full overflow-hidden rounded-[22px] border border-white/85 bg-white shadow-[0_22px_38px_-18px_rgba(15,23,42,0.34),0_8px_18px_-10px_rgba(15,23,42,0.18),inset_0_1.5px_0_rgba(255,255,255,0.95)]"
+        style={{
+          transform: tilt.active
+            ? `rotateX(${tilt.rx.toFixed(2)}deg) rotateY(${tilt.ry.toFixed(2)}deg) translateY(-4px) scale(1.035)`
+            : "rotateX(0deg) rotateY(0deg) translateY(0px) scale(1)",
+          transition: tilt.active
+            ? "transform 120ms ease-out, box-shadow 260ms ease-out"
+            : "transform 520ms cubic-bezier(0.2, 0.9, 0.25, 1.02), box-shadow 420ms ease-out",
+          willChange: "transform",
+        }}
+      >
+        {imageSrc ? (
+          <img
+            src={imageSrc}
+            alt={product.name}
+            fetchPriority="high"
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-50 via-white to-amber-50">
+            <Icon className="h-20 w-20 text-primary drop-shadow-sm" />
+          </div>
+        )}
+
+        {/* Top subtle glass highlight bevel */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-[22px] ring-1 ring-inset ring-white/45"
+          style={{
+            background: tilt.active
+              ? `radial-gradient(circle at ${tilt.gx}% ${tilt.gy}%, rgba(255,255,255,0.36) 0%, rgba(255,255,255,0.08) 38%, transparent 70%)`
+              : "linear-gradient(145deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.04) 38%, rgba(15,23,42,0.06) 100%)",
+            transition: "opacity 240ms ease",
+          }}
+        />
+      </div>
     </div>
   );
 }

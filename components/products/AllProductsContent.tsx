@@ -30,6 +30,7 @@ import type { Product } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import HoverMarqueeText from "@/components/ui/HoverMarqueeText";
 import { Input } from "@/components/ui/input";
 import {
   mallContentClassName,
@@ -328,6 +329,7 @@ export default function AllProductsContent() {
     }
   }, [isGiftCardTabActive, sortMode]);
 
+  const [hoveredProductId, setHoveredProductId] = useState("");
   const currentSortOption = visibleSortOptions.find((item) => item.value === sortMode) ?? visibleSortOptions[0];
 
   return (
@@ -583,15 +585,16 @@ export default function AllProductsContent() {
               key={listRenderKey}
               ref={scrollRef}
               className={cn(
-                "page-turn-enter mt-3.5 grid min-h-0 flex-1 grid-cols-1 content-start gap-2.5 overflow-y-auto pr-1 sidebar-scroll xl:grid-cols-2",
+                "page-turn-enter mt-3.5 grid min-h-0 flex-1 grid-cols-1 content-start gap-2.5 overflow-y-auto pr-1 sidebar-scroll scroll-fade-y xl:grid-cols-2",
                 isMobile && "!overflow-visible !pr-0"
               )}
             >
               {products.map((product, index) => {
                 const stock = Number(product.stock ?? 0);
-                const stockDisplay = getPublicStockDisplay(stock, { metadata: product.metadata });
+                const rawStockDisplay = getPublicStockDisplay(stock, { metadata: product.metadata });
                 const hasStock =
-                  stockDisplay.available && (product.stockStatus !== "out-of-stock" || stockDisplay.code === "preorder");
+                  rawStockDisplay.available && (product.stockStatus !== "out-of-stock" || rawStockDisplay.code === "preorder");
+                const stockDisplay = hasStock ? rawStockDisplay : getPublicStockDisplay(0, { metadata: product.metadata });
                 const minPrice = Number(product.metadata?.minPrice ?? product.price);
                 const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
                 const hasSkus = Boolean(product.metadata?.hasSkus);
@@ -623,8 +626,16 @@ export default function AllProductsContent() {
                   >
                     <button
                       type="button"
-                      onMouseEnter={() => rememberProductCardPreview(product)}
-                      onFocus={() => rememberProductCardPreview(product)}
+                      onMouseEnter={() => {
+                        setHoveredProductId(product.id);
+                        rememberProductCardPreview(product);
+                      }}
+                      onMouseLeave={() => setHoveredProductId((prev) => (prev === product.id ? "" : prev))}
+                      onFocus={() => {
+                        setHoveredProductId(product.id);
+                        rememberProductCardPreview(product);
+                      }}
+                      onBlur={() => setHoveredProductId((prev) => (prev === product.id ? "" : prev))}
                       onClick={() => handleOpenProduct(product)}
                       className="group flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-white px-3.5 py-3 text-left transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-[1px] hover:border-orange-300/80 hover:shadow-[0_10px_24px_-14px_rgba(169,103,52,0.28)]"
                     >
@@ -644,7 +655,12 @@ export default function AllProductsContent() {
                             <span className="shrink-0 rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-bold text-[#c85e22]">
                               {badge}
                             </span>
-                            <span className="truncate text-sm font-bold text-slate-900">{product.name}</span>
+                            <HoverMarqueeText
+                              text={product.name}
+                              hovered={hoveredProductId === product.id}
+                              autoScroll={isMobile}
+                              className="text-sm font-bold text-slate-900"
+                            />
                           </div>
                           {cleanDesc ? (
                             <p className="mt-1 truncate text-xs text-slate-500">{cleanDesc}</p>
