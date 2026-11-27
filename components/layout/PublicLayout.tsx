@@ -18,6 +18,11 @@ import PublicTopInfoBar from "./PublicTopInfoBar";
 import RouteLoadingIndicator from "./RouteLoadingIndicator";
 import { OPEN_PUBLIC_SUPPORT_EVENT } from "@/lib/support/open-public-support";
 import { clearCatalogRoutePending, getCatalogRoutePending, rebaseCatalogRoutePending, startCatalogPopstate } from "@/lib/motion/catalog-route-exit";
+import {
+  clearStorefrontPageExit,
+  getStorefrontPageTransitionGroup,
+  isAnimatedStorefrontPagePath,
+} from "@/lib/motion/storefront-page-transition";
 import { cn } from "@/lib/utils";
 import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase/client";
 import { clearPublicProductPages } from "@/lib/catalog/public-product-query-cache";
@@ -175,6 +180,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
   }, [openSupport]);
   const router = useRouter();
   useEffect(() => {
+    clearStorefrontPageExit();
     const pending = getCatalogRoutePending();
     const targetPath = pending?.target ? pending.target.split("?")[0] : "";
     if (!pending || targetPath === pathname) {
@@ -290,6 +296,7 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
       )}>
         <PublicTopInfoBar announcementText={announcement || undefined} mobileNavigationUntilLg={mobileNavigationUntilLg} />
         <div
+          data-storefront-page-stage="true"
           className={cn(
             "w-full",
             pathname === "/" && !isMobile && "relative z-30",
@@ -298,7 +305,19 @@ function PublicLayoutContent({ children, contentClassName, viewportLocked = fals
           )}
           style={{ paddingInline: "var(--storefront-content-padding-x)" }}
         >
-          {children}
+          {isAnimatedStorefrontPagePath(pathname) ? (
+            <div
+              key={getStorefrontPageTransitionGroup(pathname)}
+              className={cn(
+                "storefront-page-enter w-full",
+                viewportLocked && !isMobile && "flex h-full min-h-0 flex-col",
+              )}
+            >
+              {children}
+            </div>
+          ) : (
+            children
+          )}
         </div>
         <footer
           data-testid="public-site-footer"

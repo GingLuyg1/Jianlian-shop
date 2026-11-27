@@ -305,6 +305,32 @@ body:has([data-storefront-ui]) [role="dialog"]:not([class*="inset-y-0"]) {
   transition: opacity 160ms ease-out;
 }
 
+@keyframes storefront-page-enter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.992);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.storefront-page-enter {
+  animation: storefront-page-enter 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+[data-storefront-page-stage="true"] {
+  transition: opacity 170ms cubic-bezier(0.4, 0, 1, 1), transform 170ms cubic-bezier(0.4, 0, 1, 1), filter 170ms ease-in;
+}
+
+[data-storefront-page-stage="true"][data-page-exiting="true"] {
+  opacity: 0;
+  transform: translate3d(0, -8px, 0) scale(0.992);
+  filter: blur(2.5px);
+  pointer-events: none;
+}
+
 .catalog-placeholder {
   background-image: linear-gradient(90deg, rgba(255, 247, 237, 0.55) 25%, rgba(255, 237, 213, 0.85) 50%, rgba(255, 247, 237, 0.55) 75%);
   background-size: 200% 100%;
@@ -318,8 +344,9 @@ body:has([data-storefront-ui]) [role="dialog"]:not([class*="inset-y-0"]) {
 
 @media (prefers-reduced-motion: reduce) {
   .catalog-wheel-item { transform: none !important; opacity: 1 !important; will-change: auto; }
-  .catalog-enter-item, .catalog-title-enter, .page-turn-enter, .catalog-exiting, .catalog-placeholder { animation: none !important; }
-  .catalog-placeholder-leaving { transition: none !important; }
+  .catalog-enter-item, .catalog-title-enter, .page-turn-enter, .catalog-exiting, .catalog-placeholder, .storefront-page-enter { animation: none !important; }
+  .catalog-placeholder-leaving, [data-storefront-page-stage="true"] { transition: none !important; }
+  [data-storefront-page-stage="true"][data-page-exiting="true"] { opacity: 1 !important; transform: none !important; filter: none !important; }
 }
 
 /* Mobile performance & 390px preview studio frame */

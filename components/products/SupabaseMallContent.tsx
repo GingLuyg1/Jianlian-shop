@@ -31,6 +31,7 @@ import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import HoverMarqueeText from "@/components/ui/HoverMarqueeText";
 import { Input } from "@/components/ui/input";
 import type { Product, ProductCategory } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -1217,6 +1218,7 @@ function SubcategorySlidingList({
 }) {
   const listRef = useRef<HTMLDivElement>(null);
   const indicatorRef = useRef<HTMLSpanElement>(null);
+  const [hoveredSubKey, setHoveredSubKey] = useState("");
   const activeIdx = isSelected
     ? subItems.findIndex(
         (sub) => normalizeSubcategoryMatch(selectedSubcategory) === normalizeSubcategoryMatch(sub.name)
@@ -1261,15 +1263,20 @@ function SubcategorySlidingList({
     >
       {subItems.map((sub, subIdx) => {
         const subActive = subIdx === activeIdx;
+        const subKey = sub.slug || sub.name;
         return (
           <button
-            key={sub.slug || sub.name}
+            key={subKey}
             data-sub-item={sub.name}
             type="button"
             tabIndex={isExpanded ? 0 : -1}
             style={{
               transitionDelay: isExpanded ? `${Math.min(subIdx * 20, 120)}ms` : "0ms",
             }}
+            onMouseEnter={() => setHoveredSubKey(subKey)}
+            onMouseLeave={() => setHoveredSubKey((prev) => (prev === subKey ? "" : prev))}
+            onFocus={() => setHoveredSubKey(subKey)}
+            onBlur={() => setHoveredSubKey((prev) => (prev === subKey ? "" : prev))}
             onClick={() => onPick(sub.name)}
             className={cn(
               "group relative z-10 flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-xs sm:text-[13px] transition-[transform,opacity,background-color,color] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]",
@@ -1285,7 +1292,12 @@ function SubcategorySlidingList({
                 subActive ? "scale-125 bg-[#f97316]" : "bg-slate-300 group-hover:scale-110 group-hover:bg-[#e59866]"
               )}
             />
-            <span className="truncate leading-snug">{sub.name}</span>
+            <HoverMarqueeText
+              text={sub.name}
+              hovered={hoveredSubKey === subKey}
+              enabled={isExpanded}
+              className="leading-snug"
+            />
           </button>
         );
       })}
@@ -1335,6 +1347,7 @@ function CategoryButton({
   onClick: () => void;
 }) {
   const Icon = category.displayIcon ? iconMap[category.displayIcon] : KeyRound;
+  const [hovered, setHovered] = useState(false);
 
   if (isMobile) {
     return (
@@ -1385,8 +1398,16 @@ function CategoryButton({
 
   return (
     <button
-      onMouseEnter={onIntent}
-      onFocus={onIntent}
+      onMouseEnter={() => {
+        setHovered(true);
+        onIntent();
+      }}
+      onMouseLeave={() => setHovered(false)}
+      onFocus={() => {
+        setHovered(true);
+        onIntent();
+      }}
+      onBlur={() => setHovered(false)}
       type="button"
       aria-pressed={active}
       disabled={disabled}
@@ -1418,7 +1439,12 @@ function CategoryButton({
             <Icon className="h-4 w-4 text-primary lg:h-6 lg:w-6" />
           </div>
         )}
-        <span className="min-w-0 flex-1 truncate text-left text-xs font-semibold leading-tight sm:text-sm lg:text-base">{category.name}</span>
+        <HoverMarqueeText
+          text={category.name}
+          hovered={hovered}
+          enabled={!isMobile}
+          className="text-left text-xs font-semibold leading-tight sm:text-sm lg:text-base"
+        />
       </div>
       <div className="relative flex h-5 w-5 shrink-0 items-center justify-center">
         {hasSubcategories ? (
@@ -1769,8 +1795,9 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, hideS
   const minPrice = Number(product.metadata?.minPrice ?? product.price);
   const maxPrice = Number(product.metadata?.maxPrice ?? product.price);
   const hasSkus = Boolean(product.metadata?.hasSkus);
-  const stockDisplay = getPublicStockDisplay(stock, { metadata: product.metadata });
-  const hasStock = stockDisplay.available && (product.stockStatus !== "out-of-stock" || stockDisplay.code === "preorder");
+  const rawStockDisplay = getPublicStockDisplay(stock, { metadata: product.metadata });
+  const hasStock = rawStockDisplay.available && (product.stockStatus !== "out-of-stock" || rawStockDisplay.code === "preorder");
+  const stockDisplay = hasStock ? rawStockDisplay : getPublicStockDisplay(0, { metadata: product.metadata });
   const priceText = hasSkus && maxPrice > minPrice
     ? `${currencySymbol}${minPrice.toFixed(2)} ~ ${currencySymbol}${maxPrice.toFixed(2)}`
     : `${currencySymbol}${product.price.toFixed(2)}`;

@@ -36,6 +36,7 @@ import { isCatalogCategoryHref, useVisibleStorefrontCategoryHrefs } from "@/hook
 import { refreshPublicCategories } from "@/lib/catalog/public-category-snapshot";
 import { prefetchDefaultPublicProductPage } from "@/lib/catalog/public-product-query-cache";
 import { getCatalogRoutePending, getServerCatalogRoutePending, startCatalogRouteExit, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
+import { startStorefrontPageExit } from "@/lib/motion/storefront-page-transition";
 import { getChildCategories, normalizeText } from "@/lib/supabase/public-catalog";
 import { Button } from "@/components/ui/button";
 import {
@@ -291,7 +292,16 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                           return;
                         }
                         setExpandedPrimaryHref("");
-                        startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));
+                        const handledCatalog = startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));
+                        if (!handledCatalog) {
+                          startStorefrontPageExit(
+                            event,
+                            pathname,
+                            item.href,
+                            () => router.push(item.href),
+                            () => router.prefetch(item.href)
+                          );
+                        }
                         setOpen(false);
                       }}
                       className={cn(

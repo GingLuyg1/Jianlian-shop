@@ -185,7 +185,7 @@ export default function AppleIdVerifyFailedTutorial({
             }
           >
             <p>
-              在「添加受信任电话号码」界面，先核对国家或地区区号（中国大陆手机号选择 <strong>+86 (中国大陆)</strong> 即可，无需海外号）。
+              在「添加受信任电话号码」界面，先核对国家或地区区号（无需海外号）。
             </p>
             <p>
               在电话号码框中填入自己长期可用、能正常收到验证码的手机号，下方验证方法默认保持勾选 <strong>「短信」</strong>。

@@ -159,7 +159,41 @@ test("Apple ID verify-failed guide is wired into tutorials with 5 clean local as
     assert.match(guide, new RegExp(name.replace(".", "\\.")));
   }
   assert.doesNotMatch(guide, /小咔子|humkt|8gm\.co|bzncxfi3yup/i);
+  assert.match(guide, /在「添加受信任电话号码」界面，先核对国家或地区区号（无需海外号）。/);
   assert.match(tutorialsPage, /AppleIdVerifyFailedTutorial/);
   assert.match(tutorialsPage, /登录验证失败解决/);
   assert.match(css, /data-guide=verify-failed/);
+});
+
+test("help center and my-account storefront pages share smooth enter/exit route transition", () => {
+  const transitionMod = file("lib/motion/storefront-page-transition.ts");
+  const layout = file("components/layout/PublicLayout.tsx");
+  const sidebar = file("components/layout/PublicSidebar.tsx");
+  const mobileMenu = file("components/layout/MobileMenu.tsx");
+  const globalsCss = file("app/globals.css");
+
+  for (const path of ["/tutorials", "/faq", "/products/account-recharge", "/promotion", "/account/orders", "/account"]) {
+    assert.ok(transitionMod.includes(`"${path}"`), `Missing transition path: ${path}`);
+  }
+  assert.match(transitionMod, /STOREFRONT_PAGE_EXIT_DURATION_MS = 170/);
+  assert.match(layout, /data-storefront-page-stage="true"/);
+  assert.match(layout, /storefront-page-enter/);
+  assert.match(sidebar, /startStorefrontPageExit/);
+  assert.match(mobileMenu, /startStorefrontPageExit/);
+  assert.match(globalsCss, /@keyframes storefront-page-enter/);
+  assert.match(globalsCss, /\[data-storefront-page-stage="true"\]\[data-page-exiting="true"\]/);
+});
+
+test("dashboard trend rounds money to 2 decimals and secondary/sub categories use hover marquee for truncated text", () => {
+  const trendChart = file("components/admin/dashboard/AdminTrendRechart.tsx");
+  const dashboard = file("app/admin/page.tsx");
+  const marquee = file("components/ui/HoverMarqueeText.tsx");
+  const mall = file("components/products/SupabaseMallContent.tsx");
+
+  assert.match(trendChart, /unit === "money"\) return `¥\$\{n\.toFixed\(2\)\}`/);
+  assert.match(dashboard, /payAmount:\s*Number\(rest\.payAmount\.toFixed\(2\)\)/);
+  assert.match(marquee, /export default function HoverMarqueeText/);
+  assert.match(marquee, /maskImage:/);
+  assert.match(mall, /HoverMarqueeText/);
+  assert.match(mall, /const stockDisplay = hasStock \? rawStockDisplay : getPublicStockDisplay\(0/);
 });

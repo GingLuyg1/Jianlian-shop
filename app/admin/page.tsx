@@ -1396,6 +1396,9 @@ export default function AdminDashboardPage() {
         const uv = _uvSet.size;
         return {
           ...rest,
+          payAmount: Number(rest.payAmount.toFixed(2)),
+          rechargeAmount: Number(rest.rechargeAmount.toFixed(2)),
+          distributionAmount: Number(rest.distributionAmount.toFixed(2)),
           visitors: uv,
           conversionRate: uv > 0 ? Number(((_buyerSet.size / uv) * 100).toFixed(1)) : 0,
         };
@@ -1472,6 +1475,9 @@ export default function AdminDashboardPage() {
       const uv = _uvSet.size;
       return {
         ...rest,
+        payAmount: Number(rest.payAmount.toFixed(2)),
+        rechargeAmount: Number(rest.rechargeAmount.toFixed(2)),
+        distributionAmount: Number(rest.distributionAmount.toFixed(2)),
         visitors: uv,
         conversionRate: uv > 0 ? Number(((_buyerSet.size / uv) * 100).toFixed(1)) : 0,
       };

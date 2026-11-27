@@ -31,6 +31,7 @@ import { refreshPublicCategories } from "@/lib/catalog/public-category-snapshot"
 import { prefetchDefaultPublicProductPage } from "@/lib/catalog/public-product-query-cache";
 import { prefetchPublicProductCounts } from "@/lib/catalog/public-product-count-cache";
 import { getCatalogRoutePending, getServerCatalogRoutePending, startCatalogRouteExit, subscribeCatalogRoutePending } from "@/lib/motion/catalog-route-exit";
+import { startStorefrontPageExit } from "@/lib/motion/storefront-page-transition";
 import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
 import SidebarSlidingList from "./SidebarSlidingList";
 import styles from "./PublicSidebarGlass.module.css";
@@ -161,7 +162,16 @@ function formatCategoryNavLabel(rawName: string) {
           onClick={(event) => {
             setClickedHref(item.href);
             if (rows && isCatalogCategoryHref(item.href)) void prefetchDefaultPublicProductPage(item.href, rows);
-            startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));
+            const handledCatalog = startCatalogRouteExit(event, pathname, item.href, () => router.push(item.href));
+            if (!handledCatalog) {
+              startStorefrontPageExit(
+                event,
+                pathname,
+                item.href,
+                () => router.push(item.href),
+                () => router.prefetch(item.href)
+              );
+            }
           }}
           className={cn(
             selectionMotion.item,

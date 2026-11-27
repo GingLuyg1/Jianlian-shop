@@ -82,10 +82,20 @@ export function AdminTrendRechart({ points, loading }: { points: DashboardTrendP
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || !hasChart) return;
+    const unitBySeriesName = new Map(SERIES.map((item) => [item.label, item.unit]));
     chart.setOption({
       animation: false,
       aria: { enabled: true },
-      tooltip: { trigger: "axis", renderMode: "richText" },
+      tooltip: {
+        trigger: "axis",
+        renderMode: "richText",
+        valueFormatter: (value: unknown, dataIndex?: number) => {
+          void dataIndex;
+          const n = Number(value);
+          if (!Number.isFinite(n)) return "—";
+          return Number.isInteger(n) ? String(n) : n.toFixed(2);
+        },
+      },
       grid: { left: 56, right: 56, top: 38, bottom: 28, containLabel: true },
       xAxis: {
         type: "category",
@@ -118,7 +128,25 @@ export function AdminTrendRechart({ points, loading }: { points: DashboardTrendP
         showSymbol: points.length === 1, symbolSize: 7,
         yAxisIndex: item.unit === "money" ? 0 : 1,
         itemStyle: { color: item.color }, lineStyle: { width: 2 },
-        data: points.map(point => point[item.key] ?? null),
+        tooltip: {
+          valueFormatter: (val: unknown) => {
+            const n = Number(val);
+            if (!Number.isFinite(n)) return "—";
+            const unit = unitBySeriesName.get(item.label) ?? item.unit;
+            if (unit === "money") return `¥${n.toFixed(2)}`;
+            if (unit === "percent") return `${Number(n.toFixed(1))}%`;
+            return String(Math.round(n));
+          },
+        },
+        data: points.map(point => {
+          const raw = point[item.key];
+          if (raw === null || raw === undefined) return null;
+          const n = Number(raw);
+          if (!Number.isFinite(n)) return null;
+          if (item.unit === "money") return Number(n.toFixed(2));
+          if (item.unit === "percent") return Number(n.toFixed(1));
+          return Math.round(n);
+        }),
       })),
     }, { notMerge: true });
   }, [points, selected, hasChart]);
