@@ -5,7 +5,7 @@
   outline: 2px solid #dc884e;
   outline-offset: 3px;
 }
-.list { scrollbar-width: thin; scrollbar-color: #dec7b1 transparent; }
+.list { scrollbar-width: thin; scrollbar-color: rgba(180, 138, 102, 0.24) transparent; }
 .list table { min-width: 880px; }
 .list th { height: 48px; border-color: #eee0d2; font-weight: 500; }
 .list tbody > tr { transition: background-color 160ms ease-out; }
@@ -65,7 +65,7 @@
   color: #8b7766;
 }
 .dialogHeader > button:hover { background: #fff3e5; color: #b45c27; }
-.detailBody { scrollbar-width: thin; scrollbar-color: #d9c3ad transparent; }
+.detailBody { scrollbar-width: thin; scrollbar-color: rgba(180, 138, 102, 0.24) transparent; }
 .section { border-color: #eee1d3; background: rgb(255 255 255 / 80%); box-shadow: inset 0 1px 0 #fff; }
 .section > div:first-child { border-color: #f0e5da; }
 .section > div:first-child:not(:last-child) { background: linear-gradient(110deg, #fff9f1, #fffdfb); }

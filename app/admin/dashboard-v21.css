@@ -247,7 +247,7 @@
 .admin-dashboard-v21 .dashboard-secondary-kpis {
   display: flex; grid-template-columns: none; gap: 9px; margin-top: 6px; padding: 3px 2px 9px;
   overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: thin;
-  scrollbar-color: #a6b7d9 transparent; overscroll-behavior-inline: contain;
+  scrollbar-color: rgba(100, 116, 139, 0.22) transparent; overscroll-behavior-inline: contain;
 }
 .admin-dashboard-v21 .dashboard-secondary-kpis:focus-visible { outline: 2px solid #3f63dc; outline-offset: 2px; border-radius: 12px; }
 .admin-dashboard-v21 .dashboard-secondary-kpis > * {
