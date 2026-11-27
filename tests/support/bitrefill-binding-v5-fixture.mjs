@@ -44,6 +44,7 @@ export async function loadBindingRoutes(service, catalog) {
     const deps = { crypto: await import("node:crypto"), "next/server": { NextResponse: { json: (b, o) => new Response(JSON.stringify(b), o) } },
       "@/lib/auth/require-admin": { getServerAdminContext: async () => access.current, getServerSuperAdminContext: async () => access.current },
       "@/lib/supabase/service-role": { getSupabaseServiceRoleClient: () => { stats.clients++; return service; } },
+      "@/lib/security/rate-limit": { checkRateLimit: () => ({ allowed: true }), getAdminRateLimitKey: () => "fixture" },
       "@/lib/admin/audit-log-service": { writeAdminAuditLog: async (a) => { stats.audits.push(a); return { ok: true }; } },
       "@/lib/providers/bitrefill/catalog-server": { getPersonalCatalogManager: () => catalog },
       "@/lib/providers/core/admin-sku-binding.mjs": await import("../../lib/providers/core/admin-sku-binding.mjs"),
