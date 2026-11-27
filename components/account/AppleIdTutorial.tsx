@@ -65,7 +65,11 @@ export function AppleIdContents() {
   </nav>;
 }
 
-export default function AppleIdTutorial() {
+export default function AppleIdTutorial({
+  onSwitchToVerifyFailed,
+}: {
+  onSwitchToVerifyFailed?: () => void;
+} = {}) {
   const { isMobile } = useMobileStorefront();
   return <div className={`${tutorial.appleArticle} space-y-6`}>
     <section aria-labelledby="apple-product" className={`${tutorial.appleCard} p-5 sm:p-6`}>
@@ -189,7 +193,7 @@ export default function AppleIdTutorial() {
     <section aria-labelledby="apple-faq" className={`${tutorial.appleCard} p-5 sm:p-6`}>
       <GuideHeading number="04" id="apple-faq">常见问题</GuideHeading>
       <div className={`${tutorial.appleFaq} mt-4 space-y-3 text-sm leading-7 text-slate-600`}>
-        <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">无法登录或一直转圈</summary><p className="mt-2">先核对「媒体与购买项目」当前账号，再检查网络。可尝试开关飞行模式、临时关闭代理、在 Wi-Fi 与移动数据之间切换，或重启后再登录。也可到 Apple 官网检查账号是否能通过验证。</p></details>
+        <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">登录提示「验证失败 · 发生未知错误」、无法登录或一直转圈</summary><p className="mt-2">请立即停止连续重试密码，避免触发账户锁定。先核对「媒体与购买项目」当前账号并切换纯净网络；若为未开启双重认证的账号，可前往 Apple 官网绑定受信任手机号开启双重认证后再回 App Store 登录。{onSwitchToVerifyFailed ? <button type="button" onClick={onSwitchToVerifyFailed} className="ml-1 font-semibold text-primary underline underline-offset-4">查看「登录验证失败与双重认证解决」图文教程</button> : null}</p></details>
         <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">更新 App 时要求输入原账号</summary><p className="mt-2">用原下载账号更新。若要改用当前账号重新下载，先备份应用数据并确认该账号及所在商店能下载该 App，再决定是否删除旧版本。</p></details>
         <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">提示密码错误</summary><p className="mt-2">先确认在 <button type="button" onClick={() => scrollToChapter("apple-store-login")} className="text-primary underline">「媒体与购买项目」登录</button>，并核对输入的是正确账号。新购账号可从卡密复制对应值，避免带上标签、空格或分隔符；Apple 官网验证仍失败时联系订单客服。已修改过资料的账号应使用更新后的邮箱和密码，忘记密码可走 Apple 官方恢复流程。</p></details>
         <details className="rounded-xl border border-orange-100 bg-white/75 p-4"><summary className="cursor-pointer font-semibold text-slate-900">账号锁定、非活跃或 App Store 账户停用</summary><p className="mt-2">按屏幕提示选择对应的 <button type="button" onClick={() => scrollToChapter("apple-account-recovery")} className="text-primary underline">Apple 账户恢复入口</button>。</p></details>

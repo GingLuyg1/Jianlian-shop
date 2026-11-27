@@ -141,3 +141,25 @@ test("account API page syncs with real server agent_applications, sidebar shows 
   assert.match(adminDashboard, /曝光点击率[\s\S]{0,900}点击转化率/);
   assert.match(adminDashboard, /<option value="exposureClickRate">按曝光点击率<\/option>/);
 });
+
+test("Apple ID verify-failed guide is wired into tutorials with 5 clean local assets and zero third-party branding", () => {
+  const guide = file("components/account/AppleIdVerifyFailedTutorial.tsx");
+  const tutorialsPage = file("app/tutorials/page.tsx");
+  const css = file("components/account/TutorialsGlass.module.css");
+
+  const expectedAssets = [
+    "apple-verify-error-overview.png",
+    "apple-2fa-step1-continue.png",
+    "apple-2fa-step2-phone.png",
+    "apple-2fa-step3-submit.png",
+    "apple-2fa-step4-code.png",
+  ];
+  for (const name of expectedAssets) {
+    assert.equal(existsSync(join(process.cwd(), "public", "assets", "tutorials", "apple-id", name)), true, `Missing asset: ${name}`);
+    assert.match(guide, new RegExp(name.replace(".", "\\.")));
+  }
+  assert.doesNotMatch(guide, /小咔子|humkt|8gm\.co|bzncxfi3yup/i);
+  assert.match(tutorialsPage, /AppleIdVerifyFailedTutorial/);
+  assert.match(tutorialsPage, /登录验证失败解决/);
+  assert.match(css, /data-guide=verify-failed/);
+});

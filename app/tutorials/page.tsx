@@ -50,6 +50,7 @@ const ChatGptAccountGuideTutorial = dynamic(() => import("@/components/account/C
 const GeminiTutorial = dynamic(() => import("@/components/account/GeminiTutorial"), { ssr: false, loading: tutorialLoading });
 const GeminiStudentDiscountTutorial = dynamic(() => import("@/components/account/GeminiStudentDiscountTutorial"), { ssr: false, loading: tutorialLoading });
 const AppleIdTutorial = dynamic(() => import("@/components/account/AppleIdTutorial"), { ssr: false, loading: tutorialLoading });
+const AppleIdVerifyFailedTutorial = dynamic(() => import("@/components/account/AppleIdVerifyFailedTutorial"), { ssr: false, loading: tutorialLoading });
 const GoogleRegionTutorial = dynamic(() => import("@/components/account/GoogleRegionTutorial"), { ssr: false, loading: tutorialLoading });
 const GoogleQrSmsTutorial = dynamic(() => import("@/components/account/GoogleQrSmsTutorial"), { ssr: false, loading: tutorialLoading });
 const GoogleAppealTutorial = dynamic(() => import("@/components/account/GoogleAppealTutorial"), { ssr: false, loading: tutorialLoading });
@@ -121,7 +122,7 @@ const serviceRules = [
 const tutorialTopics = [
   { id: "required", label: "使用必读", title: "使用必读", description: "", icon: BookOpen, keywords: ["购买与交付指南", "服务说明", ...steps.flatMap(item => [item.title, item.text]), ...notices, ...serviceRules.flatMap(item => [item.title, item.text])] },
   { id: "binance", label: "币安教程", title: "币安 · USDT 交易教程", description: "", icon: BinanceWireframeIcon, keywords: ["Binance", "BEP20", "安卓", "iPhone", "Apple", "注册", "邀请码", "JIANLIAN", "购买 USDT", "提现", "支付", "收款地址", "网络手续费"] },
-  { id: "apple-id", label: "Apple ID", title: "Apple ID 使用教程", description: "", icon: AppleWireframeIcon, keywords: ["苹果 ID", "苹果ID", "卡密", "密保", "生日", "格式 A", "格式 B", "格式 C", "iCloud", ...appleChapters.map(([, label]) => label)] },
+  { id: "apple-id", label: "Apple ID", title: "Apple ID 使用教程", description: "", icon: AppleWireframeIcon, keywords: ["苹果 ID", "苹果ID", "卡密", "密保", "生日", "格式 A", "格式 B", "格式 C", "iCloud", "验证失败", "发生未知错误", "未知错误", "双重认证", "2FA", "受信任电话号码", "账户已锁定", "App Store 登录失败", "登录验证失败解决", ...appleChapters.map(([, label]) => label)] },
   { id: "giffgaff", label: "Giffgaff", title: "Giffgaff 教程", description: "", icon: GiffgaffWireframeIcon, keywords: ["英国", "SIM", "激活", "保号", "移动数据", "漫游", "120KB", "流量", "余额", "eSIM", "实体卡"] },
   { id: "haha-sim", label: "Haha SIM", title: "Haha SIM 实体卡激活与保号教程", description: "首次插卡、漫游设置、官方 App、故障排查与实名登记。", icon: HahaSimWireframeIcon, keywords: ["Haha", "haha SIM", "haha Travel", "实体卡", "激活", "数据漫游", "ICCID", "短信", "APN", "实名", "保号", "香港", "中港澳"] },
   { id: "one-nz", label: "One NZ", title: "新西兰 One NZ SIM 卡教程", description: "0月租、免费收短信、国内5G漫游防扣费与保号指南", icon: OneNzWireframeIcon, keywords: ["One NZ", "OneNZ", "新西兰", "已激活使用与账户绑定教程", "SIM 卡使用指南与常见问题", "Vodafone", "沃达丰", "激活", "0月租", "短信免费", "mytype", "mynum", "521", "充值保号", "iMessage", "关闭数据漫游"] },
@@ -164,12 +165,14 @@ function getTutorialPurchaseAction(topicId: string): { href: string; label: stri
 
 function getTutorialTitleMeta({
   topicId,
+  appleGuide,
   giffgaffGuide,
   oneNzGuide,
   chatgptGuide,
   twitterGuide,
   googleGuide,
 }: {
+  appleGuide: "usage" | "verify-failed";
   googleGuide: "qr-sms" | "region" | "appeal" | "student-discount";
   topicId: string;
   giffgaffGuide: "activation" | "keeper";
@@ -277,6 +280,13 @@ function getTutorialTitleMeta({
         desc: "首次插卡、漫游设置、官方 App、故障排查与实名登记",
       };
     case "apple-id":
+      if (appleGuide === "verify-failed") {
+        return {
+          mainTitle: "Apple ID 使用教程",
+          subTitle: "登录验证失败与双重认证解决",
+          desc: "App Store 登录提示「验证失败 · 发生未知错误」的原因排查与官网绑定受信任手机号开启双重认证全步骤",
+        };
+      }
       return {
         mainTitle: "Apple ID 使用教程",
         subTitle: "账号登录与卡密格式说明",
@@ -488,6 +498,8 @@ function TutorialsPageContent() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<(typeof tutorialTopics)[number]["id"]>("required");
   const [expandAllOpen, setExpandAllOpen] = useState(false);
+  const [appleTreeOpen, setAppleTreeOpen] = useState(false);
+  const [appleGuide, setAppleGuide] = useState<"usage" | "verify-failed">("usage");
   const [giffgaffTreeOpen, setGiffgaffTreeOpen] = useState(false);
   const [giffgaffGuide, setGiffgaffGuide] = useState<"activation" | "keeper">("activation");
   const [oneNzTreeOpen, setOneNzTreeOpen] = useState(false);
@@ -512,13 +524,22 @@ function TutorialsPageContent() {
     }
     if (paramTopic && tutorialTopics.some((t) => t.id === paramTopic)) {
       setSelected(paramTopic as (typeof tutorialTopics)[number]["id"]);
+      if (paramTopic === "apple-id") setAppleTreeOpen(true);
       if (paramTopic === "one-nz") setOneNzTreeOpen(true);
       if (paramTopic === "giffgaff") setGiffgaffTreeOpen(true);
       if (paramTopic === "chatgpt-guide") setChatgptTreeOpen(true);
       if (paramTopic === "twitter") setTwitterTreeOpen(true);
       if (paramTopic === "google-region") setGoogleTreeOpen(true);
     }
-    if (paramGuide === "usage" || paramGuide === "activation" || paramGuide === "binding") {
+    if (paramGuide === "verify-failed") {
+      setSelected("apple-id");
+      setAppleTreeOpen(true);
+      setAppleGuide("verify-failed");
+      return;
+    }
+    if (paramGuide === "usage" && paramTopic === "apple-id") {
+      setAppleGuide("usage");
+    } else if (paramGuide === "usage" || paramGuide === "activation" || paramGuide === "binding") {
       setOneNzGuide("usage");
     } else if (paramGuide === "guide" || paramGuide === "rates") {
       setOneNzGuide("guide");
@@ -538,6 +559,7 @@ function TutorialsPageContent() {
   const query = search.trim().toLocaleLowerCase();
   const matchingTopics = tutorialTopics.filter(topic => [topic.label, topic.title, topic.description, ...topic.keywords].some(text => text.toLocaleLowerCase().includes(query)));
   const topic = matchingTopics.find(item => item.id === selected) ?? matchingTopics[0] ?? tutorialTopics.find(item => item.id === selected)!;
+  const showApple = matchingTopics.length > 0 && topic.id === "apple-id";
   const showGiffgaff = matchingTopics.length > 0 && topic.id === "giffgaff";
   const showOneNz = matchingTopics.length > 0 && topic.id === "one-nz";
   const showChatgpt = matchingTopics.length > 0 && topic.id === "chatgpt-guide";
@@ -559,6 +581,7 @@ function TutorialsPageContent() {
   }, [isMobile, topic.id]);
   const titleMeta = getTutorialTitleMeta({
     topicId: topic.id,
+    appleGuide,
     giffgaffGuide,
     oneNzGuide,
     chatgptGuide,
@@ -584,6 +607,7 @@ function TutorialsPageContent() {
                         onClick={(event) => {
                           setSelected(id);
                           setSearch("");
+                          if (id === "apple-id") setAppleTreeOpen(true);
                           if (id === "giffgaff") setGiffgaffTreeOpen(true);
                           if (id === "one-nz") setOneNzTreeOpen(true);
                           if (id === "chatgpt-guide") setChatgptTreeOpen(true);
@@ -635,6 +659,7 @@ function TutorialsPageContent() {
                         onClick={() => {
                           setSelected(id);
                           setSearch("");
+                          if (id === "apple-id") setAppleTreeOpen(true);
                           if (id === "giffgaff") setGiffgaffTreeOpen(true);
                           if (id === "one-nz") setOneNzTreeOpen(true);
                           setExpandAllOpen(false);
@@ -653,6 +678,32 @@ function TutorialsPageContent() {
                     );
                   })}
                 </div>
+              </div>
+            ) : null}
+
+            {/* 如果当前分类是 Apple ID，显示二级小药丸 */}
+            {topic.id === "apple-id" ? (
+              <div className="flex items-center gap-1.5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-t border-orange-100/70 pt-2 touch-pan-x">
+                {[
+                  { guide: "usage", label: "使用与改密指南" },
+                  { guide: "verify-failed", label: "登录验证失败解决" },
+                ].map((item) => (
+                  <button
+                    key={item.guide}
+                    type="button"
+                    onClick={() => {
+                      setAppleGuide(item.guide as "usage" | "verify-failed");
+                      resetScroll();
+                    }}
+                    className={`inline-flex shrink-0 items-center rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                      appleGuide === item.guide
+                        ? "bg-primary text-white font-semibold"
+                        : "bg-white text-slate-600 border border-orange-200/60"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               </div>
             ) : null}
 
@@ -807,23 +858,28 @@ function TutorialsPageContent() {
               const button = <button type="button" aria-current={current ? "true" : undefined} data-sidebar-current={current || undefined} className={`${tutorial.navItem} ${selection.item} ${isMobile ? `!h-10 !justify-start !rounded-xl !px-3 !text-xs border ${current ? "border-orange-300 bg-orange-50/90 font-semibold text-primary" : "border-slate-100 bg-white/80"}` : ""}`} onClick={() => {
                 setSelected(id);
                 setSearch("");
+                if (id === "apple-id" && !showApple) setAppleTreeOpen(true);
                 if (id === "giffgaff" && !showGiffgaff) setGiffgaffTreeOpen(true);
                 if (id === "one-nz" && !showOneNz) setOneNzTreeOpen(true);
                 if (id === "chatgpt-guide" && !showChatgpt) setChatgptTreeOpen(true);
                 if (id === "twitter" && !showTwitter) setTwitterTreeOpen(true);
                 if (id === "google-region" && !showGoogle) setGoogleTreeOpen(true);
+                if (id !== "apple-id") setAppleTreeOpen(false);
                 if (id !== "giffgaff") setGiffgaffTreeOpen(false);
                 if (id !== "one-nz") setOneNzTreeOpen(false);
                 if (id !== "chatgpt-guide") setChatgptTreeOpen(false);
                 if (id !== "twitter") setTwitterTreeOpen(false);
                 if (id !== "google-region") setGoogleTreeOpen(false);
-                if (isMobile && id !== "giffgaff" && id !== "one-nz" && id !== "chatgpt-guide" && id !== "twitter" && id !== "google-region") setMobileNavOpen(false);
+                if (isMobile && id !== "apple-id" && id !== "giffgaff" && id !== "one-nz" && id !== "chatgpt-guide" && id !== "twitter" && id !== "google-region") setMobileNavOpen(false);
                 resetScroll();
               }}>
                 <Icon className="h-4 w-4 shrink-0 md:h-5 md:w-5" aria-hidden="true" /><span className="flex-1 text-left">{label}</span>
                 {id === "required" && <span className={`${styles.pill} hidden md:inline`}>必读</span>}
-                {(id === "giffgaff" || id === "one-nz" || id === "chatgpt-guide" || id === "twitter" || id === "google-region") && <span className={isMobile ? "inline" : "hidden md:inline"}><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
+                {(id === "apple-id" || id === "giffgaff" || id === "one-nz" || id === "chatgpt-guide" || id === "twitter" || id === "google-region") && <span className={isMobile ? "inline" : "hidden md:inline"}><ChevronDown className={tutorial.chevron} aria-hidden="true" /></span>}
               </button>;
+              if (id === "apple-id") {
+                return <Collapsible.Root key={id} asChild open={showApple && appleTreeOpen} onOpenChange={setAppleTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Apple ID 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={appleGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={appleGuide === "usage" ? "page" : undefined} title="使用与改密指南" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setAppleGuide("usage"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>使用与改密指南</button><button type="button" aria-current={appleGuide === "verify-failed" ? "page" : undefined} title="登录验证失败与双重认证解决" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setAppleGuide("verify-failed"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>登录验证失败解决</button></nav></Collapsible.Content></div></Collapsible.Root>;
+              }
               if (id === "giffgaff") {
                 return <Collapsible.Root key={id} asChild open={showGiffgaff && giffgaffTreeOpen} onOpenChange={setGiffgaffTreeOpen}><div className={`${tutorial.treeItem} min-w-0 ${isMobile ? "!col-span-2" : ""}`}><Collapsible.Trigger asChild>{button}</Collapsible.Trigger><Collapsible.Content className={tutorial.tree}><nav aria-label="Giffgaff 教程目录" className={`${tutorial.appleContents} ${tutorial.subtopics}`} data-guide={giffgaffGuide}><span aria-hidden="true" className={`${sidebar.indicator} ${tutorial.subtopicIndicator}`} data-ready="true" data-visible="true" /><button type="button" aria-current={giffgaffGuide === "activation" ? "page" : undefined} title="实体卡激活与使用" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("activation"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>实体卡激活与使用</button><button type="button" aria-current={giffgaffGuide === "keeper" ? "page" : undefined} title="保号助手" className={`${tutorial.contentsLink} ${selection.item}`} onClick={() => { setGiffgaffGuide("keeper"); if (isMobile) setMobileNavOpen(false); resetScroll(); }}>保号助手</button></nav></Collapsible.Content></div></Collapsible.Root>;
               }
@@ -879,7 +935,7 @@ function TutorialsPageContent() {
             </button>
           ) : null}
           <div
-            key={`${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showGoogle ? googleGuide : showTwitter ? twitterGuide : ""}`}
+            key={`${topic.id}-${showApple ? appleGuide : showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showGoogle ? googleGuide : showTwitter ? twitterGuide : ""}`}
             className={`${tutorial.topicEnter} flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}
           >
             <div className="flex min-w-0 flex-col gap-1">
@@ -933,9 +989,9 @@ function TutorialsPageContent() {
           role="region"
           aria-label={`${topic.label}正文`}
         >
-          <div key={matchingTopics.length ? `${topic.id}-${showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showGoogle ? googleGuide : showTwitter ? twitterGuide : ""}` : "empty"} className={tutorial.topicEnter}>
-          <TutorialContentErrorBoundary resetKey={`${topic.id}-${giffgaffGuide}-${oneNzGuide}-${chatgptGuide}-${googleGuide}-${twitterGuide}`}>
-          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? <AppleIdTutorial /> : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "gemini" ? <GeminiTutorial onGoToGoogleRegion={() => { setSelected("google-region"); setSearch(""); setGoogleTreeOpen(true); setGoogleGuide("region"); setGiffgaffTreeOpen(false); setOneNzTreeOpen(false); setChatgptTreeOpen(false); setTwitterTreeOpen(false); resetScroll(); }} /> : topic.id === "google-region" ? (googleGuide === "qr-sms" ? <GoogleQrSmsTutorial /> : googleGuide === "appeal" ? <GoogleAppealTutorial onSwitchToQrSms={() => { setGoogleGuide("qr-sms"); resetScroll(); }} onSwitchToRegion={() => { setGoogleGuide("region"); resetScroll(); }} /> : googleGuide === "student-discount" ? <GeminiStudentDiscountTutorial onGoToGoogleRegion={() => { setGoogleGuide("region"); resetScroll(); }} /> : <GoogleRegionTutorial onSwitchToQrSms={() => { setGoogleGuide("qr-sms"); resetScroll(); }} />) : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : topic.id === "rakuten-mobile" ? <RakutenMobileTutorial /> : <div className="space-y-6">
+          <div key={matchingTopics.length ? `${topic.id}-${showApple ? appleGuide : showGiffgaff ? giffgaffGuide : showOneNz ? oneNzGuide : topic.id === "chatgpt-guide" ? chatgptGuide : showGoogle ? googleGuide : showTwitter ? twitterGuide : ""}` : "empty"} className={tutorial.topicEnter}>
+          <TutorialContentErrorBoundary resetKey={`${topic.id}-${appleGuide}-${giffgaffGuide}-${oneNzGuide}-${chatgptGuide}-${googleGuide}-${twitterGuide}`}>
+          {!matchingTopics.length ? <div className="flex h-full min-h-[220px] flex-col items-center justify-center gap-4 text-center"><p className="font-medium text-slate-700">暂无匹配教程</p><p className="max-w-full break-words text-sm text-slate-500">没有找到与“{search.trim()}”相关的内容。</p><Button variant="outline" onClick={() => { setSearch(""); resetScroll(); }}>清空搜索</Button></div> : topic.id === "binance" ? <BinanceTutorial /> : topic.id === "apple-id" ? (appleGuide === "verify-failed" ? <AppleIdVerifyFailedTutorial onSwitchToUsage={() => { setAppleGuide("usage"); resetScroll(); }} /> : <AppleIdTutorial onSwitchToVerifyFailed={() => { setAppleGuide("verify-failed"); resetScroll(); }} />) : topic.id === "giffgaff" ? giffgaffGuide === "activation" ? <GiffgaffActivationTutorial /> : <GiffgaffTutorial /> : topic.id === "haha-sim" ? <HahaSimTutorial /> : topic.id === "one-nz" ? <OneNzTutorial activeSection={oneNzGuide} onSelectSection={setOneNzGuide} /> : topic.id === "chatgpt-guide" ? <ChatGptAccountGuideTutorial activeSection={chatgptGuide} onSelectSection={setChatgptGuide} /> : topic.id === "gemini" ? <GeminiTutorial onGoToGoogleRegion={() => { setSelected("google-region"); setSearch(""); setGoogleTreeOpen(true); setGoogleGuide("region"); setAppleTreeOpen(false); setGiffgaffTreeOpen(false); setOneNzTreeOpen(false); setChatgptTreeOpen(false); setTwitterTreeOpen(false); resetScroll(); }} /> : topic.id === "google-region" ? (googleGuide === "qr-sms" ? <GoogleQrSmsTutorial /> : googleGuide === "appeal" ? <GoogleAppealTutorial onSwitchToQrSms={() => { setGoogleGuide("qr-sms"); resetScroll(); }} onSwitchToRegion={() => { setGoogleGuide("region"); resetScroll(); }} /> : googleGuide === "student-discount" ? <GeminiStudentDiscountTutorial onGoToGoogleRegion={() => { setGoogleGuide("region"); resetScroll(); }} /> : <GoogleRegionTutorial onSwitchToQrSms={() => { setGoogleGuide("qr-sms"); resetScroll(); }} />) : topic.id === "facebook" ? <FacebookTutorial /> : topic.id === "twitter" ? <TwitterTutorial activeSection={twitterGuide} onSelectSection={setTwitterGuide} /> : topic.id === "rakuten-mobile" ? <RakutenMobileTutorial /> : <div className="space-y-6">
             {/* 1. 平台服务说明与三大核心准则 */}
             <section aria-labelledby="tutorial-service-title" className="space-y-4">
               <div className="flex items-center justify-between">
