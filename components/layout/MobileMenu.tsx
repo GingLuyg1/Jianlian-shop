@@ -254,11 +254,26 @@ export default function MobileMenu({ onSupportOpen, mobileNavigationUntilLg = fa
                 const hasSubItems = subItems.length > 0;
                 const isItemExpanded = expandedPrimaryHref === item.href;
                 if (isCatalogCategoryHref(item.href) && !confirmed) {
-                  return <li key={item.href} className="flex h-[34px] items-center rounded-lg px-2" aria-hidden={status !== "error"}>
-                    {status === "error" && item.href === "/products/sim-cards" ? (
-                      <button type="button" onClick={() => void refreshPublicCategories().catch(() => undefined)} className="text-left text-xs text-muted-foreground underline">分类读取失败，重试</button>
-                    ) : <span className="h-3.5 w-3/4 rounded bg-slate-100" />}
-                  </li>;
+                  return (
+                    <li
+                      key={item.href}
+                      data-testid="mobile-category-skeleton"
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-xl",
+                        isProMax ? "h-[46px] px-3" : "h-[30px] px-2"
+                      )}
+                      aria-hidden={status !== "error"}
+                    >
+                      {status === "error" && item.href === "/products/sim-cards" ? (
+                        <button type="button" onClick={() => void refreshPublicCategories().catch(() => undefined)} className="text-left text-xs text-muted-foreground underline">分类读取失败，重试</button>
+                      ) : (
+                        <>
+                          <span className={cn("shrink-0 animate-pulse rounded-md bg-orange-200/55 motion-reduce:animate-none", isProMax ? "h-[20px] w-[20px]" : "h-3.5 w-3.5")} />
+                          <span className={cn("animate-pulse rounded-md bg-slate-200/75 motion-reduce:animate-none", isProMax ? "h-3.5 w-24" : "h-3 w-16")} />
+                        </>
+                      )}
+                    </li>
+                  );
                 }
                 return (
                   <li key={item.href}>

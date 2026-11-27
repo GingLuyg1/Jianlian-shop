@@ -123,10 +123,20 @@ function formatCategoryNavLabel(rawName: string) {
 
     if (isCatalogCategoryHref(item.href) && !confirmed) {
       return (
-        <li key={item.href} className="mx-auto flex h-[46px] w-[calc(100%-6px)] items-center gap-2.5 rounded-xl px-3 text-sm text-muted-foreground" aria-hidden={status !== "error"}>
+        <li
+          key={item.href}
+          data-testid="sidebar-category-skeleton"
+          className="mx-auto flex h-[46px] w-[calc(100%-6px)] items-center gap-2.5 rounded-xl px-3 text-sm text-muted-foreground"
+          aria-hidden={status !== "error"}
+        >
           {status === "error" && item.href === "/products/sim-cards" ? (
             <button type="button" onClick={() => void refreshPublicCategories().catch(() => undefined)} className="text-left underline">分类读取失败，重试</button>
-          ) : <span className="h-3 w-3/4 rounded bg-slate-100" />}
+          ) : (
+            <>
+              <span className="h-[18px] w-[18px] shrink-0 animate-pulse rounded-md bg-orange-200/55 motion-reduce:animate-none" />
+              <span className="h-3.5 flex-1 max-w-[112px] animate-pulse rounded-md bg-slate-200/75 motion-reduce:animate-none" />
+            </>
+          )}
         </li>
       );
     }

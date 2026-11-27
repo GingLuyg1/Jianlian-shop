@@ -34,7 +34,8 @@ test("P0-1: guest checkout session + CF email order lookup + signup redirectTo",
 
   const checkoutPage = read("app/checkout/page.tsx");
   assert.match(checkoutPage, /\/api\/auth\/guest-session/);
-  assert.match(checkoutPage, /checkout-guest-banner/);
+  assert.doesNotMatch(checkoutPage, /checkout-guest-banner/);
+  assert.match(checkoutPage, /pickDefaultThirdPartyMethod/);
 });
 
 test("P0-2: recharge amount shortfall prefill, return-to-order CTA, and channel copy", () => {

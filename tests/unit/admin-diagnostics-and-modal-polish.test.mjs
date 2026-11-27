@@ -70,18 +70,35 @@ test("kuajingzy SKU readiness and operational diagnostic reflect real server pur
   assert.ok(disabledResult.reasons.includes("SUPPLIER_PURCHASE_DISABLED"));
 });
 
-test("admin categories full-count fetch, two-line modal hint, centered icon and moved share button contracts", () => {
+test("admin categories full-count fetch, two-line modal hint, centered icon, share placement, 4 payment cards, title manager and stable nav skeleton", () => {
   const apiRoute = file("app/api/admin/catalog/products/route.ts");
   const categoriesPage = file("app/admin/categories/page.tsx");
   const modal = file("components/checkout/LiquidGlassCheckoutModal.tsx");
   const checkout = file("app/checkout/page.tsx");
+  const sidebar = file("components/layout/PublicSidebar.tsx");
+  const mobileMenu = file("components/layout/MobileMenu.tsx");
+  const titleMgr = file("lib/navigation/document-title.ts");
 
   assert.match(apiRoute, /fetchAllInCategory/);
   assert.match(categoriesPage, /all:\s*true/);
   assert.match(modal, /正在处理订单或存在待支付订单；/);
   assert.match(modal, /如需退出请点击右上角关闭按钮。/);
   assert.match(checkout, /lg:grid-cols-\[220px_minmax\(0,1fr\)\] lg:items-center/);
-  const shareIdx = checkout.indexOf('data-testid="checkout-share-button"');
-  const emailLabelIdx = checkout.indexOf('<span className="text-red-500">*</span>联系邮箱');
-  assert.ok(shareIdx > 0 && emailLabelIdx > 0 && Math.abs(shareIdx - emailLabelIdx) < 900);
+  assert.doesNotMatch(checkout, /checkout-guest-banner/);
+  assert.match(checkout, /data-testid="checkout-modal-right-actions"[^>]*justify-between/);
+  assert.match(checkout, /data-testid="checkout-share-button"[\s\S]*modalStyles\.shareActionBtn/);
+  assert.match(checkout, /data-testid="checkout-payment-cards"/);
+  assert.match(checkout, /（3%手续费）/);
+  assert.match(checkout, /（无手续费）/);
+  assert.match(checkout, /pickDefaultThirdPartyMethod/);
+  assert.match(checkout, /pushModalDocumentTitle/);
+  assert.match(sidebar, /sidebar-category-skeleton/);
+  assert.match(mobileMenu, /mobile-category-skeleton/);
+  assert.match(titleMgr, /export function pushModalDocumentTitle/);
+  assert.match(titleMgr, /export function setRouteDocumentTitle/);
+
+  const seo = file("lib/seo.ts");
+  assert.match(seo, /MERCHANT_PRODUCT_NAME_MAX_LENGTH = 150/);
+  assert.match(seo, /export function normalizeMerchantProductName/);
+  assert.match(seo, /name:\s*safeProductName/);
 });

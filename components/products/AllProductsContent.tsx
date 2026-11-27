@@ -9,6 +9,7 @@ import LiquidGlassCheckoutModal from "@/components/checkout/LiquidGlassCheckoutM
 import { rememberProductCardPreview } from "@/lib/catalog/public-product-preview";
 import { loadPublicRechargeChannels } from "@/lib/catalog/public-recharge-channels";
 import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
+import { setRouteDocumentTitle } from "@/lib/navigation/document-title";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { usePublicCategorySnapshot } from "@/lib/catalog/public-category-snapshot";
@@ -171,9 +172,7 @@ export default function AllProductsContent() {
   }, [sortMenuOpen]);
 
   useEffect(() => {
-    if (typeof document !== "undefined") {
-      document.title = "全部商品 · 资源中心 | Jianlian Shop";
-    }
+    setRouteDocumentTitle("全部商品 · 资源中心 | Jianlian Shop");
   }, []);
 
   useEffect(() => {

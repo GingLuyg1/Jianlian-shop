@@ -31,6 +31,7 @@ import {
 } from "@/lib/catalog/visible-storefront-category-routes";
 import { getChildCategories, normalizeText } from "@/lib/supabase/public-catalog";
 import { cn } from "@/lib/utils";
+import { setRouteDocumentTitle } from "@/lib/navigation/document-title";
 import { useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
 
 const categoryCards = [
@@ -438,10 +439,15 @@ function HeroVisual({ type }: { type: string }) {
 
 export default function HomePage() {
   const { isMobile } = useMobileStorefront();
-  const { visibleHrefs: visibleCategoryHrefs, rows: categoryRows } = useVisibleStorefrontCategoryHrefs();
+  const { visibleHrefs: visibleCategoryHrefs, confirmed: categoriesConfirmed, rows: categoryRows } = useVisibleStorefrontCategoryHrefs();
+
+  useEffect(() => {
+    setRouteDocumentTitle("Jianlian Shop | 精选数字商品与海外服务");
+  }, []);
+
   const visibleCategoryCards = sortStorefrontCategoryItems(
     categoryCards
-      .filter((item) => !isCatalogCategoryHref(item.href) || visibleCategoryHrefs.has(item.href))
+      .filter((item) => !isCatalogCategoryHref(item.href) || !categoriesConfirmed || visibleCategoryHrefs.has(item.href))
       .map((item) => {
         if (categoryRows && isCatalogCategoryHref(item.href)) {
           const primary = findVisibleStorefrontPrimaryCategory(item.href, categoryRows);

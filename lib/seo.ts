@@ -243,6 +243,27 @@ export async function listSeoCategories() {
   return (data ?? []) as SeoCategory[];
 }
 
+const MERCHANT_PRODUCT_NAME_MAX_LENGTH = 150;
+
+/**
+ * Google Merchant Listings requires Product.name to be non-empty and <= 150 characters.
+ * Truncate safely without splitting UTF-16 surrogate pairs (e.g. emojis).
+ */
+export function normalizeMerchantProductName(rawName: string | null | undefined, fallback = SITE_NAME): string {
+  const collapsed = String(rawName ?? "").replace(/\s+/g, " ").trim();
+  const base = collapsed || String(fallback ?? "").replace(/\s+/g, " ").trim() || SITE_NAME;
+  if (base.length <= MERCHANT_PRODUCT_NAME_MAX_LENGTH) return base;
+
+  const limit = MERCHANT_PRODUCT_NAME_MAX_LENGTH - 1;
+  let result = "";
+  for (const ch of base) {
+    if (result.length + ch.length > limit) break;
+    result += ch;
+  }
+  const trimmed = result.replace(/[\s|｜,，、；;（(【\[]+$/u, "").trim();
+  return `${trimmed || result.trim()}…`;
+}
+
 export function productJsonLd(product: SeoProduct, categoryPath = "") {
   const stockCount = Number(product.effective_stock ?? product.stock ?? 0);
   const isPreorder = Boolean(product.is_preorder || isPreorderDeliveryMode(product.delivery_type, product.metadata));
@@ -266,11 +287,12 @@ export function productJsonLd(product: SeoProduct, categoryPath = "") {
       : now.toISOString();
   const isPhysicalShipping = product.delivery_type === "shipping";
   const servedRegions = ["HK", "US", "SG", "JP", "GB"];
+  const safeProductName = normalizeMerchantProductName(product.name, product.slug || product.id);
 
   return {
     "@context": "https://schema.org",
     "@type": "Product",
-    name: product.name,
+    name: safeProductName,
     description: (product.short_description || product.description || SITE_DESCRIPTION)
       .replace(/\s+/g, " ")
       .slice(0, 300),
@@ -353,7 +375,7 @@ export function productBreadcrumbJsonLd(
   items.push({
     "@type": "ListItem",
     position: items.length + 1,
-    name: product.name,
+    name: normalizeMerchantProductName(product.name, product.slug || product.id),
     item: absoluteUrl(`/products/${product.slug || product.id}`),
   });
   return {

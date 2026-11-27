@@ -20,6 +20,7 @@ import { resolveProductImageSrc } from "@/components/products/product-ui";
 import { usePublicAuthProfile } from "@/components/auth/AuthProfileProvider";
 import { isGuestAuthUser } from "@/lib/auth/guest-user";
 import { createSafeUuid, safeSessionStorageGet, safeSessionStorageRemove, safeSessionStorageSet } from "@/lib/browser/safe-storage";
+import { pushModalDocumentTitle, setRouteDocumentTitle } from "@/lib/navigation/document-title";
 import { fetchWithTimeout } from "@/lib/network/fetch-with-timeout";
 import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
 import ChatGptRechargeMethodComparison from "@/components/products/ChatGptRechargeMethodComparison";
@@ -389,8 +390,10 @@ function CheckoutPageContent() {
     const rawQty = Number(searchParams.get("qty") || searchParams.get("quantity") || 1);
     return Number.isFinite(rawQty) && rawQty >= 1 ? Math.floor(rawQty) : 1;
   });
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>(DEFAULT_PAYMENT_METHOD);
-  const [hasSelectedPaymentMethod, setHasSelectedPaymentMethod] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodCode>("alipay");
+  const [hasSelectedPaymentMethod, setHasSelectedPaymentMethod] = useState(true);
+  const userPickedPaymentRef = useRef(false);
+  const [balanceShortfallNotice, setBalanceShortfallNotice] = useState(false);
   const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>(() => peekPublicRechargeChannels() ?? []);
   const [paymentDropdownOpen, setPaymentDropdownOpen] = useState(false);
   const [confirmed, setConfirmed] = useState(true);
@@ -742,8 +745,12 @@ function CheckoutPageContent() {
 
   useEffect(() => {
     if (typeof document === "undefined" || !product?.name) return;
-    document.title = `${product.name} | Jianlian Shop`;
-  }, [product?.name]);
+    const nextTitle = `${product.name} | Jianlian Shop`;
+    if (isModal) {
+      return pushModalDocumentTitle(nextTitle);
+    }
+    setRouteDocumentTitle(nextTitle);
+  }, [isModal, product?.name]);
 
   const databaseSkuOptions: SkuOption[] = productSkus.map((sku) => ({
     id: sku.id,
@@ -862,6 +869,51 @@ function CheckoutPageContent() {
     () => evaluateCheckoutBalance(effectiveOrderAmount, availableBalance),
     [availableBalance, effectiveOrderAmount]
   );
+
+  const pickDefaultThirdPartyMethod = useCallback((): PaymentMethodCode => {
+    const preference: PaymentMethodCode[] = ["wechat_pay", "alipay", "usdt_bep20"];
+    for (const code of preference) {
+      if (!ORDER_ENABLED_PAYMENT_METHODS.has(code)) continue;
+      const option = getPaymentMethodOption(code);
+      if (option && paymentChannels.some((ch) => option.channelCodes.includes(ch.code) && ch.enabled)) {
+        return code;
+      }
+    }
+    return "alipay";
+  }, [paymentChannels]);
+
+  useEffect(() => {
+    if (userPickedPaymentRef.current || pendingBalanceOrder) return;
+    if (!publicAuthReady) return;
+
+    if (isGuestUser) {
+      const nextThirdParty = pickDefaultThirdPartyMethod();
+      setPaymentMethod(nextThirdParty);
+      setHasSelectedPaymentMethod(true);
+      setBalanceShortfallNotice(false);
+      return;
+    }
+
+    if (balanceStatus === "ready" && balanceSummary.kind === "ready") {
+      if (balanceSummary.sufficient) {
+        setPaymentMethod("balance");
+        setHasSelectedPaymentMethod(true);
+        setBalanceShortfallNotice(false);
+      } else {
+        const nextThirdParty = pickDefaultThirdPartyMethod();
+        setPaymentMethod(nextThirdParty);
+        setHasSelectedPaymentMethod(true);
+        setBalanceShortfallNotice(true);
+      }
+    }
+  }, [
+    balanceStatus,
+    balanceSummary,
+    isGuestUser,
+    pendingBalanceOrder,
+    pickDefaultThirdPartyMethod,
+    publicAuthReady,
+  ]);
 
   useEffect(() => {
     setAppliedCoupon(null);
@@ -984,6 +1036,7 @@ function CheckoutPageContent() {
   }
 
   const handleSelectPaymentMethod = (nextMethod: PaymentMethodCode) => {
+    userPickedPaymentRef.current = true;
     setHasSelectedPaymentMethod(true);
     setPaymentMethod(nextMethod);
     if (nextMethod === "balance") {
@@ -1240,23 +1293,48 @@ function CheckoutPageContent() {
     }
   };
 
-  const modalActionRow = isModal && modalCtx?.onClose ? (
-    <div data-testid="checkout-modal-right-actions" className="flex shrink-0 items-center justify-end gap-2">
-      <button
-        type="button"
-        onClick={modalCtx.onClose}
-        className={modalStyles.closeCircle}
-        aria-label="关闭弹窗"
-        title="关闭并返回列表"
-      >
-        <X className="h-4 w-4" />
-      </button>
+  const modalActionRow = isModal && (modalCtx?.onShare || modalCtx?.onClose) ? (
+    <div data-testid="checkout-modal-right-actions" className="flex w-full shrink-0 items-center justify-between gap-2">
+      {modalCtx?.onShare ? (
+        <button
+          type="button"
+          onClick={modalCtx.onShare}
+          data-testid="checkout-share-button"
+          className={modalStyles.shareActionBtn}
+          aria-label="分享商品链接"
+        >
+          {modalCtx.shareCopied ? (
+            <>
+              <Check className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="text-emerald-700">已复制链接</span>
+            </>
+          ) : (
+            <>
+              <Share2 className="h-3.5 w-3.5" />
+              <span>分享商品</span>
+            </>
+          )}
+        </button>
+      ) : (
+        <span />
+      )}
+      {modalCtx?.onClose ? (
+        <button
+          type="button"
+          onClick={modalCtx.onClose}
+          className={modalStyles.closeCircle}
+          aria-label="关闭弹窗"
+          title="关闭并返回列表"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      ) : null}
     </div>
   ) : null;
 
   const checkoutBody = (
     <>
-      {isModal ? <div className="mb-2.5 flex justify-end lg:hidden">{modalActionRow}</div> : null}
+      {isModal ? <div className="mb-2.5 flex w-full lg:hidden">{modalActionRow}</div> : null}
       <div
         data-testid="checkout-layout"
         className={cn(
@@ -1278,7 +1356,7 @@ function CheckoutPageContent() {
         />
 
         <div className={cn("flex min-h-0 flex-col", isModal ? "gap-2.5 lg:h-full" : "lg:h-full")}>
-          {isModal ? <div className="hidden lg:flex lg:justify-end">{modalActionRow}</div> : null}
+          {isModal ? <div className="hidden w-full lg:flex">{modalActionRow}</div> : null}
           <Card id="checkout-purchase-card" data-testid="checkout-purchase-panel" className={cn("scroll-mt-32 h-auto min-h-0 overflow-hidden !rounded-[26px]", isModal ? "lg:flex-1" : "lg:h-full")}>
           <CardContent className="flex h-full min-h-0 flex-col bg-white p-4">
             <div className="flex min-h-0 flex-1 flex-col gap-3 lg:overflow-hidden">
@@ -1297,55 +1375,15 @@ function CheckoutPageContent() {
               ) : null}
 
               <div className={cn("flex shrink-0 flex-col gap-3", !(hasSku && skuOptions.length > 1) && "min-h-0 lg:overflow-y-auto sidebar-scroll")}>
-                {publicAuthReady && isGuestUser ? (
-                  <div
-                    data-testid="checkout-guest-banner"
-                    className="flex items-center justify-between gap-2 rounded-xl border border-orange-100 bg-orange-50/70 px-3 py-2 text-[11px] leading-4 text-slate-700"
-                  >
-                    <span className="min-w-0">
-                      支持游客免登录下单（支付宝/微信/USDT），卡密发至下方邮箱并可按邮箱查单
-                    </span>
-                    <Link
-                      href={`/login?redirect=${encodeURIComponent(currentCheckoutUrl)}`}
-                      className="shrink-0 font-semibold text-primary underline-offset-2 hover:underline"
-                    >
-                      登录/注册
-                    </Link>
-                  </div>
-                ) : null}
-
                 <div className="shrink-0">
-                  <div className="mb-1 flex items-center justify-between gap-2">
-                    <label className="block text-xs font-medium">
-                      <span className="text-red-500">*</span>联系邮箱
-                      {isShippingProduct && (
-                        <span className="ml-1 text-[11px] font-normal text-muted-foreground">
-                          （用于接收订单及物流发货单号）
-                        </span>
-                      )}
-                    </label>
-                    {isModal && modalCtx?.onShare ? (
-                      <button
-                        type="button"
-                        onClick={modalCtx.onShare}
-                        data-testid="checkout-share-button"
-                        className="inline-flex h-6 shrink-0 items-center gap-1 rounded-full border border-orange-200/80 bg-orange-50/70 px-2.5 text-[11px] font-medium text-slate-700 transition-colors hover:border-primary/40 hover:bg-orange-100/70 hover:text-primary"
-                        aria-label="分享商品链接"
-                      >
-                        {modalCtx.shareCopied ? (
-                          <>
-                            <Check className="h-3 w-3 text-emerald-600" />
-                            <span className="text-emerald-700">已复制链接</span>
-                          </>
-                        ) : (
-                          <>
-                            <Share2 className="h-3 w-3" />
-                            <span>分享商品</span>
-                          </>
-                        )}
-                      </button>
-                    ) : null}
-                  </div>
+                  <label className="mb-1 block text-xs font-medium">
+                    <span className="text-red-500">*</span>联系邮箱
+                    {isShippingProduct && (
+                      <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                        （用于接收订单及物流发货单号）
+                      </span>
+                    )}
+                  </label>
                   <Input
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
@@ -1484,8 +1522,25 @@ function CheckoutPageContent() {
                   onSelect={handleSelectPaymentMethod}
                   channels={paymentChannels}
                   rechargeHref={rechargeReturnTo}
+                  isGuestUser={isGuestUser}
+                  availableBalance={availableBalance}
+                  balanceInsufficient={!isGuestUser && balanceSummary.kind === "ready" && !balanceSummary.sufficient}
                   disabled={productLoading || submitLoading}
                 />
+                {!isGuestUser && balanceShortfallNotice && balanceSummary.kind === "ready" && !balanceSummary.sufficient ? (
+                  <div className="mt-1.5 flex items-center justify-between gap-2 rounded-lg border border-orange-200/80 bg-orange-50/80 px-2.5 py-1.5 text-[11px] leading-4 text-orange-800">
+                    <span>
+                      当前余额 ¥{formatCnyFromCents(balanceSummary.balanceCents)} 不足，已自动切换为其他可用支付方式
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => router.push(rechargeReturnTo)}
+                      className="shrink-0 font-semibold text-primary underline underline-offset-2"
+                    >
+                      去充值
+                    </button>
+                  </div>
+                ) : null}
                 {selectedPaymentUnavailable ? (
                   <p className="mt-1.5 text-xs text-amber-700">
                     该支付方式暂未开放，不会生成二维码、钱包地址或假支付结果。
@@ -1650,6 +1705,35 @@ function isValidContactPhone(value: string) {
   );
 }
 
+const THIRD_PARTY_CARD_METHODS: Array<{
+  code: PaymentMethodCode;
+  shortLabel: string;
+  feeTag: string;
+  isFree: boolean;
+}> = [
+  { code: "wechat_pay", shortLabel: "微信支付", feeTag: "（3%手续费）", isFree: false },
+  { code: "alipay", shortLabel: "支付宝", feeTag: "（3%手续费）", isFree: false },
+  { code: "usdt_bep20", shortLabel: "USDT · BSC", feeTag: "（无手续费）", isFree: true },
+  { code: "usdt_trc20", shortLabel: "USDT · TRC", feeTag: "（无手续费）", isFree: true },
+];
+
+function getPaymentMethodDisplayMeta(
+  code: PaymentMethodCode,
+  availableBalance: number | null
+): { label: string; feeTag: string; isFree: boolean } {
+  if (code === "balance") {
+    return {
+      label: "余额支付",
+      feeTag: availableBalance !== null ? `（可用 ¥${availableBalance.toFixed(2)} · 无手续费）` : "（无手续费）",
+      isFree: true,
+    };
+  }
+  const found = THIRD_PARTY_CARD_METHODS.find((item) => item.code === code);
+  if (found) return { label: found.shortLabel, feeTag: found.feeTag, isFree: found.isFree };
+  const fallback = getPaymentMethodOption(code);
+  return { label: fallback?.label ?? "支付方式", feeTag: "", isFree: false };
+}
+
 function PaymentMethodSelect({
   open,
   rootRef,
@@ -1658,6 +1742,9 @@ function PaymentMethodSelect({
   onSelect,
   channels,
   rechargeHref,
+  isGuestUser = false,
+  availableBalance = null,
+  balanceInsufficient = false,
   disabled,
 }: {
   open: boolean;
@@ -1667,198 +1754,263 @@ function PaymentMethodSelect({
   onSelect: (method: PaymentMethodCode) => void;
   channels: PaymentChannel[];
   rechargeHref?: string;
+  isGuestUser?: boolean;
+  availableBalance?: number | null;
+  balanceInsufficient?: boolean;
   disabled?: boolean;
 }) {
   const router = useRouter();
-  const selectedOption = getPaymentMethodOption(selected) ?? CHECKOUT_PAYMENT_OPTIONS[0];
-  const [hasExplicitlySelected, setHasExplicitlySelected] = useState(false);
-  const available = (index: number) => {
-    const option = CHECKOUT_PAYMENT_OPTIONS[index];
-    return Boolean(option && ORDER_ENABLED_PAYMENT_METHODS.has(option.code)
-      && (option.code === "balance" || channels.some((channel) => option.channelCodes.includes(channel.code) && channel.enabled)));
+  const selectedMeta = getPaymentMethodDisplayMeta(selected, availableBalance);
+
+  const isMethodAvailable = (code: PaymentMethodCode) => {
+    if (code === "balance") return !isGuestUser;
+    const option = getPaymentMethodOption(code);
+    return Boolean(
+      option &&
+        ORDER_ENABLED_PAYMENT_METHODS.has(code) &&
+        channels.some((channel) => option.channelCodes.includes(channel.code) && channel.enabled)
+    );
   };
-  const descriptionFor = (option: typeof selectedOption) => {
-    if (option.code === "balance") return "";
-    const channel = channels.find((item) => option.channelCodes.includes(item.code));
-    if (channel && channel.currency === "CNY") {
-      return `${option.label}（即时到账 · 无最低限额）`;
-    }
-    return channel?.maximumAmount && channel.currency === "CNY"
-      ? `${option.label}，单笔最高 ¥${channel.maximumAmount}`
-      : option.description;
-  };
-  const selectedIndex = Math.max(0, CHECKOUT_PAYMENT_OPTIONS.findIndex((option) => option.code === selected));
-  const [activeIndex, setActiveIndex] = useState(selectedIndex);
-  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  useEffect(() => {
-    if (open) setActiveIndex(selectedIndex);
-  }, [open, selectedIndex]);
-
-  useEffect(() => {
-    if (open) optionRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
-  }, [activeIndex, open]);
-
-  function moveActive(step: number) {
-    setActiveIndex((current) => {
-      const count = CHECKOUT_PAYMENT_OPTIONS.length;
-      for (let offset = 1; offset <= count; offset++) {
-        const next = (current + step * offset + count * 2) % count;
-        if (available(next)) return next;
-      }
-      return current;
-    });
-  }
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (disabled) return;
-    if (event.key === "Escape") {
-      if (open) {
-        event.preventDefault();
-        onOpenChange(false);
-      }
-      return;
-    }
-
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (event.key === "Escape" && open) {
       event.preventDefault();
-      if (!open) {
-        const step = event.key === "ArrowDown" ? 1 : -1;
-        moveActive(step);
-        onOpenChange(true);
-      } else {
-        moveActive(event.key === "ArrowDown" ? 1 : -1);
-      }
-      return;
-    }
-
-    if (event.key === "Enter" && open) {
-      event.preventDefault();
-      const option = CHECKOUT_PAYMENT_OPTIONS[activeIndex];
-      if (option && available(activeIndex)) {
-        setHasExplicitlySelected(true);
-        onSelect(option.code);
-      }
       onOpenChange(false);
     }
   }
-
-  const triggerSubtitle = descriptionFor(selectedOption);
 
   return (
     <div ref={rootRef} className="relative z-30" onKeyDown={handleKeyDown}>
       <button
         type="button"
         role="combobox"
-        className="flex h-14 min-h-[56px] w-full items-center justify-between gap-3 rounded-lg border border-[#ead9cc] bg-[#fffaf6] px-3 py-2 text-left text-sm transition hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/20"
+        data-testid="checkout-payment-trigger"
+        className={cn(
+          "flex h-12 min-h-[48px] w-full items-center justify-between gap-2.5 rounded-xl border px-3 py-2 text-left text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20",
+          open
+            ? "border-primary/50 bg-white shadow-sm ring-2 ring-primary/10"
+            : "border-[#ead9cc] bg-[#fffaf6] hover:border-primary/40 hover:bg-white"
+        )}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls="checkout-payment-method-options"
-        aria-activedescendant={open ? `checkout-payment-method-${CHECKOUT_PAYMENT_OPTIONS[activeIndex]?.code ?? selected}` : undefined}
         onClick={() => onOpenChange(!open)}
         disabled={disabled}
       >
-        <span className="flex min-w-0 items-center gap-2">
-          <PaymentMethodIcon method={selectedOption.code} />
-          <span className="min-w-0">
-            <span className="block truncate font-medium text-slate-900">
-              {hasExplicitlySelected ? selectedOption.label : "余额 / 支付宝 / 微信 / USDT"}
-            </span>
-            {hasExplicitlySelected && triggerSubtitle ? (
-              <span className="block truncate text-xs text-muted-foreground">{triggerSubtitle}</span>
+        <span className="flex min-w-0 items-center gap-2.5">
+          <PaymentMethodIcon method={selected} />
+          <span className="flex min-w-0 items-baseline gap-0.5 truncate">
+            <span className="truncate font-semibold text-slate-900">{selectedMeta.label}</span>
+            {selectedMeta.feeTag ? (
+              <span
+                className={cn(
+                  "shrink-0 text-[11px] font-medium",
+                  selectedMeta.isFree ? "text-emerald-600" : "text-slate-500"
+                )}
+              >
+                {selectedMeta.feeTag}
+              </span>
             ) : null}
           </span>
         </span>
-        <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition", open ? "rotate-180" : "")} />
+        <span
+          aria-hidden="true"
+          className={cn(
+            "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]",
+            open && "rotate-180 text-primary"
+          )}
+        >
+          <svg viewBox="0 0 12 12" className="h-3 w-3 fill-current">
+            <path d="M2.2 4.1a.75.75 0 0 1 1.06 0L6 6.84l2.74-2.74a.75.75 0 1 1 1.06 1.06l-3.27 3.27a.75.75 0 0 1-1.06 0L2.2 5.16a.75.75 0 0 1 0-1.06Z" />
+          </svg>
+        </span>
       </button>
 
-      {open ? (
-        <div
-          id="checkout-payment-method-options"
-          className="absolute bottom-[calc(100%+8px)] left-0 right-0 z-50 max-h-[232px] overflow-y-auto rounded-xl border border-[#ead9cc] bg-white p-1 shadow-xl"
-          role="listbox"
-        >
-          {CHECKOUT_PAYMENT_OPTIONS.map((option, index) => {
-            const active = option.code === selected;
-            const keyboardActive = index === activeIndex;
-            const unavailable = !available(index);
-            const desc = descriptionFor(option);
-            return (
+      {/* 细腻平滑展开与回收的支付方式面板 */}
+      <div
+        id="checkout-payment-method-options"
+        role="listbox"
+        aria-hidden={!open}
+        className={cn(
+          "grid transition-[grid-template-rows,opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] origin-top",
+          open
+            ? "mt-2 grid-rows-[1fr] opacity-100 translate-y-0 scale-100 pointer-events-auto"
+            : "mt-0 grid-rows-[0fr] opacity-0 -translate-y-1 scale-[0.985] pointer-events-none"
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="rounded-xl border border-[#ead9cc]/90 bg-[#fffdfb] p-2 shadow-sm">
+            {!isGuestUser ? (
               <button
-                key={option.code}
-                id={`checkout-payment-method-${option.code}`}
-                ref={(node) => { optionRefs.current[index] = node; }}
                 type="button"
                 role="option"
-                aria-selected={active}
-                aria-disabled={unavailable}
-                disabled={unavailable}
-                tabIndex={-1}
-                className={cn(
-                  "flex h-14 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition",
-                  active ? "bg-primary/10 text-primary" : "text-slate-800 hover:bg-slate-50",
-                  keyboardActive && !active ? "bg-slate-50 ring-1 ring-primary/20" : "",
-                  unavailable ? "cursor-not-allowed opacity-50" : ""
-                )}
-                onMouseEnter={() => { if (!unavailable) setActiveIndex(index); }}
+                aria-selected={selected === "balance"}
+                tabIndex={open ? 0 : -1}
                 onClick={() => {
-                  if (unavailable) return;
-                  setHasExplicitlySelected(true);
-                  onSelect(option.code);
+                  onSelect("balance");
                   onOpenChange(false);
                 }}
+                className={cn(
+                  "mb-2 flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left transition-all duration-150",
+                  selected === "balance"
+                    ? "border-primary/50 bg-orange-50/80 shadow-xs ring-1 ring-primary/15"
+                    : "border-slate-200/80 bg-white hover:border-primary/30 hover:bg-orange-50/35"
+                )}
               >
                 <span className="flex min-w-0 items-center gap-2">
-                  <PaymentMethodIcon method={option.code} />
+                  <PaymentMethodIcon method="balance" />
                   <span className="min-w-0">
-                    <span className="block truncate font-medium">{option.label}</span>
-                    {desc ? (
-                      <span className="block truncate text-xs text-muted-foreground">{desc}</span>
-                    ) : null}
+                    <span className="flex items-center gap-1 text-xs font-semibold text-slate-900">
+                      <span>余额支付</span>
+                      <span className="font-medium text-emerald-600">（无手续费）</span>
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-slate-500">
+                      {availableBalance !== null
+                        ? `当前可用 ¥${availableBalance.toFixed(2)}${balanceInsufficient ? " · 余额不足" : ""}`
+                        : "点击核对账户余额"}
+                    </span>
                   </span>
                 </span>
-                {unavailable ? (
-                  <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                    暂未开放
-                  </span>
-                ) : option.code === "balance" ? (
-                  <span
-                    role="link"
-                    tabIndex={0}
-                    onClick={(event) => {
+                <span
+                  role="link"
+                  tabIndex={open ? 0 : -1}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onOpenChange(false);
+                    router.push(rechargeHref || "/products/account-recharge");
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
                       event.stopPropagation();
                       onOpenChange(false);
                       router.push(rechargeHref || "/products/account-recharge");
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onOpenChange(false);
-                        router.push(rechargeHref || "/products/account-recharge");
-                      }
-                    }}
-                    className="shrink-0 cursor-pointer rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-primary transition hover:border-orange-300 hover:bg-orange-100"
-                  >
-                    去充值
-                  </span>
-                ) : null}
+                    }
+                  }}
+                  className="shrink-0 cursor-pointer rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-primary transition hover:border-orange-300 hover:bg-orange-100"
+                >
+                  去充值
+                </span>
               </button>
-            );
-          })}
+            ) : null}
+
+            <div data-testid="checkout-payment-cards" className="grid grid-cols-2 gap-2">
+              {THIRD_PARTY_CARD_METHODS.map((card) => {
+                const active = selected === card.code;
+                const unavailable = !isMethodAvailable(card.code);
+                return (
+                  <button
+                    key={card.code}
+                    id={`checkout-payment-method-${card.code}`}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    aria-disabled={unavailable}
+                    disabled={unavailable}
+                    tabIndex={open && !unavailable ? 0 : -1}
+                    onClick={() => {
+                      if (unavailable) return;
+                      onSelect(card.code);
+                      onOpenChange(false);
+                    }}
+                    className={cn(
+                      "group relative flex flex-col justify-between rounded-xl border px-2.5 py-2 text-left transition-all duration-150",
+                      active
+                        ? "border-primary bg-orange-50/85 shadow-xs ring-1 ring-primary/20"
+                        : "border-slate-200/85 bg-white hover:border-primary/35 hover:bg-orange-50/35",
+                      unavailable && "cursor-not-allowed border-slate-200/60 bg-slate-50/70 opacity-60 hover:border-slate-200/60 hover:bg-slate-50/70"
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <PaymentMethodIcon method={card.code} />
+                        <span className={cn("truncate text-xs font-semibold", active ? "text-primary" : "text-slate-900")}>
+                          {card.shortLabel}
+                        </span>
+                      </span>
+                      {active ? (
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-white">
+                          <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between gap-1">
+                      <span
+                        className={cn(
+                          "truncate text-[10px] font-medium",
+                          unavailable
+                            ? "text-amber-700"
+                            : card.isFree
+                              ? "text-emerald-600"
+                              : "text-slate-500"
+                        )}
+                      >
+                        {unavailable ? "暂未开放" : card.feeTag}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-      ) : null}
+      </div>
     </div>
   );
 }
 
 function PaymentMethodIcon({ method }: { method: PaymentMethodCode }) {
-  const className = "h-4 w-4 shrink-0 text-primary";
-  if (method === "balance") return <Wallet className={className} />;
-  if (method === "wechat_pay") return <Smartphone className={className} />;
-  if (method === "binance_pay") return <Sparkles className={className} />;
-  if (method === "usdt_trc20" || method === "usdt_bep20") return <Bot className={className} />;
-  return <CreditCard className={className} />;
+  if (method === "wechat_pay") {
+    return (
+      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#07C160]/12 text-[#07C160]">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
+          <path d="M9.5 4C5.36 4 2 6.86 2 10.4c0 2.02 1.1 3.82 2.82 4.99l-.71 2.13 2.47-1.24c.9.25 1.88.39 2.92.39.3 0 .59-.02.88-.05a5.88 5.88 0 0 1-.28-1.78c0-3.28 3.07-5.94 6.86-5.94.28 0 .56.02.83.05C16.92 6.08 13.56 4 9.5 4Zm-2.6 4.9a1.05 1.05 0 1 1 0-2.1 1.05 1.05 0 0 1 0 2.1Zm5.2 0a1.05 1.05 0 1 1 0-2.1 1.05 1.05 0 0 1 0 2.1ZM22 14.84c0-2.86-2.76-5.19-6.16-5.19-3.4 0-6.16 2.33-6.16 5.19 0 2.86 2.76 5.19 6.16 5.19.76 0 1.48-.12 2.15-.33l1.95.98-.56-1.69c1.59-.96 2.62-2.47 2.62-4.15Zm-8.21-.82a.88.88 0 1 1 0-1.76.88.88 0 0 1 0 1.76Zm4.1 0a.88.88 0 1 1 0-1.76.88.88 0 0 1 0 1.76Z" />
+        </svg>
+      </span>
+    );
+  }
+  if (method === "alipay") {
+    return (
+      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#1677FF]/12 text-[#1677FF]">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
+          <path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm7.85 4.2h-1.7v1.7H7.3v1.35h3.85v1.3H7.8v1.3h6.35c-.5 1.15-1.26 2.15-2.16 2.94-1.36-.56-2.76-.88-3.83-.68-1.15.22-1.91 1.02-1.83 1.97.08.97.97 1.69 2.28 1.69 1.62 0 3.16-.83 4.39-2.09 1.72.77 3.85 1.64 5.7 2.09V16.6c-1.48-.36-3.18-.97-4.5-1.52.89-1.08 1.62-2.36 2.1-3.53h-1.62v-1.3h2.97V8.9h-3.8V7.2Zm-3.85 9.1c.73-.1 1.56.11 2.34.43-.84.71-1.78 1.14-2.67 1.14-.7 0-1.13-.29-1.15-.69-.02-.43.47-.75 1.48-.88Z" />
+        </svg>
+      </span>
+    );
+  }
+  if (method === "usdt_bep20") {
+    return (
+      <span className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#26A17B]/12 text-[#26A17B]">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
+          <path d="M12 2L4.5 6.3v11.4L12 22l7.5-4.3V6.3L12 2Zm3.9 7.1h-2.8v1.65c1.94.13 3.4.55 3.4 1.06 0 .52-1.46.94-3.4 1.07V17h-2.2v-4.12c-1.94-.13-3.4-.55-3.4-1.07 0-.51 1.46-.93 3.4-1.06V9.1H8.1V7.2h7.8v1.9Z" />
+        </svg>
+        <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#F0B90B] ring-1 ring-white" />
+      </span>
+    );
+  }
+  if (method === "usdt_trc20") {
+    return (
+      <span className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#26A17B]/12 text-[#26A17B]">
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
+          <path d="M12 2L4.5 6.3v11.4L12 22l7.5-4.3V6.3L12 2Zm3.9 7.1h-2.8v1.65c1.94.13 3.4.55 3.4 1.06 0 .52-1.46.94-3.4 1.07V17h-2.2v-4.12c-1.94-.13-3.4-.55-3.4-1.07 0-.51 1.46-.93 3.4-1.06V9.1H8.1V7.2h7.8v1.9Z" />
+        </svg>
+        <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full bg-[#EF0027] ring-1 ring-white" />
+      </span>
+    );
+  }
+  if (method === "balance") {
+    return (
+      <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-orange-500/12 text-primary">
+        <Wallet className="h-3.5 w-3.5" />
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-slate-100 text-slate-600">
+      <CreditCard className="h-3.5 w-3.5" />
+    </span>
+  );
 }
 
 function TermsDialog({

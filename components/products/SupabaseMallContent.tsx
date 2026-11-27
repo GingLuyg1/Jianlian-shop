@@ -26,6 +26,7 @@ import LiquidGlassCheckoutModal from "@/components/checkout/LiquidGlassCheckoutM
 import { rememberProductCardPreview } from "@/lib/catalog/public-product-preview";
 import { loadPublicRechargeChannels } from "@/lib/catalog/public-recharge-channels";
 import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
+import { setRouteDocumentTitle } from "@/lib/navigation/document-title";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
 import { Button } from "@/components/ui/button";
@@ -398,11 +399,14 @@ function SupabaseMallContentInner({
   }, [filters.search]);
 
   useEffect(() => {
-    if (typeof document === "undefined") return;
     const baseTitle = fallbackTitle || primaryNames[0] || "商品分类";
-    const subTitle = resolvedCategory?.name ? `${resolvedCategory.name} · ${baseTitle}` : baseTitle;
-    document.title = `${subTitle} | Jianlian Shop`;
-  }, [fallbackTitle, primaryNames, resolvedCategory?.name]);
+    const subTitle = resolvedCategory?.name
+      ? selectedSubcategory
+        ? `${selectedSubcategory} · ${resolvedCategory.name} · ${baseTitle}`
+        : `${resolvedCategory.name} · ${baseTitle}`
+      : baseTitle;
+    setRouteDocumentTitle(`${subTitle} | Jianlian Shop`);
+  }, [fallbackTitle, primaryNames, resolvedCategory?.name, selectedSubcategory]);
 
   useEffect(() => {
     const rows = categorySnapshot.rows;
