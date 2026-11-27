@@ -23,6 +23,7 @@ async function catalog(client = {}) {
   return load("../../lib/supabase/public-catalog.ts", {
     "@/lib/supabase/client": { getSupabaseBrowserClient: () => client },
     "@/lib/catalog/effective-category-visibility.mjs": visibility,
+    "@/lib/products/delivery-and-stock": await load("../../lib/products/delivery-and-stock.ts", {}),
   });
 }
 test("public product and SKU DTOs never expose binding/cost/audit/secrets; navigation and public prices survive", async () => {
@@ -48,17 +49,24 @@ test("actual public detail Route Handler redacts metadata on normal and service-
   const id = "11111111-1111-4111-8111-111111111111";
   const product = { id, category_id: "mock-category", name: "MOCK", slug: "mock-gift", status: "active", price: 20, stock: 8, metadata: privateMetadata };
   const sku = { ...product, id: "mock-sku", product_id: id, metadata: privateMetadata };
-  let fallback = false, serviceCalls = 0;
+  let fallback = false, privilegedProductReads = 0;
   function client(service = false) {
     return { from(table) {
-      let single = false;
+      let single = false, selected;
       const q = {
-        select: () => q, eq: () => q, in: () => q, limit: () => q, order: () => q,
+        select: (fields) => { selected = fields; return q; },
+        eq: () => q, in: () => q, limit: () => q, order: () => q,
         maybeSingle: () => { single = true; return Promise.resolve(result()); },
         then: (ok, fail) => Promise.resolve(result()).then(ok, fail),
       };
       function result() {
-        if (table === "products") return { data: fallback && !service ? null : single ? product : [product], error: null };
+        if (table === "products") {
+          if (service && selected === "metadata") return { data: { metadata: privateMetadata }, error: null };
+          if (service) privilegedProductReads++;
+          assert.ok(!selected.split(",").includes("metadata"));
+          return { data: fallback && !service ? null : single ? product : [product], error: null };
+        }
+        if (table === "order_items") { assert.ok(service); return { data: [], error: null }; }
         if (table === "product_skus") return { data: [sku], error: null };
         assert.equal(table, "categories"); return { data: [{ id: "mock-category", level: 1, parent_id: null, is_active: true }], error: null };
       }
@@ -70,7 +78,8 @@ test("actual public detail Route Handler redacts metadata on normal and service-
     "next/server": { NextResponse: { json: (b, o) => new Response(JSON.stringify(b), o) } },
     "@/lib/supabase/public-catalog": c,
     "@/lib/supabase/server": { getSupabaseServerClient: () => client() },
-    "@/lib/supabase/service-role": { getSupabaseServiceRoleClient: () => { serviceCalls++; return client(true); } },
+    "@/lib/supabase/service-role": { getSupabaseServiceRoleClient: () => client(true) },
+    "@/lib/security/rate-limit": { checkRateLimit: () => ({ allowed: true }), getRequestSourceKey: () => "fixture" },
     "@/lib/catalog/effective-category-visibility.mjs": visibility,
   });
   // The UUID fallback can also consult the catalog list. Keep this loopback
@@ -87,7 +96,7 @@ test("actual public detail Route Handler redacts metadata on normal and service-
       assert.equal(body.data.product.price, 20); assert.equal(body.data.skus[0].stock, 8);
       assert.ok(!JSON.stringify(body).includes("supplier"));
     }
-    assert.equal(serviceCalls, 1);
+    assert.equal(privilegedProductReads, 1);
   } finally { globalThis.fetch = originalFetch; }
 });
 

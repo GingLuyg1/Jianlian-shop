@@ -54,9 +54,11 @@ function route(authorize) {
   const client={auth:{getUser:async()=>({data:{user},error:null})},from:()=>({select:()=>({eq(){return this;},maybeSingle:async()=>({data:{has_skus:true},error:null}),then:yes=>Promise.resolve({count:1,error:null}).then(yes)})}),
     rpc:async(name,args)=>{calls.push({name,args});return {data:null,error:{code:'PGRST202',message:'synthetic missing function'}};}};
   const mocks={NextResponse:{json:(body,options={})=>({body,status:options.status??200})},authorizeBitrefillStorefrontOrder:authorize,authorizeKuajingZyStorefrontOrder:async()=>({applicable:false}),
-    hasSupabaseServerConfig:()=>true,getSupabaseServerClient:()=>client,checkRequestSize:()=>null,checkRateLimit:()=>({allowed:true}),getUserRateLimitKey:()=>'',
+    hasSupabaseServerConfig:()=>true,getSupabaseServerClient:()=>client,getSupabaseServiceRoleClient:()=>null,
+    checkRequestSize:()=>null,checkRateLimit:()=>({allowed:true}),getUserRateLimitKey:()=>'',
     assertUserBusinessAllowed:async()=>{},normalizePaymentMethod:x=>x,isLiuhaoyiPaymentMethod:()=>false,checkOrderProductAvailability:async()=>({available:true}),
-    verifyCheckoutAgreements:async()=>[],evaluateOrderRisk:async()=>({}),shouldBlockRisk:()=>false,getOrderErrorMessage:()=> 'synthetic error'};
+    verifyCheckoutAgreements:async()=>[],evaluateOrderRisk:async()=>({}),shouldBlockRisk:()=>false,
+    normalizeCouponCode:value=>String(value??'').trim().toUpperCase(),getOrderErrorMessage:()=> 'synthetic error'};
   const src=readFileSync(new URL('../../app/api/orders/route.ts',import.meta.url),'utf8');
   const js=ts.transpileModule(src,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}}).outputText;
   const exports={};new Function('require','exports','console',js)(()=>mocks,exports,{error(){},warn(){},info(){}});

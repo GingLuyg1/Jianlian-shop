@@ -1,5 +1,5 @@
 // Execute actual TS delivery/router implementations in Node without Next runtime.
-// Only Daju's network handler is replaced with a zero-summary offline stub.
+// External delivery dependencies are injected or kept offline.
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
@@ -15,12 +15,16 @@ export async function loadActualLocalDeliveryEntry(root) {
     'const fulfillKuajingZyOrderWithSupabase = async () => { throw new Error("KUAJINGZY_FORBIDDEN_IN_BITREFILL_FIXTURE"); };');
   router = router.replace('import { fulfillDajuOrderWithSupabase } from "../daju/fulfillment";',
     'const fulfillDajuOrderWithSupabase = async () => ({ handled: 0, fulfilled: 0, failed: 0, uncertain: 0, needsInput: 0 });');
+  router = router.replace('import { fulfillBitrefillLiveOrderWithSupabase } from "../bitrefill/live-fulfillment";',
+    'const fulfillBitrefillLiveOrderWithSupabase = async () => { throw new Error("LIVE_BITREFILL_FORBIDDEN_IN_FIXTURE"); };');
   router = router.replaceAll('"./supplier-router-core.mjs"', JSON.stringify(moduleUrl("lib/providers/core/supplier-router-core.mjs")));
   router = router.replaceAll('"../bitrefill/pin-runtime.mjs"', JSON.stringify(moduleUrl("lib/providers/bitrefill/pin-runtime.mjs")));
   router = router.replace('import { ensureBitrefillProductionRuntime } from "../bitrefill/production-server";', 'const ensureBitrefillProductionRuntime = () => {}; // closed production composition; synthetic handler injected below');
   const routerUrl = compile(router);
   let delivery = readFileSync(resolve(root, "lib/delivery/delivery-service.ts"), "utf8");
-  delivery = delivery.replace('"@/lib/providers/core/supplier-router"', JSON.stringify(routerUrl))
+  delivery = delivery.replace('import { sendOrderDeliveryEmail } from "@/lib/email/order-delivery-email";',
+    'const sendOrderDeliveryEmail = async () => ({status:"skipped"});')
+    .replace('"@/lib/providers/core/supplier-router"', JSON.stringify(routerUrl))
     .replace('"./local-stock-priority.mjs"', JSON.stringify(moduleUrl("lib/delivery/local-stock-priority.mjs")));
   return import(compile(delivery));
 }
