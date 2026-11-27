@@ -23,7 +23,12 @@ import {
 import PublicLayout from "@/components/layout/PublicLayout";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { fallbackCategoriesByPath, simRegionCode } from "@/lib/catalog/storefront-category-visuals";
-import { findVisibleStorefrontPrimaryCategory, isCatalogCategoryHref, storefrontCategoryPaths } from "@/lib/catalog/visible-storefront-category-routes";
+import {
+  findVisibleStorefrontPrimaryCategory,
+  isCatalogCategoryHref,
+  sortStorefrontCategoryItems,
+  storefrontCategoryPaths,
+} from "@/lib/catalog/visible-storefront-category-routes";
 import { getChildCategories, normalizeText } from "@/lib/supabase/public-catalog";
 import { cn } from "@/lib/utils";
 import { useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
@@ -434,21 +439,24 @@ function HeroVisual({ type }: { type: string }) {
 export default function HomePage() {
   const { isMobile } = useMobileStorefront();
   const { visibleHrefs: visibleCategoryHrefs, rows: categoryRows } = useVisibleStorefrontCategoryHrefs();
-  const visibleCategoryCards = categoryCards
-    .filter((item) => !isCatalogCategoryHref(item.href) || visibleCategoryHrefs.has(item.href))
-    .map((item) => {
-      if (categoryRows && isCatalogCategoryHref(item.href)) {
-        const primary = findVisibleStorefrontPrimaryCategory(item.href, categoryRows);
-        if (primary?.name) {
-          const normalizedTitle = primary.name
-            .replace(/国际\s*sim\s*卡|国际电话卡/gi, "国际 SIM 卡")
-            .replace(/数字\s*\/\s*社媒账号/g, "数字 / 社媒账号")
-            .replace(/礼品卡\s*\/\s*充值卡/g, "礼品卡 / 充值卡");
-          return { ...item, title: normalizedTitle };
+  const visibleCategoryCards = sortStorefrontCategoryItems(
+    categoryCards
+      .filter((item) => !isCatalogCategoryHref(item.href) || visibleCategoryHrefs.has(item.href))
+      .map((item) => {
+        if (categoryRows && isCatalogCategoryHref(item.href)) {
+          const primary = findVisibleStorefrontPrimaryCategory(item.href, categoryRows);
+          if (primary?.name) {
+            const normalizedTitle = primary.name
+              .replace(/国际\s*sim\s*卡|国际电话卡/gi, "国际 SIM 卡")
+              .replace(/数字\s*\/\s*社媒账号/g, "数字 / 社媒账号")
+              .replace(/礼品卡\s*\/\s*充值卡/g, "礼品卡 / 充值卡");
+            return { ...item, title: normalizedTitle };
+          }
         }
-      }
-      return item;
-    });
+        return item;
+      }),
+    categoryRows
+  );
   const visibleHotLinks = hotLinks.filter((item) => {
     const categoryHref = item.href.split("?")[0];
     return !isCatalogCategoryHref(categoryHref) || visibleCategoryHrefs.has(categoryHref);
@@ -500,7 +508,7 @@ export default function HomePage() {
       }>;
     }> = [];
 
-    for (const card of categoryCards) {
+    for (const card of sortStorefrontCategoryItems(categoryCards, categoryRows)) {
       if (!isCatalogCategoryHref(card.href) || !visibleCategoryHrefs.has(card.href)) continue;
       const primary = findVisibleStorefrontPrimaryCategory(card.href, categoryRows);
       if (!primary) continue;

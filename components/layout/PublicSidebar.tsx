@@ -23,7 +23,10 @@ import {
 import { cn } from "@/lib/utils";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { isCatalogCategoryHref, useVisibleStorefrontCategoryHrefs } from "@/hooks/use-visible-storefront-categories";
-import { findVisibleStorefrontPrimaryCategory } from "@/lib/catalog/visible-storefront-category-routes";
+import {
+  findVisibleStorefrontPrimaryCategory,
+  sortStorefrontCategoryItems,
+} from "@/lib/catalog/visible-storefront-category-routes";
 import { refreshPublicCategories } from "@/lib/catalog/public-category-snapshot";
 import { prefetchDefaultPublicProductPage } from "@/lib/catalog/public-product-query-cache";
 import { prefetchPublicProductCounts } from "@/lib/catalog/public-product-count-cache";
@@ -89,15 +92,18 @@ function formatCategoryNavLabel(rawName: string) {
     .replace(/礼品卡\s*\/\s*充值卡/g, "礼品卡 / 充值卡");
 }
 
-  const visibleMenuItems = menuItems
-    .filter((item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href))
-    .map((item) => {
-      if (rows && isCatalogCategoryHref(item.href)) {
-        const primary = findVisibleStorefrontPrimaryCategory(item.href, rows);
-        if (primary?.name) return { ...item, label: formatCategoryNavLabel(primary.name) };
-      }
-      return item;
-    });
+  const visibleMenuItems = sortStorefrontCategoryItems(
+    menuItems
+      .filter((item) => !isCatalogCategoryHref(item.href) || !confirmed || visibleHrefs.has(item.href))
+      .map((item) => {
+        if (rows && isCatalogCategoryHref(item.href)) {
+          const primary = findVisibleStorefrontPrimaryCategory(item.href, rows);
+          if (primary?.name) return { ...item, label: formatCategoryNavLabel(primary.name) };
+        }
+        return item;
+      }),
+    rows
+  );
   const navigationGroups = [
     { title: "", items: visibleMenuItems.filter((item) => item.href === "/") },
     { title: "资源中心", items: visibleMenuItems.filter((item) => item.href === "/products/all" || isCatalogCategoryHref(item.href)) },

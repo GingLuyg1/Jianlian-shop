@@ -1,7 +1,7 @@
 "use client";
 
 import { type FormEvent, type ReactNode, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Edit, GripVertical, Loader2, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Edit, GripVertical, Layers, Loader2, PackagePlus, Plus, RefreshCw, Search, Trash2, X } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
@@ -309,8 +309,10 @@ function AdminCategoriesPageInner() {
   const [error, setError] = useState("");
   const [reordering, setReordering] = useState(false);
   const [draggedProductId, setDraggedProductId] = useState<string | null>(null);
+  const [dragOverProductId, setDragOverProductId] = useState<string | null>(null);
   const [reorderingCategories, setReorderingCategories] = useState(false);
   const [draggedCategoryId, setDraggedCategoryId] = useState<string | null>(null);
+  const [dragOverCategoryId, setDragOverCategoryId] = useState<string | null>(null);
   const [categoryForm, setCategoryForm] = useState<CategoryForm | null>(null);
   const [productForm, setProductForm] = useState<ProductForm | null>(null);
   const [productInitialForm, setProductInitialForm] = useState<ProductForm | null>(null);
@@ -894,12 +896,14 @@ function AdminCategoriesPageInner() {
       const saved = await reorderCategories(parentId, optimistic);
       const savedMap = new Map(saved.map((category) => [category.id, category]));
       setCategories((current) => current.map((category) => savedMap.get(category.id) ?? category));
-      toast.success("分类排序已保存");
+      void invalidatePublicCategories().catch(() => undefined);
+      toast.success(parentId === null ? "一级分类排序已保存，前台导航同步生效" : "分类排序已保存");
     } catch (reorderError) {
       setCategories(previous);
       toast.error(getErrorText(reorderError, "分类排序保存失败，已恢复原顺序"));
     } finally {
       setDraggedCategoryId(null);
+      setDragOverCategoryId(null);
       setReorderingCategories(false);
     }
   }
@@ -912,11 +916,17 @@ function AdminCategoriesPageInner() {
     void moveCategory(parentId, categoryId, target.id);
   }
 
+  const activeProductCount = useMemo(
+    () => products.filter((item) => item.status === "active").length,
+    [products]
+  );
+  const hasActiveFilters = Boolean(productSearch.trim() || productStatus !== "all" || selectedSubcategoryFilter);
+
   return (
     <AdminPageShell
       variant="v2"
       title="分类管理"
-      description="维护一级分类、二级分类，以及当前分类下的商品。"
+      description="维护一级分类、二级分类及归属商品；一级分类排序将实时同步至前台导航与首页。"
       actions={
         <Button size="sm" onClick={openCreateRoot}>
           <Plus className="mr-2 h-4 w-4" />
@@ -933,15 +943,20 @@ function AdminCategoriesPageInner() {
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden xl:grid-cols-[260px_260px_minmax(0,1fr)]">
         <CategoryColumn
           title="一级分类"
+          badgeCount={rootCategories.length}
+          hint="拖拽或点 ↑↓ 调序，同步前台顺序"
           loading={loadingCategories}
           emptyTitle="暂无一级分类"
           error={Boolean(error && categories.length === 0)}
           onRetry={() => void loadCategories()}
         >
-          {rootCategories.map((category) => (
+          {rootCategories.map((category, index) => (
             <CategoryCard
               key={category.id}
               category={category}
+              rank={index + 1}
+              isFirst={index === 0}
+              isLast={index === rootCategories.length - 1}
               active={selectedRootId === category.id}
               count={categories.filter((item) => item.parent_id === category.id).length}
               onClick={() => selectRoot(category.id)}
@@ -950,10 +965,19 @@ function AdminCategoriesPageInner() {
               onToggle={() => toggleCategory(category)}
               saving={saving}
               dragging={draggedCategoryId === category.id}
+              dragOver={dragOverCategoryId === category.id && draggedCategoryId !== category.id}
               reorderDisabled={reorderingCategories || loadingCategories || saving}
               onDragStart={() => setDraggedCategoryId(category.id)}
-              onDragEnd={() => setDraggedCategoryId(null)}
-              onDrop={() => draggedCategoryId && void moveCategory(null, draggedCategoryId, category.id)}
+              onDragEnter={() => setDragOverCategoryId(category.id)}
+              onDragLeave={() => setDragOverCategoryId((current) => (current === category.id ? null : current))}
+              onDragEnd={() => {
+                setDraggedCategoryId(null);
+                setDragOverCategoryId(null);
+              }}
+              onDrop={() => {
+                setDragOverCategoryId(null);
+                if (draggedCategoryId) void moveCategory(null, draggedCategoryId, category.id);
+              }}
               onMoveByKeyboard={(direction) => moveCategoryByKeyboard(null, category.id, direction)}
             />
           ))}
@@ -961,18 +985,23 @@ function AdminCategoriesPageInner() {
 
         <CategoryColumn
           title="二级分类"
+          badgeCount={childCategories.length}
+          hint={selectedRoot ? `所属：${selectedRoot.name}` : undefined}
           loading={loadingCategories}
           emptyTitle={selectedRoot ? "暂无二级分类" : "请选择一级分类"}
           emptyDescription={selectedRoot ? "右侧将显示直接关联该一级分类的商品。" : "选择一级分类后查看二级分类。"}
-          actionLabel={selectedRoot ? "新增二级分类" : undefined}
+          actionLabel={selectedRoot ? "新增" : undefined}
           onAction={selectedRoot ? openCreateChild : undefined}
           error={false}
           onRetry={() => void loadCategories()}
         >
-          {childCategories.map((category) => (
+          {childCategories.map((category, index) => (
             <CategoryCard
               key={category.id}
               category={category}
+              rank={index + 1}
+              isFirst={index === 0}
+              isLast={index === childCategories.length - 1}
               active={selectedChildId === category.id}
               count={categoryProductCounts[category.id] ?? 0}
               onClick={() => selectChild(category.id)}
@@ -981,51 +1010,75 @@ function AdminCategoriesPageInner() {
               onToggle={() => toggleCategory(category)}
               saving={saving}
               dragging={draggedCategoryId === category.id}
+              dragOver={dragOverCategoryId === category.id && draggedCategoryId !== category.id}
               reorderDisabled={reorderingCategories || loadingCategories || saving}
               onDragStart={() => setDraggedCategoryId(category.id)}
-              onDragEnd={() => setDraggedCategoryId(null)}
-              onDrop={() => draggedCategoryId && void moveCategory(selectedRootId, draggedCategoryId, category.id)}
+              onDragEnter={() => setDragOverCategoryId(category.id)}
+              onDragLeave={() => setDragOverCategoryId((current) => (current === category.id ? null : current))}
+              onDragEnd={() => {
+                setDraggedCategoryId(null);
+                setDragOverCategoryId(null);
+              }}
+              onDrop={() => {
+                setDragOverCategoryId(null);
+                if (draggedCategoryId) void moveCategory(selectedRootId, draggedCategoryId, category.id);
+              }}
               onMoveByKeyboard={(direction) => moveCategoryByKeyboard(selectedRootId, category.id, direction)}
             />
           ))}
         </CategoryColumn>
 
-        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-          <div className="shrink-0 border-b px-4 py-3">
+        <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm">
+          <div className="shrink-0 border-b border-slate-200/80 bg-slate-50/40 px-4 py-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-slate-950">
-                  {selectedChild ? selectedChild.name : selectedRoot ? selectedRoot.name : "当前分类商品"}
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="truncate text-sm font-semibold text-slate-950">
+                    {selectedChild ? selectedChild.name : selectedRoot ? selectedRoot.name : "当前分类商品"}
+                  </h2>
+                  {selectedProductCategoryId ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                        共 {productCount} 个
+                      </span>
+                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200/70">
+                        在售 {activeProductCount}
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="mt-1 truncate text-xs text-slate-500">
-                  {selectedProductCategoryId ? getCategoryPath(selectedProductCategoryId, categoryMap) : "请选择分类"}
+                <div className="mt-1 flex items-center gap-1.5 truncate text-xs text-slate-500">
+                  <Layers className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                  <span className="truncate">
+                    {selectedProductCategoryId ? getCategoryPath(selectedProductCategoryId, categoryMap) : "请在左侧选择分类"}
+                  </span>
                 </div>
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="flex shrink-0 items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => { productsCacheRef.current.clear(); void loadProducts({ forceRefresh: true }); void loadCategories({ silent: true }); }} disabled={loadingProducts}>
-                  <RefreshCw className={cn("mr-2 h-4 w-4", loadingProducts && "animate-spin")} />
+                  <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", loadingProducts && "animate-spin")} />
                   刷新
                 </Button>
                 <Button size="sm" onClick={openCreateProduct} disabled={!selectedProductCategoryId || saving}>
-                  <PackagePlus className="mr-2 h-4 w-4" />
+                  <PackagePlus className="mr-1.5 h-3.5 w-3.5" />
                   新增商品
                 </Button>
               </div>
             </div>
-            <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_160px]">
-              <div className="relative">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[200px] flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <Input
                   value={productSearch}
                   onChange={(event) => setProductSearch(event.target.value)}
-                  className="pl-9"
+                  className="h-9 bg-white pl-9 text-sm"
                   placeholder="搜索商品名称或标识"
                 />
               </div>
               <select
                 value={productStatus}
                 onChange={(event) => setProductStatusFilter(event.target.value as ProductStatus | "all")}
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                className="h-9 w-[136px] rounded-md border border-input bg-white px-2.5 text-sm text-slate-700"
               >
                 <option value="all">全部状态</option>
                 {Object.entries(productStatusLabel).map(([value, label]) => (
@@ -1034,18 +1087,34 @@ function AdminCategoriesPageInner() {
                   </option>
                 ))}
               </select>
+              {hasActiveFilters ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 px-2.5 text-xs text-slate-600 hover:text-slate-900"
+                  onClick={() => {
+                    setProductSearch("");
+                    setProductStatusFilter("all");
+                    setSelectedSubcategoryFilter("");
+                  }}
+                >
+                  <X className="mr-1 h-3.5 w-3.5" />
+                  清空筛选
+                </Button>
+              ) : null}
             </div>
             {selectedChild && selectedChildSubcategories.length > 0 ? (
               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                <span className="text-xs font-medium text-slate-500">子分类筛选：</span>
+                <span className="text-xs font-medium text-slate-500">子分类：</span>
                 <button
                   type="button"
                   onClick={() => setSelectedSubcategoryFilter("")}
                   className={cn(
-                    "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                    "rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
                     !selectedSubcategoryFilter
-                      ? "bg-orange-100 text-orange-800 ring-1 ring-orange-300"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-100"
                   )}
                 >
                   全部 ({products.length})
@@ -1064,10 +1133,10 @@ function AdminCategoriesPageInner() {
                       type="button"
                       onClick={() => setSelectedSubcategoryFilter(active ? "" : subName)}
                       className={cn(
-                        "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                        "rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
                         active
-                          ? "bg-orange-100 text-orange-800 ring-1 ring-orange-300"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          ? "bg-blue-600 text-white shadow-sm"
+                          : "bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-100"
                       )}
                     >
                       {subName} ({subCount})
@@ -1095,8 +1164,8 @@ function AdminCategoriesPageInner() {
                 action={<Button size="sm" onClick={openCreateProduct}>新增商品</Button>}
               />
             ) : (
-              <div className="min-w-[760px] divide-y">
-                <div className="sticky top-0 z-10 grid grid-cols-[72px_minmax(220px,1fr)_96px_80px_96px_140px_168px] bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-500">
+              <div className="min-w-[760px] divide-y divide-slate-100">
+                <div className="sticky top-0 z-10 grid grid-cols-[72px_minmax(220px,1fr)_96px_80px_96px_140px_168px] border-b border-slate-200/80 bg-slate-50/95 px-4 py-2.5 text-xs font-semibold text-slate-500 backdrop-blur-sm">
                   <div className="text-center">图片</div>
                   <div>商品名称</div>
                   <div className="text-center">价格</div>
@@ -1109,15 +1178,23 @@ function AdminCategoriesPageInner() {
                   <div
                     key={product.id}
                     onDragOver={(event) => {
-                      if (canReorderProducts && draggedProductId) event.preventDefault();
+                      if (canReorderProducts && draggedProductId) {
+                        event.preventDefault();
+                        if (dragOverProductId !== product.id) setDragOverProductId(product.id);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      setDragOverProductId((current) => (current === product.id ? null : current));
                     }}
                     onDrop={(event) => {
                       event.preventDefault();
+                      setDragOverProductId(null);
                       if (draggedProductId) void moveProduct(draggedProductId, product.id);
                     }}
                     className={cn(
-                      "grid grid-cols-[72px_minmax(220px,1fr)_96px_80px_96px_140px_168px] items-center px-4 py-3 text-sm",
-                      draggedProductId === product.id && "bg-blue-50 opacity-70"
+                      "grid grid-cols-[72px_minmax(220px,1fr)_96px_80px_96px_140px_168px] items-center px-4 py-2.5 text-sm transition-colors hover:bg-slate-50/80",
+                      draggedProductId === product.id && "bg-blue-50 opacity-70",
+                      dragOverProductId === product.id && draggedProductId !== product.id && "bg-blue-50/60 ring-1 ring-inset ring-blue-400"
                     )}
                   >
                     <div className="flex items-center justify-center gap-1">
@@ -1131,27 +1208,30 @@ function AdminCategoriesPageInner() {
                           event.dataTransfer.effectAllowed = "move";
                           event.dataTransfer.setData("text/plain", product.id);
                         }}
-                        onDragEnd={() => setDraggedProductId(null)}
+                        onDragEnd={() => {
+                          setDraggedProductId(null);
+                          setDragOverProductId(null);
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === "ArrowUp" || event.key === "ArrowDown") {
                             event.preventDefault();
                             moveProductByKeyboard(product.id, event.key === "ArrowUp" ? -1 : 1);
                           }
                         }}
-                        className="cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                        className="cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
                       >
                         <GripVertical className="h-4 w-4" />
                       </button>
                       <img
                         src={product.image_url || PRODUCT_FALLBACK_IMAGE}
                         alt=""
-                        className="h-10 w-10 rounded-lg border object-cover"
+                        className="h-9 w-9 rounded-lg border border-slate-200/80 bg-white object-cover"
                         onError={(event) => {
                           event.currentTarget.src = PRODUCT_FALLBACK_IMAGE;
                         }}
                       />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 pr-2">
                       <div className="flex items-center gap-1.5">
                         <div className="truncate font-medium text-slate-950" title={product.name}>
                           {product.name}
@@ -1161,34 +1241,35 @@ function AdminCategoriesPageInner() {
                             extractSubcategoryFromShortDescription(product.short_description).subcategory ||
                             (typeof product.metadata?.subcategory === "string" ? product.metadata.subcategory.trim() : "");
                           return sub ? (
-                            <span className="shrink-0 rounded bg-orange-50 px-1.5 py-0.5 text-[11px] font-medium text-orange-700 ring-1 ring-inset ring-orange-200">
+                            <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 ring-1 ring-inset ring-blue-200/70">
                               {sub}
                             </span>
                           ) : null;
                         })()}
                       </div>
-                      <div className="truncate text-xs text-slate-500" title={product.slug}>
+                      <div className="mt-0.5 truncate text-xs text-slate-400" title={product.slug}>
                         {product.slug}
                       </div>
                     </div>
-                    <div className="text-center tabular-nums">¥{product.price.toFixed(2)}</div>
-                    <div className={cn("text-center tabular-nums", product.stock <= 0 ? "text-red-600" : "text-slate-700")}>
+                    <div className="text-center font-medium tabular-nums text-slate-900">¥{product.price.toFixed(2)}</div>
+                    <div className={cn("text-center font-medium tabular-nums", product.stock <= 0 ? "text-red-600" : "text-slate-700")}>
                       {product.stock}
                     </div>
                     <div className="flex justify-center"><StatusBadge status={product.status} /></div>
-                    <time className="text-center text-xs text-slate-500">{formatDate(product.updated_at)}</time>
+                    <time className="text-center text-xs tabular-nums text-slate-500">{formatDate(product.updated_at)}</time>
                     <div className="flex justify-center gap-1 whitespace-nowrap">
-                      <Button variant="ghost" size="sm" onClick={() => openEditProduct(product)}>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-blue-700 hover:bg-blue-50 hover:text-blue-800" onClick={() => openEditProduct(product)}>
                         编辑
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="h-7 px-2 text-xs text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                         onClick={() => changeProductStatus(product, product.status === "active" ? "inactive" : "active")}
                       >
                         {product.status === "active" ? "下架" : "上架"}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => changeProductStatus(product, "sold_out")}>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-amber-700 hover:bg-amber-50 hover:text-amber-800" onClick={() => changeProductStatus(product, "sold_out")}>
                         售罄
                       </Button>
                     </div>
@@ -1197,8 +1278,15 @@ function AdminCategoriesPageInner() {
               </div>
             )}
           </div>
-          <div className="shrink-0 border-t px-4 py-3 text-sm text-slate-500">
-            共 {productCount} 个商品
+          <div className="flex shrink-0 items-center justify-between border-t border-slate-200/80 bg-slate-50/40 px-4 py-2.5 text-xs text-slate-500">
+            <span>
+              {displayedProducts.length !== productCount
+                ? `显示 ${displayedProducts.length} / 共 ${productCount} 个商品`
+                : `共 ${productCount} 个商品`}
+            </span>
+            {canReorderProducts && displayedProducts.length > 1 ? (
+              <span className="text-slate-400">支持拖拽商品行调整展示顺序</span>
+            ) : null}
           </div>
         </section>
       </div>
@@ -1230,20 +1318,24 @@ function AdminCategoriesPageInner() {
 
 function CategoryColumn({
   actionLabel,
+  badgeCount,
   children,
   emptyDescription,
   emptyTitle,
   error,
+  hint,
   loading,
   onAction,
   onRetry,
   title,
 }: {
   actionLabel?: string;
+  badgeCount?: number;
   children: ReactNode;
   emptyDescription?: string;
   emptyTitle: string;
   error: boolean;
+  hint?: string;
   loading: boolean;
   onAction?: () => void;
   onRetry: () => void;
@@ -1251,17 +1343,31 @@ function CategoryColumn({
 }) {
   const hasChildren = Boolean(children && (!Array.isArray(children) || children.length > 0));
   return (
-    <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border bg-white shadow-sm">
-      <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
-        <div className="truncate text-sm font-semibold text-slate-950">{title}</div>
-        {onAction && actionLabel ? (
-          <Button size="sm" variant="outline" onClick={onAction}>
-            <Plus className="mr-1 h-4 w-4" />
-            {actionLabel}
-          </Button>
+    <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200/90 bg-white shadow-sm">
+      <div className="shrink-0 border-b border-slate-200/80 bg-slate-50/50 px-3.5 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <div className="truncate text-sm font-semibold text-slate-900">{title}</div>
+            {typeof badgeCount === "number" ? (
+              <span className="inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-slate-200/70 px-1.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                {badgeCount}
+              </span>
+            ) : null}
+          </div>
+          {onAction && actionLabel ? (
+            <Button size="sm" variant="outline" className="h-7 shrink-0 px-2 text-xs" onClick={onAction}>
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              {actionLabel}
+            </Button>
+          ) : null}
+        </div>
+        {hint ? (
+          <p className="mt-1 truncate text-[11px] text-slate-500" title={hint}>
+            {hint}
+          </p>
         ) : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
         {loading ? (
           <AdminTableSkeleton rows={7} />
         ) : error ? (
@@ -1284,14 +1390,20 @@ function CategoryCard({
   active,
   category,
   count,
+  rank,
+  isFirst,
+  isLast,
   onClick,
   onDelete,
   onEdit,
   onToggle,
   saving,
   dragging,
+  dragOver,
   reorderDisabled,
   onDragStart,
+  onDragEnter,
+  onDragLeave,
   onDragEnd,
   onDrop,
   onMoveByKeyboard,
@@ -1299,28 +1411,48 @@ function CategoryCard({
   active: boolean;
   category: AdminCategory;
   count: number;
+  rank: number;
+  isFirst: boolean;
+  isLast: boolean;
   onClick: () => void;
   onDelete: () => void;
   onEdit: () => void;
   onToggle: () => void;
   saving: boolean;
   dragging: boolean;
+  dragOver: boolean;
   reorderDisabled: boolean;
   onDragStart: () => void;
+  onDragEnter: () => void;
+  onDragLeave: () => void;
   onDragEnd: () => void;
   onDrop: () => void;
   onMoveByKeyboard: (direction: -1 | 1) => void;
 }) {
+  const enabled = isCategoryEnabled(category);
+  const subNames = category.level === 2 ? extractSubcategoriesFromCategory(category) : [];
   return (
     <div
       onDragOver={(event) => {
-        if (!reorderDisabled) event.preventDefault();
+        if (!reorderDisabled) {
+          event.preventDefault();
+          onDragEnter();
+        }
       }}
+      onDragLeave={onDragLeave}
       onDrop={(event) => {
         event.preventDefault();
         onDrop();
       }}
-      className={cn("rounded-lg border p-3", active ? "border-primary bg-orange-50" : "border-slate-200", dragging && "opacity-60")}
+      className={cn(
+        "group rounded-lg border px-2.5 py-2 transition-all",
+        active
+          ? "border-blue-500/80 border-l-[3px] border-l-blue-600 bg-blue-50/60 shadow-sm"
+          : "border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50/70",
+        !enabled && !active && "opacity-75",
+        dragging && "border-dashed border-blue-400 bg-blue-50/40 opacity-60",
+        dragOver && "ring-2 ring-blue-500/50 border-blue-500 bg-blue-50/70"
+      )}
     >
       <div className="flex min-w-0 items-start gap-1.5">
         <button
@@ -1340,47 +1472,103 @@ function CategoryCard({
               onMoveByKeyboard(event.key === "ArrowUp" ? -1 : 1);
             }
           }}
-          className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-slate-400 hover:bg-slate-200/60 hover:text-slate-700 disabled:cursor-not-allowed disabled:opacity-35"
         >
-          <GripVertical className="h-4 w-4" />
+          <GripVertical className="h-3.5 w-3.5" />
         </button>
-        <button type="button" className="min-w-0 flex-1 text-left" onClick={onClick}>
-        <div className="flex items-center justify-between gap-2">
-          <span className="min-w-0 truncate text-sm font-medium text-slate-950" title={category.name}>{category.name}</span>
-          <Badge
-            variant="outline"
-            className={isCategoryEnabled(category) ? "border-green-200 bg-green-50 text-green-700" : "border-slate-200 bg-slate-50 text-slate-500"}
-          >
-            {isCategoryEnabled(category) ? "启用" : "停用"}
-          </Badge>
-        </div>
-        <div className="mt-1 truncate text-xs text-slate-500">
-          {category.level === 1 ? `${count} 个二级分类` : `${count} 个商品`}
-        </div>
-        {category.level === 2 && extractSubcategoriesFromCategory(category).length > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {extractSubcategoriesFromCategory(category).map((subName) => (
-              <span
-                key={subName}
-                className="inline-flex items-center rounded bg-orange-100/70 px-1.5 py-0.5 text-[11px] font-medium text-orange-800"
+
+        <div className="min-w-0 flex-1">
+          <button type="button" className="w-full text-left" onClick={onClick}>
+            <div className="flex items-center justify-between gap-1.5">
+              <div className="flex min-w-0 items-center gap-1.5">
+                <span
+                  className={cn(
+                    "inline-flex h-4 min-w-[18px] shrink-0 items-center justify-center rounded px-1 text-[10px] font-semibold tabular-nums",
+                    active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"
+                  )}
+                >
+                  {rank}
+                </span>
+                <span className="min-w-0 truncate text-[13px] font-semibold text-slate-900" title={category.name}>
+                  {category.name}
+                </span>
+              </div>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "shrink-0 px-1.5 py-0 text-[10px] leading-4",
+                  enabled
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-slate-200 bg-slate-100 text-slate-500"
+                )}
               >
-                • {subName}
-              </span>
-            ))}
+                {enabled ? "启用" : "停用"}
+              </Badge>
+            </div>
+          </button>
+          <div className="mt-1.5 flex items-center justify-between gap-1">
+            <button
+              type="button"
+              onClick={onClick}
+              className="min-w-0 truncate text-left text-[11px] text-slate-500 hover:text-slate-700"
+              title={category.slug}
+            >
+              {category.level === 1 ? `${count} 个二级分类` : `${count} 个商品`}
+            </button>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <button
+                type="button"
+                title="上移"
+                aria-label={`上移 ${category.name}`}
+                disabled={reorderDisabled || isFirst}
+                onClick={() => onMoveByKeyboard(-1)}
+                className="inline-flex h-5 w-5 items-center justify-center rounded border border-slate-200/90 bg-white text-slate-500 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <ArrowUp className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                title="下移"
+                aria-label={`下移 ${category.name}`}
+                disabled={reorderDisabled || isLast}
+                onClick={() => onMoveByKeyboard(1)}
+                className="inline-flex h-5 w-5 items-center justify-center rounded border border-slate-200/90 bg-white text-slate-500 transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-30"
+              >
+                <ArrowDown className="h-3 w-3" />
+              </button>
+            </div>
           </div>
-        ) : null}
-      </button>
+          {subNames.length > 0 ? (
+            <button type="button" onClick={onClick} className="mt-1.5 flex w-full flex-wrap gap-1 text-left">
+              {subNames.map((subName) => (
+                <span
+                  key={subName}
+                  className="inline-flex items-center rounded bg-blue-50/90 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 ring-1 ring-inset ring-blue-200/70"
+                >
+                  • {subName}
+                </span>
+              ))}
+            </button>
+          ) : null}
+        </div>
       </div>
-      <div data-category-actions className="mt-3 flex flex-nowrap items-center gap-1.5">
+
+      <div data-category-actions className="mt-2 flex flex-nowrap items-center gap-1.5 border-t border-slate-100 pt-2">
         <Button className="h-8 shrink-0 px-2 text-xs" variant="outline" size="sm" onClick={onEdit} disabled={saving}>
-          <Edit className="mr-1 h-3.5 w-3.5" />
+          <Edit className="mr-1 h-3 w-3" />
           编辑
         </Button>
         <Button className="h-8 shrink-0 px-2 text-xs" variant="outline" size="sm" onClick={onToggle} disabled={saving}>
-          {isCategoryEnabled(category) ? "停用" : "启用"}
+          {enabled ? "停用" : "启用"}
         </Button>
-        <Button className="h-8 shrink-0 px-2 text-xs" variant="outline" size="sm" onClick={onDelete} disabled={saving}>
-          <Trash2 className="mr-1 h-3.5 w-3.5" />
+        <Button
+          className="h-8 shrink-0 px-2 text-xs hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          variant="outline"
+          size="sm"
+          onClick={onDelete}
+          disabled={saving}
+        >
+          <Trash2 className="mr-1 h-3 w-3" />
           删除
         </Button>
       </div>

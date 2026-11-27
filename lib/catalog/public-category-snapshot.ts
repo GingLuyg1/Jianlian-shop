@@ -107,6 +107,13 @@ export function refreshPublicCategories(force = false): Promise<PublicCategory[]
 
 export function invalidatePublicCategories() {
   fetchedAt = 0;
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.removeItem(SNAPSHOT_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
   return refreshPublicCategories(true);
 }
 

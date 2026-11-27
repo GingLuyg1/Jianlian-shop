@@ -34,3 +34,40 @@ export function isCatalogCategoryHref(href: string) {
 }
 
 export const storefrontCategoryPaths = Object.keys(CATEGORY_ROUTE_MATCHERS);
+
+export function sortStorefrontCategoryItems<T extends { href: string }>(
+  items: T[],
+  categories: PublicCategory[] | null | undefined
+): T[] {
+  if (!categories || categories.length === 0) return items;
+  const rankByHref = new Map<string, number>();
+  for (const href of storefrontCategoryPaths) {
+    const primary = findVisibleStorefrontPrimaryCategory(href, categories);
+    if (primary) {
+      const order = Number(primary.sort_order);
+      rankByHref.set(href, Number.isFinite(order) ? order : Number.MAX_SAFE_INTEGER);
+    }
+  }
+  if (rankByHref.size === 0) return items;
+
+  const catalogSlots: number[] = [];
+  const catalogEntries: Array<{ item: T; rank: number; originalIndex: number }> = [];
+  items.forEach((item, index) => {
+    if (isCatalogCategoryHref(item.href)) {
+      catalogSlots.push(index);
+      catalogEntries.push({
+        item,
+        rank: rankByHref.get(item.href) ?? Number.MAX_SAFE_INTEGER,
+        originalIndex: index,
+      });
+    }
+  });
+  if (catalogEntries.length <= 1) return items;
+
+  catalogEntries.sort((a, b) => a.rank - b.rank || a.originalIndex - b.originalIndex);
+  const result = [...items];
+  catalogSlots.forEach((slotIndex, i) => {
+    result[slotIndex] = catalogEntries[i].item;
+  });
+  return result;
+}
