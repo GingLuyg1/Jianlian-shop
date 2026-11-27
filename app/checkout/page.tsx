@@ -4000,7 +4000,7 @@ function SkuSelector({
 function resolveArtworkGlowColor(product: Product): string {
   const token = `${product.name ?? ""} ${product.id ?? ""} ${String(product.metadata?.slug ?? "")}`.toLowerCase();
   if (token.includes("t-mobile") || token.includes("tmobile")) return "rgba(226, 0, 116, 0.34)";
-  if (token.includes("vodafone") || token.includes("rakuten")) return "rgba(230, 0, 0, 0.30)";
+  if (token.includes("vodafone") || token.includes("rakuten") || token.includes("verizon")) return "rgba(230, 0, 0, 0.30)";
   if (token.includes("gpt") || token.includes("openai") || token.includes("giffgaff")) return "rgba(16, 163, 127, 0.30)";
   if (token.includes("claude")) return "rgba(217, 119, 87, 0.34)";
   if (token.includes("gemini") || token.includes("telegram") || token.includes("apple") || token.includes("itunes") || token.includes("movistar")) {
@@ -4013,7 +4013,7 @@ function resolveArtworkGlowColor(product: Product): string {
 function ProductArtwork({ product }: { product: Product }) {
   const imageSrc = getProductImage(product);
   const stageRef = useRef<HTMLDivElement>(null);
-  const [tilt, setTilt] = useState({ rx: 0, ry: 0, gx: 50, gy: 50, active: false });
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0, active: false });
   const glowColor = resolveArtworkGlowColor(product);
 
   const handlePointerMove = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -4022,13 +4022,13 @@ function ProductArtwork({ product }: { product: Product }) {
     const rect = el.getBoundingClientRect();
     const px = (event.clientX - rect.left) / Math.max(1, rect.width);
     const py = (event.clientY - rect.top) / Math.max(1, rect.height);
-    const ry = (px - 0.5) * 14;
-    const rx = (0.5 - py) * 14;
-    setTilt({ rx, ry, gx: Math.round(px * 100), gy: Math.round(py * 100), active: true });
+    const ry = (px - 0.5) * 20;
+    const rx = (0.5 - py) * 20;
+    setTilt({ rx, ry, active: true });
   };
 
   const handlePointerLeave = () => {
-    setTilt({ rx: 0, ry: 0, gx: 50, gy: 50, active: false });
+    setTilt({ rx: 0, ry: 0, active: false });
   };
 
   const Icon = getProductFallbackIcon(product);
@@ -4039,7 +4039,9 @@ function ProductArtwork({ product }: { product: Product }) {
       data-testid="product-artwork-stage"
       onMouseMove={handlePointerMove}
       onMouseLeave={handlePointerLeave}
-      className="group/art relative h-full w-full select-none [perspective:900px]"
+      onDragStart={(event) => event.preventDefault()}
+      onContextMenu={(event) => event.preventDefault()}
+      className="group/art relative h-full w-full select-none [-webkit-touch-callout:none] [perspective:900px]"
     >
       {/* Ambient colored glow backdrop (inspired by premium 3D product showcases) */}
       <span
@@ -4052,9 +4054,9 @@ function ProductArtwork({ product }: { product: Product }) {
         }}
       />
 
-      {/* Interactive 3D tilted badge card with spring pop entrance & specular glass sheen */}
+      {/* Interactive 3D tilted icon badge matching catalog 25% corner radius ratio */}
       <div
-        className="product-artwork-pop relative z-10 h-full w-full overflow-hidden rounded-[22px] border border-white/85 bg-white shadow-[0_22px_38px_-18px_rgba(15,23,42,0.34),0_8px_18px_-10px_rgba(15,23,42,0.18),inset_0_1.5px_0_rgba(255,255,255,0.95)]"
+        className="product-artwork-pop relative z-10 h-full w-full overflow-hidden rounded-[25%] bg-transparent shadow-[0_22px_38px_-18px_rgba(15,23,42,0.34),0_8px_18px_-10px_rgba(15,23,42,0.18)] ring-1 ring-inset ring-black/[0.06]"
         style={{
           transform: tilt.active
             ? `rotateX(${tilt.rx.toFixed(2)}deg) rotateY(${tilt.ry.toFixed(2)}deg) translateY(-4px) scale(1.035)`
@@ -4069,27 +4071,18 @@ function ProductArtwork({ product }: { product: Product }) {
           <img
             src={imageSrc}
             alt={product.name}
+            draggable={false}
             fetchPriority="high"
             decoding="async"
-            className="h-full w-full object-cover"
+            onDragStart={(event) => event.preventDefault()}
+            onContextMenu={(event) => event.preventDefault()}
+            className="pointer-events-none h-full w-full scale-[1.03] select-none object-cover [-webkit-touch-callout:none] [-webkit-user-drag:none]"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-orange-50 via-white to-amber-50">
             <Icon className="h-20 w-20 text-primary drop-shadow-sm" />
           </div>
         )}
-
-        {/* Top subtle glass highlight bevel */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-[22px] ring-1 ring-inset ring-white/45"
-          style={{
-            background: tilt.active
-              ? `radial-gradient(circle at ${tilt.gx}% ${tilt.gy}%, rgba(255,255,255,0.36) 0%, rgba(255,255,255,0.08) 38%, transparent 70%)`
-              : "linear-gradient(145deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.04) 38%, rgba(15,23,42,0.06) 100%)",
-            transition: "opacity 240ms ease",
-          }}
-        />
       </div>
     </div>
   );

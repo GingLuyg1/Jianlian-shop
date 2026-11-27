@@ -206,6 +206,7 @@ test("dashboard trend rounds money to 2 decimals and secondary/sub categories us
 
 test("checkout guards topup/PIN products from SIM detail mismatch, protects dark Hero contrast in modal, and upgrades ProductArtwork with 3D glow", () => {
   const checkout = file("app/checkout/page.tsx");
+  const mall = file("components/products/SupabaseMallContent.tsx");
   const modalCss = file("components/checkout/LiquidGlassCheckoutModal.module.css");
   const globalsCss = file("app/globals.css");
   const tutorials = file("app/tutorials/page.tsx");
@@ -215,6 +216,14 @@ test("checkout guards topup/PIN products from SIM detail mismatch, protects dark
   assert.match(checkout, /function isVodafoneSimProduct[\s\S]{0,160}if \(isTopupOrPinCardProduct\(product\)\) return false/);
   assert.match(checkout, /data-testid="product-artwork-stage"/);
   assert.match(checkout, /resolveArtworkGlowColor/);
+  assert.match(checkout, /const ry = \(px - 0\.5\) \* 20/);
+  assert.match(checkout, /const rx = \(0\.5 - py\) \* 20/);
+  assert.match(checkout, /rounded-\[25%\]/);
+  assert.match(checkout, /draggable=\{false\}/);
+  assert.match(checkout, /scale-\[1\.03\]/);
+  assert.doesNotMatch(checkout, /radial-gradient\(circle at/);
+  assert.match(mall, /activeModalProductId=\{quickCheckoutProduct\}/);
+  assert.match(mall, /if \(!activeModalProductId\)[\s\S]{0,60}setSelectedProductId\(""\)/);
   assert.match(modalCss, /section:not\(\[class\*="text-white"\]\):not\(\[class\*="bg-gradient-"\]\)/);
   assert.match(modalCss, /--scroll-fade-size:\s*22px/);
   assert.match(globalsCss, /@keyframes product-artwork-pop/);

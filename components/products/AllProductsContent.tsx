@@ -271,8 +271,17 @@ export default function AllProductsContent() {
     return () => window.clearTimeout(timer);
   }, []);
 
+  const [hoveredProductId, setHoveredProductId] = useState("");
+
   const handleCloseQuickCheckout = useCallback(() => {
     setQuickCheckoutProduct(null);
+    setHoveredProductId("");
+    if (typeof document !== "undefined") {
+      const activeEl = document.activeElement;
+      if (activeEl instanceof HTMLElement && activeEl.tagName === "BUTTON") {
+        activeEl.blur();
+      }
+    }
     if (typeof window !== "undefined") {
       try {
         const url = new URL(window.location.href);
@@ -329,7 +338,6 @@ export default function AllProductsContent() {
     }
   }, [isGiftCardTabActive, sortMode]);
 
-  const [hoveredProductId, setHoveredProductId] = useState("");
   const currentSortOption = visibleSortOptions.find((item) => item.value === sortMode) ?? visibleSortOptions[0];
 
   return (

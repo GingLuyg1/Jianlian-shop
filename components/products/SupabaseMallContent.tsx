@@ -836,6 +836,12 @@ function SupabaseMallContentInner({
 
   const handleCloseQuickCheckout = useCallback(() => {
     setQuickCheckoutProduct(null);
+    if (typeof document !== "undefined") {
+      const activeEl = document.activeElement;
+      if (activeEl instanceof HTMLElement && activeEl.hasAttribute("data-catalog-card")) {
+        activeEl.blur();
+      }
+    }
     if (typeof window !== "undefined") {
       try {
         const url = new URL(window.location.href);
@@ -941,6 +947,7 @@ function SupabaseMallContentInner({
           onSearchSubmit={submitSearch}
           onRetry={retryLoad}
           onOpenProduct={handleOpenQuickCheckout}
+          activeModalProductId={quickCheckoutProduct}
         />
       </CategoryContentBoundary>
       <LiquidGlassCheckoutModal
@@ -1501,6 +1508,7 @@ function ProductPanel({
   onSearchSubmit,
   onRetry,
   onOpenProduct,
+  activeModalProductId,
 }: {
   pageRoute: string;
   activeCategory: DisplayCategory | null;
@@ -1530,11 +1538,17 @@ function ProductPanel({
   onSearchSubmit: () => void;
   onRetry: () => void;
   onOpenProduct?: (slugOrId: string, product?: Product) => void;
+  activeModalProductId?: string | null;
 }) {
   const [selectedProductId, setSelectedProductId] = useState("");
   const [routeStalled, setRouteStalled] = useState(false);
   const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false });
   const { isMobile } = useMobileStorefront();
+  useEffect(() => {
+    if (!activeModalProductId) {
+      setSelectedProductId("");
+    }
+  }, [activeModalProductId]);
   useEffect(() => {
     setRouteStalled(false);
     if (!routePendingTarget) return;
