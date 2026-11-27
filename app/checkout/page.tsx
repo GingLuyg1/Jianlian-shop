@@ -2133,19 +2133,23 @@ function ProductDetailCard({
             </p>
 
             {(() => {
-              const isGiftCardProduct =
+              const categorySlug = String(product.metadata?.categorySlug ?? "").trim().toLowerCase();
+              const categoryId = String(product.metadata?.categoryId ?? "").trim();
+              const hideProductSales =
                 product.category === "gift-cards" ||
-                /礼品卡|充值卡|话费充值|gift-?card|recharge-?card/i.test(
-                  `${product.categoryLabel ?? ""} ${String(product.metadata?.categorySlug ?? "")}`
+                categoryId === "94319387-0291-4e58-b9fd-e25fbdfbfaf1" ||
+                categorySlug === "balance" ||
+                /礼品卡|充值卡|话费充值|sim\s*卡服务|gift-?card|recharge-?card/i.test(
+                  `${product.categoryLabel ?? ""} ${categorySlug}`
                 );
               return (
                 <div
                   className={cn(
                     "mt-3.5 grid w-full gap-3 rounded-xl border border-border bg-white p-3.5 sm:mt-5 sm:gap-4 sm:p-5",
-                    isGiftCardProduct ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2"
+                    hideProductSales ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-2"
                   )}
                 >
-                  {!isGiftCardProduct ? (
+                  {!hideProductSales ? (
                     <DetailMetric
                       label="商品销量"
                       value={`已售 ${computeProductSalesCount({

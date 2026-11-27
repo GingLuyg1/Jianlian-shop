@@ -866,15 +866,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                   />
                   <button
                     type="button"
-                    onClick={(event) => {
-                      if (currentMode !== "login") {
-                        triggerWaterRippleTransition({
-                          originEl: event.currentTarget,
-                          ringsOnly: true,
-                        });
-                      }
-                      switchMode("login");
-                    }}
+                    onClick={() => switchMode("login")}
                     className={cn(
                       "relative z-10 flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors duration-200",
                       !isRegister
@@ -886,15 +878,7 @@ export default function AuthScreen({ mode: initialMode }: AuthScreenProps) {
                   </button>
                   <button
                     type="button"
-                    onClick={(event) => {
-                      if (currentMode !== "register") {
-                        triggerWaterRippleTransition({
-                          originEl: event.currentTarget,
-                          ringsOnly: true,
-                        });
-                      }
-                      switchMode("register");
-                    }}
+                    onClick={() => switchMode("register")}
                     className={cn(
                       "relative z-10 flex h-10 flex-1 items-center justify-center rounded-xl text-sm font-semibold transition-colors duration-200",
                       isRegister

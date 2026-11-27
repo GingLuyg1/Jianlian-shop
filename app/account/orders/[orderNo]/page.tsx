@@ -8,7 +8,6 @@ import { toast } from "sonner";
 
 import { Bep20OrderPaymentSummary } from "@/components/account/orders/Bep20OrderPaymentSummary";
 import { SecureOrderDelivery } from "@/components/account/orders/SecureOrderDelivery";
-import { OrderRefundPanel } from "@/components/refunds/OrderRefundPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -235,14 +234,6 @@ export default function AccountOrderDetailPage() {
                   fulfillmentStatus={order.fulfillment_status}
                   deliveryStatus={order.order_deliveries?.[0]?.delivery_status}
                   deliveryType={order.delivery_type ?? order.order_items?.[0]?.delivery_type}
-                />
-
-                <OrderRefundPanel
-                  orderNo={order.order_no}
-                  totalAmount={Number(order.total_amount ?? 0)}
-                  currency={order.currency ?? "CNY"}
-                  status={order.status}
-                  paymentStatus={order.payment_status}
                 />
               </div>
             </section>

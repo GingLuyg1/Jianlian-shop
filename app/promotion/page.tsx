@@ -1,17 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { accountRecordPreload } from "@/lib/account/record-preload";
-import { useAccountRecordIdentity } from "@/hooks/use-account-record-identity";
 import {
-  BarChart3,
+  ArrowRightLeft,
+  Check,
   ChevronLeft,
   ChevronRight,
   Copy,
-  DollarSign,
+  CreditCard,
+  Gift,
+  Headphones,
   Link2,
+  Loader2,
   Percent,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
   Users,
   Wallet,
   type LucideIcon,
@@ -19,9 +26,22 @@ import {
 import { toast } from "sonner";
 
 import PublicLayout from "@/components/layout/PublicLayout";
-import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
+import PromotionPosterCarousel from "@/components/promotion/PromotionPosterCarousel";
+import { openPublicSupport } from "@/lib/support/open-public-support";
+import { setRouteDocumentTitle } from "@/lib/navigation/document-title";
+import { useAccountRecordIdentity } from "@/hooks/use-account-record-identity";
+import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
+import { PROMOTION_MIN_TRANSFER_AMOUNT } from "@/lib/promotion";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import glass from "@/components/account/AccountGlass.module.css";
 
 const PAGE_SIZE = 10;
@@ -44,8 +64,19 @@ type ReferralRecord = {
   status: ReferralStatus;
 };
 
+type TransferRecord = {
+  id: string;
+  transactionNo: string;
+  amount: number;
+  balanceAfter: number | null;
+  status: string;
+  remark: string;
+  createdAt: string | null;
+};
+
 type ReferralResponse = {
   inviteCode: string;
+  userEmail?: string;
   promotionEnabled?: boolean;
   commissionRate: number;
   minWithdrawAmount: number;
@@ -57,9 +88,14 @@ type ReferralResponse = {
     registrationRate: { value: string | null; error?: string };
     totalCommission: number | null;
     availableCommission: number | null;
+    pendingCommission?: number | null;
+    withdrawnCommission?: number | null;
+    qualifiedOrderCount?: number;
+    qualifiedOrderAmount?: number;
     commissionError?: string;
   };
   records: ReferralRecord[];
+  transfers?: TransferRecord[];
   recordError?: string;
   count: number;
   page: number;
@@ -68,22 +104,22 @@ type ReferralResponse = {
 };
 
 const statusLabels: Record<ReferralStatus, string> = {
-  pending: "待确认",
-  available: "已确认",
-  withdrawn: "已提现",
+  pending: "待结算",
+  available: "可转余额",
+  withdrawn: "已转余额",
   cancelled: "已取消",
 };
 
 const statusStyles: Record<ReferralStatus, string> = {
-  pending: "bg-amber-50 text-amber-700 ring-amber-100",
-  available: "bg-blue-50 text-blue-700 ring-blue-100",
-  withdrawn: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+  pending: "bg-amber-50 text-amber-700 ring-amber-200/80",
+  available: "bg-emerald-50 text-emerald-700 ring-emerald-200/80",
+  withdrawn: "bg-blue-50 text-blue-700 ring-blue-200/80",
   cancelled: "bg-slate-100 text-slate-500 ring-slate-200",
 };
 
 function formatMoney(value: number | null | undefined) {
   const amount = Number(value ?? 0);
-  return `¥ ${amount.toFixed(2)}`;
+  return `¥${amount.toFixed(2)}`;
 }
 
 function formatDateTime(value: string | null) {
@@ -96,7 +132,6 @@ function formatDateTime(value: string | null) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
     hour12: false,
   });
 }
@@ -111,77 +146,40 @@ function getErrorMessage(error: unknown, fallback = "推广数据读取失败，
   return fallback;
 }
 
-function StatCard({
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className={cn(glass.inset, "flex items-center justify-between gap-2 rounded-xl px-3.5 py-2.5")}>
+      <span className="text-xs text-slate-500">{label}</span>
+      <span className="text-sm font-bold text-slate-900">{value}</span>
+    </div>
+  );
+}
+
+function KpiCard({
   label,
   value,
+  sub,
   icon: Icon,
-  highlight,
+  highlight = false,
 }: {
   label: string;
   value: string | number;
+  sub: string;
   icon: LucideIcon;
   highlight?: boolean;
 }) {
   return (
-    <div className={cn(glass.inset, "flex min-h-[66px] flex-col justify-center rounded-xl px-3 py-2.5")}>
-      <div className="flex items-center gap-1.5 text-xs text-slate-500">
-        <Icon className="h-3.5 w-3.5 text-orange-500" />
-        <span>{label}</span>
-      </div>
-      <div className={cn("mt-1 truncate text-[17px] font-bold leading-none text-slate-950", highlight && "text-primary")} title={String(value)}>{value}</div>
-    </div>
-  );
-}
-
-function InfoTile({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className={cn(glass.inset, "flex h-[58px] flex-col justify-center rounded-xl px-3 py-2")}>
-      <div className="text-xs text-slate-500">{label}</div>
-      <div className="mt-0.5 text-[17px] font-bold leading-none text-slate-950">{value}</div>
-    </div>
-  );
-}
-
-function ReferralPagination({
-  page,
-  totalPages,
-  total,
-  onPageChange,
-}: {
-  page: number;
-  totalPages: number;
-  total: number;
-  onPageChange: (page: number) => void;
-}) {
-  const resolvedTotalPages = Math.max(1, totalPages);
-
-  return (
-    <div className="flex min-h-[36px] shrink-0 flex-wrap items-center justify-between gap-3 text-xs text-slate-500 md:text-sm">
-      <div className="whitespace-nowrap">共 {total} 条记录，每页 10 条</div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onPageChange(Math.max(1, page - 1))}
-          disabled={page <= 1}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-orange-50 text-orange-400 transition hover:bg-orange-100 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="上一页"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <span className="inline-flex h-7 min-w-7 items-center justify-center rounded-lg bg-orange-500 px-2.5 font-semibold text-white">
-          {page}
+    <div className={cn(glass.inset, "flex flex-col justify-between rounded-2xl px-4 py-3.5 transition-colors hover:bg-white/95")}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-slate-500">{label}</span>
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-100/75 text-primary">
+          <Icon className="h-3.5 w-3.5" />
         </span>
-        <button
-          type="button"
-          onClick={() => onPageChange(Math.min(resolvedTotalPages, page + 1))}
-          disabled={page >= resolvedTotalPages}
-          className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-orange-50 text-orange-400 transition hover:bg-orange-100 hover:text-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-          aria-label="下一页"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-        <span className="ml-3 whitespace-nowrap text-slate-500">第 {page} / {resolvedTotalPages} 页</span>
       </div>
+      <div className={cn("mt-2 truncate text-xl font-bold tabular-nums text-slate-950", highlight && "text-primary")}>
+        {value}
+      </div>
+      <div className="mt-1 truncate text-[11px] text-slate-400">{sub}</div>
     </div>
   );
 }
@@ -197,292 +195,803 @@ export default function PromotionPage() {
   const loading = requestLoading || loadedEpoch !== identity.epoch;
   const activeRequest = useRef<{ page: number; epoch: number; controller: AbortController; promise?: Promise<void> } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [shortLinkLoading, setShortLinkLoading] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<"" | "link" | "code">("");
 
-  const loadReferralData = useCallback(() => {
-    const prior = activeRequest.current;
-    if (prior?.page === page && prior.epoch === identity.epoch && !prior.controller.signal.aborted) return prior.promise;
-    prior?.controller.abort();
-    const request = { page, epoch: identity.epoch, controller: new AbortController(), promise: undefined as Promise<void> | undefined };
-    activeRequest.current = request;
-    const isCurrent = () => activeRequest.current === request && !request.controller.signal.aborted && accountRecordPreload.getSnapshot().epoch === request.epoch;
-    setLoading(true);
-    setError(null);
+  // Transfer-to-balance modal state
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [transferring, setTransferring] = useState(false);
 
-    request.promise = (async () => { try {
-      const params = new URLSearchParams({
-        page: String(page),
-        pageSize: String(PAGE_SIZE),
-        status: "all",
-      });
-      const response = await fetch(`/api/referrals?${params.toString()}`, { cache: "no-store", signal: request.controller.signal });
-      const result = (await response.json().catch(() => null)) as ReferralResponse | null;
-      if (!isCurrent()) return;
-      setLoadedEpoch(request.epoch);
+  // Records tabs & filters
+  const [recordTab, setRecordTab] = useState<"commissions" | "transfers">("commissions");
+  const [statusFilter, setStatusFilter] = useState<"all" | ReferralStatus>("all");
+  const [searchKeyword, setSearchKeyword] = useState("");
 
-      if (response.status === 401) {
-        setError("请先登录后查看推广数据。");
+  useEffect(() => {
+    setRouteDocumentTitle("推广中心 | Jianlian Shop");
+  }, []);
+
+  const loadPromotionData = useCallback(
+    async (targetPage = page, force = false) => {
+      const requestEpoch = identity.epoch;
+      if (identity.status === "anonymous") {
+        activeRequest.current?.controller.abort();
+        activeRequest.current = null;
         setData(null);
+        setLoadedEpoch(requestEpoch);
+        setError("请先登录账户后查看您的专属推广链接、海报与返佣记录");
+        setLoading(false);
+        return;
+      }
+      if (identity.status === "checking") {
+        setLoading(true);
         return;
       }
 
-      if (!response.ok) {
-        throw new Error(result?.error ?? "推广数据读取失败，请稍后重试");
+      if (!force && activeRequest.current?.page === targetPage && activeRequest.current.epoch === requestEpoch && activeRequest.current.promise) {
+        return activeRequest.current.promise;
       }
 
-      setData(result);
-    } catch (fetchError) {
-      if (!isCurrent()) return;
-      setLoadedEpoch(request.epoch);
-      setError(getErrorMessage(fetchError));
-      setData(null);
-    } finally {
-      if (isCurrent()) { setLoading(false); activeRequest.current = null; }
-    }
-    })();
-    return request.promise;
-  }, [page, identity.epoch]);
+      activeRequest.current?.controller.abort();
+      const controller = new AbortController();
+      const entry: { page: number; epoch: number; controller: AbortController; promise?: Promise<void> } = {
+        page: targetPage,
+        epoch: requestEpoch,
+        controller,
+      };
+      activeRequest.current = entry;
+      setLoading(true);
+      setError(null);
 
-  useEffect(() => {
-    void loadReferralData();
-    return () => { activeRequest.current?.controller.abort(); activeRequest.current = null; };
-  }, [loadReferralData]);
+      const promise = (async () => {
+        try {
+          const params = new URLSearchParams({
+            page: String(targetPage),
+            pageSize: String(PAGE_SIZE),
+          });
+          const res = await fetch(`/api/referrals?${params.toString()}`, {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          const payload = (await res.json().catch(() => null)) as ReferralResponse | null;
+          if (controller.signal.aborted || activeRequest.current !== entry) return;
+          if (res.status === 401) {
+            setData(null);
+            setLoadedEpoch(requestEpoch);
+            setError("请先登录账户后查看推广中心数据");
+            return;
+          }
+          if (!res.ok || !payload) {
+            setError(payload?.error || "推广数据读取失败，请稍后重试");
+            return;
+          }
+          setData(payload);
+          setLoadedEpoch(requestEpoch);
+          setError(null);
+        } catch (err) {
+          if (controller.signal.aborted || activeRequest.current !== entry) return;
+          setError(getErrorMessage(err));
+        } finally {
+          if (activeRequest.current === entry) {
+            setLoading(false);
+          }
+        }
+      })();
 
-  const promotionLink = useMemo(() => {
-    if (!data?.inviteCode) return "";
-    return `${getPromotionOrigin()}/r/${encodeURIComponent(data.inviteCode)}`;
-  }, [data?.inviteCode]);
-
-  const totalPages = Math.max(1, Math.ceil((data?.count ?? 0) / PAGE_SIZE));
-
-  const stats = useMemo(
-    () => [
-      { label: "访问量", value: data?.stats.visits.value ?? "—", icon: BarChart3 },
-      { label: "注册", value: data?.stats.registrations.value ?? "—", icon: Users },
-      { label: "推荐人", value: data?.stats.referrals.value ?? "—", icon: Users },
-      { label: "注册率", value: data?.stats.registrationRate.value ?? "—", icon: Percent },
-      { label: "总收入", value: data ? formatMoney(data.stats.totalCommission) : "—", icon: DollarSign },
-      { label: "可用金额", value: data ? formatMoney(data.stats.availableCommission) : "—", icon: Wallet, highlight: true },
-    ],
-    [data],
+      entry.promise = promise;
+      return promise;
+    },
+    [identity.epoch, identity.status, identity.userId, page]
   );
 
-  const copyPromotionLink = async () => {
-    if (!promotionLink) {
-      toast.error("暂无短链接，请稍后重试");
+  useEffect(() => {
+    void loadPromotionData(page);
+  }, [loadPromotionData, page]);
+
+  const inviteCode = data?.inviteCode?.trim() || "";
+  const inviteUrl = inviteCode ? `${getPromotionOrigin()}/register?invite=${encodeURIComponent(inviteCode)}` : "";
+  const totalCommission = Number(data?.stats?.totalCommission ?? 0);
+  const availableCommission = Number(data?.stats?.availableCommission ?? 0);
+  const pendingCommission = Number(data?.stats?.pendingCommission ?? 0);
+  const withdrawnCommission = Number(data?.stats?.withdrawnCommission ?? 0);
+  const minTransferAmount = Number(data?.minWithdrawAmount ?? PROMOTION_MIN_TRANSFER_AMOUNT) || PROMOTION_MIN_TRANSFER_AMOUNT;
+  const progressPct = Math.min(100, Math.round((availableCommission / Math.max(0.01, minTransferAmount)) * 100));
+  const shortfallAmount = Math.max(0, minTransferAmount - availableCommission);
+  const canTransfer = availableCommission >= minTransferAmount && availableCommission > 0;
+  const totalPages = Math.max(1, Math.ceil(Number(data?.count ?? 0) / PAGE_SIZE));
+
+  const copyText = async (value: string, key: "link" | "code", label: string) => {
+    if (!value) {
+      toast.error("请先登录后获取专属邀请信息");
       return;
     }
-
-    setShortLinkLoading(true);
-
     try {
-      await navigator.clipboard.writeText(promotionLink);
-      toast.success("短链接已复制");
-    } catch (copyError) {
-      console.error("[Promotion] Failed to copy short link", copyError);
-      toast.error("短链接复制失败，请手动复制");
-    } finally {
-      setShortLinkLoading(false);
+      await navigator.clipboard.writeText(value);
+      setCopiedKey(key);
+      toast.success(`${label}已复制`);
+      window.setTimeout(() => setCopiedKey((curr) => (curr === key ? "" : curr)), 2000);
+    } catch {
+      toast.error("复制失败，请手动选中复制");
     }
   };
 
-  if (error === "请先登录后查看推广数据。") {
-    return (
-      <PublicLayout contentClassName="mx-auto max-w-none px-4 py-3 md:px-5">
-        <div data-testid="promotion-glass-login" className={cn(glass.surface, glass.login, "mx-auto w-full max-w-[1540px] text-center")}>
-          <span aria-hidden="true" className={cn(glass.icon, "mb-5 h-16 w-16")}><Users className="h-7 w-7" strokeWidth={1.6} /></span>
-          <h1 className="text-2xl font-bold text-slate-950">推广赚钱</h1>
-          <p className="mt-3 text-slate-500">登录后可查看推广链接、佣金统计和推广记录。</p>
-          <Link
-            href="/login?redirect=/promotion"
-            className="mt-6 inline-flex h-11 items-center justify-center rounded-xl bg-orange-500 px-6 font-semibold text-white transition hover:bg-orange-600"
-          >
-            去登录
-          </Link>
-        </div>
-      </PublicLayout>
+  const handleTransferToBalance = async () => {
+    if (transferring || !canTransfer) return;
+    setTransferring(true);
+    try {
+      const res = await fetch("/api/referrals/transfer-to-balance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId: `promo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        }),
+      });
+      const payload = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: string;
+        result?: { transferred_amount?: number; balance_after?: number };
+      } | null;
+
+      if (!res.ok || !payload?.ok) {
+        toast.error(payload?.error || "转入余额失败，请稍后重试");
+        return;
+      }
+
+      const transferred = Number(payload.result?.transferred_amount ?? availableCommission);
+      toast.success(`已成功转入 ¥${transferred.toFixed(2)} 至您的本站账户余额`);
+      setTransferModalOpen(false);
+      await loadPromotionData(1, true);
+    } catch {
+      toast.error("网络异常，转入余额失败，请稍后重试");
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  const filteredRecords = useMemo(() => {
+    const list = data?.records ?? [];
+    const q = searchKeyword.trim().toLowerCase();
+    return list.filter((row) => {
+      if (statusFilter !== "all" && row.status !== statusFilter) return false;
+      if (!q) return true;
+      return (
+        row.referredUser.toLowerCase().includes(q) ||
+        row.orderNo.toLowerCase().includes(q) ||
+        statusLabels[row.status].includes(q)
+      );
+    });
+  }, [data?.records, searchKeyword, statusFilter]);
+
+  const filteredTransfers = useMemo(() => {
+    const list = data?.transfers ?? [];
+    const q = searchKeyword.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (row) =>
+        row.transactionNo.toLowerCase().includes(q) ||
+        row.remark.toLowerCase().includes(q)
     );
-  }
+  }, [data?.transfers, searchKeyword]);
 
   return (
-    <PublicLayout mobileNavigationUntilLg contentClassName="mx-auto max-w-none px-4 py-3 md:px-5">
-      <div data-testid="promotion-glass-page" className={cn(`mx-auto flex w-full min-w-0 max-w-[1540px] flex-col gap-3.5 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`, isMobile && "!h-auto !min-h-0 !overflow-visible")}>
-        {error && (
-          <div className="flex h-10 shrink-0 items-center rounded-xl border border-red-100 bg-red-50 px-4 text-sm text-red-700">
-            <span className="min-w-0 flex-1 truncate">{error}</span>
-            <button type="button" onClick={() => void loadReferralData()} className="ml-3 shrink-0 font-semibold underline">
-              重新加载
-            </button>
-          </div>
+    <PublicLayout
+      mobileNavigationUntilLg
+      contentClassName={cn("mx-auto w-full max-w-[1540px] px-4 py-3 md:px-6", isMobile && "!px-3 !py-2.5")}
+    >
+      <div
+        data-testid="promotion-center-page"
+        className={cn(
+          "flex flex-col gap-4 overflow-y-auto pb-8 pr-0.5 sidebar-scroll",
+          publicMainPanelHeightClassName,
+          isMobile && "!h-auto !overflow-visible"
         )}
-
-        {data?.promotionEnabled === false && (
-          <div className="flex h-10 shrink-0 items-center rounded-xl border border-amber-100 bg-amber-50 px-4 text-sm text-amber-700">
-            <span className="min-w-0 truncate">推广功能尚未完成数据库初始化，请管理员执行推广系统 migration。</span>
-          </div>
-        )}
-
-        <div className="grid min-w-0 shrink-0 gap-3.5 xl:grid-cols-[1.08fr_1fr]">
-          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]")}>
-            <div className="flex items-start justify-between gap-4">
+      >
+        {/* 1. 顶部横幅与核心佣金 KPI */}
+        <section className={cn(glass.surface, "flex flex-col gap-4 rounded-2xl p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between")}>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-sm">
+                <Gift className="h-5 w-5" />
+              </span>
               <div>
-                <h1 className="text-[22px] font-bold leading-tight text-slate-950">推广链接</h1>
-                <p className="mt-1 text-sm text-slate-500">复制链接发送给好友，注册后自动绑定推广关系。</p>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg font-bold text-slate-950 sm:text-xl">推广中心</h1>
+                  <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                    3% 订单返佣
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
+                  复制专属链接或海报邀请好友注册，好友购买「数字 / 社媒账号」或「国际 SIM 卡（不含 SIM 卡服务）」即享 3% 返佣，返佣仅支持转入本站账户余额。
+                </p>
               </div>
-              <div className={cn(glass.icon, "h-11 w-11")}>
-                <Link2 className="h-5 w-5" />
-              </div>
             </div>
-
-            <div className={cn(glass.inset, "mt-4 flex h-12 items-center gap-3 rounded-xl p-2")}>
-              <div className="min-w-0 flex-1 truncate text-sm text-slate-700" title={promotionLink || "推广返佣活动筹备中，敬请期待"}>
-                {loading && !promotionLink ? "正在读取推广状态..." : promotionLink || "推广返佣活动筹备中，敬请期待"}
-              </div>
-              <button
-                type="button"
-                onClick={copyPromotionLink}
-                disabled={!promotionLink || shortLinkLoading}
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-orange-500 text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
-                aria-label="复制短链接"
-              >
-                <Copy className="h-4 w-4" />
-              </button>
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-2.5 md:grid-cols-[1fr_1fr_1.15fr]">
-              <InfoTile label="充值提佣倍率" value="暂未开放" />
-              <InfoTile
-                label="最低提现额"
-                value={loading && !data ? "—" : formatMoney(data?.minWithdrawAmount ?? 100)}
-              />
-              <button
-                type="button"
-                onClick={copyPromotionLink}
-                className="col-span-2 inline-flex h-[58px] items-center justify-center rounded-xl bg-primary px-5 text-base font-semibold text-white shadow-sm transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-1"
-                disabled={loading || shortLinkLoading || !promotionLink}
-              >
-                {shortLinkLoading ? "复制中..." : "生成短链接"}
-              </button>
-            </div>
-          </section>
-
-          <section className={cn(glass.surface, "flex min-w-0 flex-col p-5 xl:min-h-[226px]")}>
-            <div className="mb-2 flex items-start justify-between gap-4">
-              <div>
-                <h2 className="text-[22px] font-bold leading-tight text-slate-950">推广数据</h2>
-                <p className="mt-1 text-sm text-slate-500">推广访问、注册和佣金收益统计。</p>
-              </div>
-              <button
-                type="button"
-                disabled
-                className="inline-flex h-9 shrink-0 items-center justify-center rounded-lg bg-orange-500 px-5 font-semibold text-white opacity-60"
-                title="提现功能暂未开放"
-              >
-                提现
-              </button>
-            </div>
-
-            <div className="mt-2 grid min-w-0 grid-cols-2 gap-2.5 xl:grid-cols-3">
-              {stats.map((item) => (
-                <StatCard key={item.label} {...item} />
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <section className={cn(glass.surface, "flex min-h-[360px] min-w-0 flex-1 flex-col overflow-hidden p-5 md:min-h-0")}>
-          <div className="mb-2.5 shrink-0">
-            <h2 className="text-[22px] font-bold leading-tight text-slate-950">推广记录</h2>
-            <p className="mt-1 text-sm text-slate-500">推广用户后，用户每一次充值提成记录都会在这里展示。</p>
           </div>
 
-          {data?.recordError && (
-            <div className="mb-2 flex h-10 shrink-0 items-center rounded-xl border border-amber-100 bg-amber-50 px-4 text-sm text-amber-700">
-              <span className="min-w-0 truncate">{data.recordError}</span>
+          <div className="grid shrink-0 grid-cols-2 gap-2.5 sm:flex sm:items-stretch">
+            <div className={cn(glass.inset, "flex min-w-[144px] flex-col justify-center rounded-xl px-4 py-2.5")}>
+              <span className="text-[11px] font-medium text-slate-500">累计佣金</span>
+              <span className="mt-1 text-lg font-bold tabular-nums text-slate-950">
+                {loading ? "--" : formatMoney(totalCommission)}
+              </span>
             </div>
-          )}
 
-          <div data-empty={!data?.records.length ? "true" : undefined} className={cn(glass.table, "min-h-0 flex-1 overflow-hidden rounded-2xl")}>
-            <div className="h-full overflow-auto">
-              {data?.records.length ? (
-                <div className={cn("space-y-2.5 p-3 md:hidden", isMobile && "!block")}>
-                  {data.records.map((record) => (
-                    <div key={record.id} className="rounded-xl border border-orange-100/80 bg-white p-3.5 text-xs shadow-sm">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-slate-900">{record.referredUser}</span>
-                        <span className={cn("inline-flex shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1", statusStyles[record.status])}>
-                          {statusLabels[record.status]}
-                        </span>
+            <div className={cn(glass.inset, "flex min-w-[208px] items-center justify-between gap-3 rounded-xl px-4 py-2.5")}>
+              <div className="min-w-0">
+                <span className="block text-[11px] font-medium text-slate-500">可转余额</span>
+                <span className="mt-1 block text-lg font-bold tabular-nums text-primary">
+                  {loading ? "--" : formatMoney(availableCommission)}
+                </span>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setTransferModalOpen(true)}
+                disabled={identity.status !== "signed-in"}
+                className="h-9 shrink-0 rounded-xl px-3.5 text-xs font-semibold shadow-sm"
+              >
+                <ArrowRightLeft className="mr-1.5 h-3.5 w-3.5" />
+                转入余额
+              </Button>
+            </div>
+          </div>
+        </section>
+
+        {/* 未登录提示横幅 */}
+        {identity.status === "anonymous" ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-200/80 bg-orange-50/85 px-4 py-3 text-sm text-slate-700 shadow-xs">
+            <div className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 shrink-0 text-primary" />
+              <span>登录后即可生成您的固定专属邀请码、动态二维码海报并查看实时返佣明细。</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-white text-xs">
+                <Link href="/register?redirect=/promotion">立即注册</Link>
+              </Button>
+              <Button asChild size="sm" className="h-8 rounded-lg text-xs">
+                <Link href="/login?redirect=/promotion">立即登录</Link>
+              </Button>
+            </div>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs text-red-700">
+            <span>{error}</span>
+            <Button size="sm" variant="outline" className="h-7 bg-white text-xs" onClick={() => void loadPromotionData(page, true)}>
+              重试
+            </Button>
+          </div>
+        ) : null}
+
+        {/* 2. 上半双栏：左侧「专属推广入口 + 动态二维码海报」 | 右侧「佣金结算 + 返佣规则」 */}
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)]">
+          {/* 左侧大卡：专属推广入口 */}
+          <div className={cn(glass.surface, "flex flex-col justify-between rounded-2xl p-4 sm:p-5")}>
+            <div className="mb-4 flex items-center justify-between border-b border-orange-100/80 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100/75 text-primary">
+                  <Link2 className="h-4 w-4" />
+                </span>
+                <div>
+                  <h2 className="text-base font-bold text-slate-950">专属推广入口</h2>
+                  <p className="text-[11px] text-slate-500">每个账户固定专属邀请码，海报二维码随链接自动生成</p>
+                </div>
+              </div>
+              {inviteCode ? (
+                <button
+                  type="button"
+                  onClick={() => void copyText(inviteCode, "code", "专属邀请码")}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50/90 px-3 py-1 text-xs font-semibold text-primary transition hover:bg-orange-100"
+                >
+                  <span>邀请码：{inviteCode}</span>
+                  {copiedKey === "code" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_292px] lg:items-center">
+              {/* 左侧：专属邀请链接 + 3小指标 + 3步指引 */}
+              <div className="flex h-full flex-col justify-between gap-4">
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-700">
+                    <span>专属邀请链接</span>
+                    <span className="font-normal text-slate-400">永久绑定推荐关系</span>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-xl border border-orange-200/80 bg-white/90 p-1.5 pl-3 shadow-2xs">
+                    <div className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700" title={inviteUrl || "登录后生成专属推广链接"}>
+                      {inviteUrl || "登录后自动生成您的专属推广链接"}
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => void copyText(inviteUrl, "link", "专属邀请链接")}
+                      disabled={!inviteUrl}
+                      className="h-8 shrink-0 rounded-lg px-3 text-xs font-semibold"
+                    >
+                      {copiedKey === "link" ? (
+                        <>
+                          <Check className="mr-1 h-3.5 w-3.5" />
+                          已复制
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="mr-1 h-3.5 w-3.5" />
+                          复制链接
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 3 Mini Stat Tiles */}
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className={cn(glass.inset, "rounded-xl px-3 py-2.5 text-center")}>
+                    <div className="text-[11px] text-slate-500">邀请注册</div>
+                    <div className="mt-1 text-lg font-bold tabular-nums text-slate-950">
+                      {loading ? "--" : (data?.stats?.registrations?.value ?? 0)}
+                    </div>
+                  </div>
+                  <div className={cn(glass.inset, "rounded-xl px-3 py-2.5 text-center")}>
+                    <div className="text-[11px] text-slate-500">返佣订单</div>
+                    <div className="mt-1 text-lg font-bold tabular-nums text-slate-950">
+                      {loading ? "--" : (data?.stats?.qualifiedOrderCount ?? 0)}
+                    </div>
+                  </div>
+                  <div className={cn(glass.inset, "rounded-xl px-3 py-2.5 text-center")}>
+                    <div className="text-[11px] text-slate-500">返佣比例</div>
+                    <div className="mt-1 text-lg font-bold tabular-nums text-primary">3%</div>
+                  </div>
+                </div>
+
+                {/* 3-Step Guide */}
+                <div className="space-y-2.5 rounded-2xl border border-orange-100/80 bg-orange-50/45 p-3.5">
+                  {[
+                    { step: "1", title: "复制链接或下载右侧专属海报", desc: "4 套高清海报均自动嵌入您的专属邀请二维码" },
+                    { step: "2", title: "好友通过链接或扫码注册", desc: "注册即永久绑定您的推广关系，无需重复填写" },
+                    { step: "3", title: "好友购买指定分类商品享 3% 返佣", desc: "支持「数字 / 社媒账号」与「国际 SIM 卡（除 SIM 卡服务）」" },
+                  ].map((item) => (
+                    <div key={item.step} className="flex items-start gap-2.5">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">
+                        {item.step}
+                      </span>
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-slate-800">{item.title}</div>
+                        <div className="text-[11px] text-slate-500">{item.desc}</div>
                       </div>
-                      <div className="mt-2.5 grid grid-cols-2 gap-2 text-slate-500">
-                        <div>充值金额：<span className="font-medium tabular-nums text-slate-800">{formatMoney(record.orderAmount)}</span></div>
-                        <div>佣金变动：<span className="font-semibold tabular-nums text-orange-600">{formatMoney(record.commissionAmount)}</span></div>
-                      </div>
-                      <div className="mt-1.5 text-[11px] tabular-nums text-slate-400">支付时间：{formatDateTime(record.paidAt)}</div>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <div className={cn("px-4 py-10 text-center md:hidden", isMobile && "!block")}>
-                  <div className="mx-auto flex min-h-[220px] max-w-sm flex-col items-center justify-center">
-                    <div className={cn(glass.icon, "h-14 w-14")}>
-                      <Users className="h-6 w-6" />
-                    </div>
-                    <div className="mt-3 text-base font-semibold text-slate-900">暂无真实推广记录</div>
-                    <p className="mt-1 text-sm text-slate-500">推荐用户完成有效订单后，推广记录会显示在这里。</p>
+              </div>
+
+              {/* 右侧：4 张动态二维码推广海报轮播 */}
+              <div className="rounded-2xl border border-orange-100/90 bg-white/75 p-3.5 shadow-2xs">
+                <PromotionPosterCarousel inviteUrl={inviteUrl} inviteCode={inviteCode} />
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between border-t border-orange-100/80 pt-3">
+              <span className="text-xs text-slate-500">大流量渠道或需定制品牌推广素材？</span>
+              <button
+                type="button"
+                onClick={() => openPublicSupport()}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-orange-50"
+              >
+                <Headphones className="h-3.5 w-3.5" />
+                <span>如需推广素材请联系客服</span>
+              </button>
+            </div>
+          </div>
+
+          {/* 右列：佣金结算 + 返佣规则 */}
+          <div className="flex flex-col gap-4">
+            {/* 佣金结算 */}
+            <div className={cn(glass.surface, "rounded-2xl p-4 sm:p-5")}>
+              <div className="mb-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100/75 text-primary">
+                    <Wallet className="h-4 w-4" />
+                  </span>
+                  <h2 className="text-base font-bold text-slate-950">佣金结算</h2>
+                </div>
+                <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200/70">
+                  仅转入本站余额
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className={cn(glass.inset, "rounded-xl px-3 py-2.5")}>
+                  <div className="text-[11px] text-slate-500">待结算</div>
+                  <div className="mt-1 text-base font-bold tabular-nums text-slate-900">
+                    {loading ? "--" : formatMoney(pendingCommission)}
                   </div>
                 </div>
-              )}
-              <table className={cn("hidden w-full min-w-[920px] border-collapse text-sm md:table", isMobile && "!hidden")}>
-                <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
-                  <tr>
-                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">用户名</th>
-                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">支付时间</th>
-                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">充值金额</th>
-                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">佣金变动</th>
-                    <th className="h-10 whitespace-nowrap border-b border-orange-100 px-4 text-center font-semibold">付款状态</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data?.records.length ? (
-                    data.records.map((record) => (
-                      <tr key={record.id} className="h-11 text-slate-700 transition hover:bg-orange-50/40">
-                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center font-medium text-slate-900">{record.referredUser}</td>
-                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center tabular-nums">{formatDateTime(record.paidAt)}</td>
-                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center tabular-nums">{formatMoney(record.orderAmount)}</td>
-                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center font-semibold tabular-nums text-orange-600">
-                          {formatMoney(record.commissionAmount)}
-                        </td>
-                        <td className="whitespace-nowrap border-b border-orange-50 px-4 text-center">
-                          <span className={cn("inline-flex rounded-full px-3 py-1 text-xs font-semibold ring-1", statusStyles[record.status])}>
-                            {statusLabels[record.status]}
-                          </span>
+                <div className={cn(glass.inset, "rounded-xl px-3 py-2.5")}>
+                  <div className="text-[11px] text-slate-500">累计已转入</div>
+                  <div className="mt-1 text-base font-bold tabular-nums text-slate-900">
+                    {loading ? "--" : formatMoney(withdrawnCommission)}
+                  </div>
+                </div>
+                <div className={cn(glass.inset, "rounded-xl border-orange-200/80 bg-orange-50/55 px-3 py-2.5")}>
+                  <div className="text-[11px] font-medium text-primary">可转余额</div>
+                  <div className="mt-1 text-base font-bold tabular-nums text-primary">
+                    {loading ? "--" : formatMoney(availableCommission)}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <InfoTile label="商品返佣比例" value="3%" />
+                <InfoTile label="充值提佣倍率" value="暂未开放" />
+              </div>
+
+              {/* 最低转余额进度条 */}
+              <div className="mt-3.5 rounded-xl border border-orange-100/90 bg-white/80 p-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-slate-600">最低转入余额门槛进度</span>
+                  <span className="font-semibold tabular-nums text-primary">
+                    {formatMoney(availableCommission)} / {formatMoney(minTransferAmount)} ({progressPct}%)
+                  </span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-orange-100">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#ea580c] to-[#fb923c] transition-all duration-500"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 返佣规则 */}
+            <div className={cn(glass.surface, "flex-1 rounded-2xl p-4 sm:p-5")}>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100/75 text-primary">
+                  <ShieldCheck className="h-4 w-4" />
+                </span>
+                <h2 className="text-base font-bold text-slate-950">返佣规则</h2>
+              </div>
+              <ol className="space-y-2 text-xs leading-5 text-slate-600">
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[10px] font-bold text-primary">1</span>
+                  <span>每个注册账户拥有唯一固定专属邀请码，好友通过您的链接或海报二维码注册后永久绑定推广关系。</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[10px] font-bold text-primary">2</span>
+                  <span>返佣比例固定为 <strong className="text-slate-900">3.00%</strong>，仅针对 <strong className="text-slate-900">「数字 / 社媒账号」</strong> 与 <strong className="text-slate-900">「国际 SIM 卡（除 SIM 卡服务外）」</strong> 分类商品的有效支付订单。</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[10px] font-bold text-primary">3</span>
+                  <span>AI 会员充值、礼品卡 / 充值卡、账号充值及 SIM 卡服务不计入推广返佣。</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[10px] font-bold text-primary">4</span>
+                  <span>推广返佣<strong className="text-slate-900">仅支持转入本站账户余额</strong>（满 {formatMoney(minTransferAmount)} 即可一键转入，即时到账，可用于站内任意商品消费），不支持外部提现。</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[10px] font-bold text-primary">5</span>
+                  <span>若推广订单发生退款、取消或存在自邀小号刷佣行为，系统将自动撤销对应返佣。</span>
+                </li>
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        {/* 3. 全宽推广数据 6 宫格 */}
+        <section className={cn(glass.surface, "rounded-2xl p-4 sm:p-5")}>
+          <div className="mb-3.5 flex items-center justify-between">
+            <h2 className="text-base font-bold text-slate-950">推广数据</h2>
+            <span className="text-xs text-slate-400">数据随订单支付与结算自动更新</span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <KpiCard
+              label="邀请注册人数"
+              value={loading ? "--" : (data?.stats?.registrations?.value ?? 0)}
+              sub="已绑定推广关系好友"
+              icon={Users}
+            />
+            <KpiCard
+              label="有效返佣订单"
+              value={loading ? "--" : (data?.stats?.qualifiedOrderCount ?? 0)}
+              sub="数字/社媒账号及国际 SIM 卡"
+              icon={ShoppingBag}
+            />
+            <KpiCard
+              label="有效推广成交额"
+              value={loading ? "--" : formatMoney(data?.stats?.qualifiedOrderAmount ?? 0)}
+              sub="符合返佣分类商品实付金额"
+              icon={CreditCard}
+            />
+            <KpiCard
+              label="当前返佣比例"
+              value="3.00%"
+              sub="指定商品分类固定返佣"
+              icon={Percent}
+            />
+            <KpiCard
+              label="累计已获佣金"
+              value={loading ? "--" : formatMoney(totalCommission)}
+              sub="含可转与已转入余额部分"
+              icon={Gift}
+              highlight
+            />
+            <KpiCard
+              label="当前可转余额"
+              value={loading ? "--" : formatMoney(availableCommission)}
+              sub="满额可一键转入本站余额"
+              icon={Wallet}
+              highlight
+            />
+          </div>
+        </section>
+
+        {/* 4. 底部全宽记录卡片：返佣记录 / 转入余额记录 */}
+        <section className={cn(glass.surface, "rounded-2xl p-4 sm:p-5")}>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/80 pb-3.5">
+            <div className="flex items-center gap-2">
+              <div className="inline-flex rounded-xl border border-orange-200/70 bg-orange-50/70 p-1">
+                <button
+                  type="button"
+                  onClick={() => setRecordTab("commissions")}
+                  className={cn(
+                    "rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+                    recordTab === "commissions"
+                      ? "bg-white text-primary shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  返佣记录
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRecordTab("transfers")}
+                  className={cn(
+                    "rounded-lg px-3.5 py-1.5 text-xs font-semibold transition",
+                    recordTab === "transfers"
+                      ? "bg-white text-primary shadow-xs"
+                      : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  转入余额记录
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  placeholder={recordTab === "commissions" ? "搜索好友 / 订单号 / 状态" : "搜索流水号 / 备注"}
+                  className="h-8 w-52 rounded-lg border border-orange-200/80 bg-white/90 pl-8 pr-2.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-primary focus:outline-none"
+                />
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void loadPromotionData(page, true)}
+                disabled={loading}
+                className="h-8 rounded-lg border-orange-200/80 bg-white px-2.5 text-xs"
+              >
+                <RefreshCw className={cn("mr-1 h-3.5 w-3.5", loading && "animate-spin")} />
+                刷新记录
+              </Button>
+            </div>
+          </div>
+
+          {recordTab === "commissions" ? (
+            <>
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                {(["all", "available", "pending", "withdrawn", "cancelled"] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setStatusFilter(key)}
+                    className={cn(
+                      "rounded-full px-3 py-1 text-xs font-medium transition",
+                      statusFilter === key
+                        ? "bg-primary text-white shadow-xs"
+                        : "bg-white/80 text-slate-600 ring-1 ring-inset ring-orange-100 hover:bg-orange-50"
+                    )}
+                  >
+                    {key === "all" ? "全部" : statusLabels[key]}
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[680px] text-left text-xs sm:text-sm">
+                  <thead>
+                    <tr className="border-b border-orange-100/80 text-xs text-slate-500">
+                      <th className="py-2.5 pr-3 font-semibold">被邀请好友</th>
+                      <th className="py-2.5 px-3 font-semibold">订单编号</th>
+                      <th className="py-2.5 px-3 text-right font-semibold">有效金额</th>
+                      <th className="py-2.5 px-3 text-center font-semibold">佣金率</th>
+                      <th className="py-2.5 px-3 text-right font-semibold">返佣金额</th>
+                      <th className="py-2.5 px-3 text-center font-semibold">状态</th>
+                      <th className="py-2.5 pl-3 text-right font-semibold">时间</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-orange-100/60">
+                    {loading ? (
+                      <tr>
+                        <td colSpan={7} className="py-10 text-center text-xs text-slate-400">
+                          正在读取返佣记录...
                         </td>
                       </tr>
-                    ))
-                  ) : (
+                    ) : filteredRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-10 text-center text-xs text-slate-400">
+                          暂无匹配返佣记录，分享您的专属链接或海报给好友即可开始赚取 3% 返佣
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredRecords.map((row) => (
+                        <tr key={row.id} className="transition-colors hover:bg-orange-50/40">
+                          <td className="py-3 pr-3 font-medium text-slate-800">{row.referredUser}</td>
+                          <td className="py-3 px-3 font-mono text-xs text-slate-600">{row.orderNo}</td>
+                          <td className="py-3 px-3 text-right tabular-nums text-slate-700">{formatMoney(row.orderAmount)}</td>
+                          <td className="py-3 px-3 text-center tabular-nums text-slate-600">{(row.commissionRate * 100).toFixed(0)}%</td>
+                          <td className="py-3 px-3 text-right font-semibold tabular-nums text-primary">+{formatMoney(row.commissionAmount)}</td>
+                          <td className="py-3 px-3 text-center">
+                            <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset", statusStyles[row.status])}>
+                              {statusLabels[row.status]}
+                            </span>
+                          </td>
+                          <td className="py-3 pl-3 text-right text-xs tabular-nums text-slate-500">{formatDateTime(row.paidAt)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-orange-100/80 pt-3 text-xs text-slate-500">
+                <span>共 {data?.count ?? 0} 条返佣记录</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-orange-100 bg-white text-slate-600 hover:bg-orange-50 disabled:opacity-40"
+                    aria-label="上一页"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="px-2 font-semibold text-slate-700">
+                    {page} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-orange-100 bg-white text-slate-600 hover:bg-orange-50 disabled:opacity-40"
+                    aria-label="下一页"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-xs sm:text-sm">
+                <thead>
+                  <tr className="border-b border-orange-100/80 text-xs text-slate-500">
+                    <th className="py-2.5 pr-3 font-semibold">流水编号</th>
+                    <th className="py-2.5 px-3 font-semibold">说明</th>
+                    <th className="py-2.5 px-3 text-right font-semibold">转入金额</th>
+                    <th className="py-2.5 px-3 text-right font-semibold">转入后余额</th>
+                    <th className="py-2.5 px-3 text-center font-semibold">状态</th>
+                    <th className="py-2.5 pl-3 text-right font-semibold">时间</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-orange-100/60">
+                  {loading ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-10 text-center">
-                        <div className="mx-auto flex min-h-[260px] max-w-sm flex-col items-center justify-center">
-                          <div className={cn(glass.icon, "h-14 w-14")}>
-                            <Users className="h-6 w-6" />
-                          </div>
-                          <div className="mt-3 text-base font-semibold text-slate-900">暂无真实推广记录</div>
-                          <p className="mt-1 text-sm text-slate-500">推荐用户完成有效订单后，推广记录会显示在这里。</p>
-                        </div>
+                      <td colSpan={6} className="py-10 text-center text-xs text-slate-400">
+                        正在读取转入余额记录...
                       </td>
                     </tr>
+                  ) : filteredTransfers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-10 text-center text-xs text-slate-400">
+                        暂无转入余额记录
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTransfers.map((row) => (
+                      <tr key={row.id} className="transition-colors hover:bg-orange-50/40">
+                        <td className="py-3 pr-3 font-mono text-xs text-slate-600">{row.transactionNo}</td>
+                        <td className="py-3 px-3 text-slate-700">{row.remark}</td>
+                        <td className="py-3 px-3 text-right font-semibold tabular-nums text-emerald-700">+{formatMoney(row.amount)}</td>
+                        <td className="py-3 px-3 text-right tabular-nums text-slate-700">
+                          {row.balanceAfter !== null ? formatMoney(row.balanceAfter) : "-"}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200/80">
+                            已转入余额
+                          </span>
+                        </td>
+                        <td className="py-3 pl-3 text-right text-xs tabular-nums text-slate-500">{formatDateTime(row.createdAt)}</td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
-          </div>
-
-          <div className="mt-2.5 shrink-0">
-            <ReferralPagination page={page} totalPages={totalPages} total={data?.count ?? 0} onPageChange={setPage} />
-          </div>
+          )}
         </section>
       </div>
+
+      {/* 转入本站账户余额弹窗 */}
+      <Dialog open={transferModalOpen} onOpenChange={setTransferModalOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100 text-primary">
+                <ArrowRightLeft className="h-4 w-4" />
+              </span>
+              <span>佣金转入本站余额</span>
+            </DialogTitle>
+            <DialogDescription>
+              返佣仅支持转入您的简联商城账户余额，即时到账且无手续费。
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3.5 py-1">
+            <div className="flex items-center justify-between rounded-xl border border-orange-200/80 bg-orange-50/60 px-4 py-3.5">
+              <div>
+                <div className="text-xs text-slate-500">当前可转入佣金</div>
+                <div className="mt-1 text-2xl font-bold tabular-nums text-primary">
+                  {formatMoney(availableCommission)}
+                </div>
+              </div>
+              <Wallet className="h-7 w-7 text-primary/70" />
+            </div>
+
+            <div className="rounded-xl border border-slate-200/80 bg-slate-50/70 px-3.5 py-2.5 text-xs">
+              <div className="flex items-center justify-between py-1">
+                <span className="text-slate-500">到账账户</span>
+                <span className="font-semibold text-slate-900">{data?.userEmail || "当前登录账户"}</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-200/70 py-1">
+                <span className="text-slate-500">到账方式</span>
+                <span className="font-semibold text-emerald-700">本站账户余额（实时到账）</span>
+              </div>
+              <div className="flex items-center justify-between border-t border-slate-200/70 py-1">
+                <span className="text-slate-500">最低转入门槛</span>
+                <span className="font-semibold tabular-nums text-slate-900">{formatMoney(minTransferAmount)}</span>
+              </div>
+            </div>
+
+            {!canTransfer ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-xs leading-5 text-amber-800">
+                当前可转佣金尚未达到最低转入门槛，还差 <strong>{formatMoney(shortfallAmount)}</strong>。累计满 {formatMoney(minTransferAmount)} 后即可一键转入本站余额。
+              </div>
+            ) : null}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => setTransferModalOpen(false)} disabled={transferring}>
+                取消
+              </Button>
+              <Button
+                type="button"
+                onClick={() => void handleTransferToBalance()}
+                disabled={!canTransfer || transferring}
+              >
+                {transferring ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    正在转入...
+                  </>
+                ) : canTransfer ? (
+                  `确认全部转入 (${formatMoney(availableCommission)})`
+                ) : (
+                  "未达到最低转入门槛"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PublicLayout>
   );
 }

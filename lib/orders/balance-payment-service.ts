@@ -9,6 +9,7 @@ import {
 } from "@/lib/delivery/delivery-service";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import { runPostPaymentDelivery, type PostPaymentDeliveryStage } from "@/lib/orders/post-payment-delivery.mjs";
+import { syncOrderReferralCommissionSafe } from "@/lib/promotion/referral-commission-service";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 type BalancePaymentRow = {
@@ -63,6 +64,7 @@ export async function payOrderWithBalance(
   } catch {
     // Logging callbacks are best-effort and must not change the paid result.
   }
+  void syncOrderReferralCommissionSafe(service, result.orderId);
   const delivery = await runPostPaymentDelivery({
     payment: result,
     deliver: () => deliverDigitalOrder(service, result.orderId, "balance_payment", input.onLifecycleStage),

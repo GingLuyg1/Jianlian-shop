@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/delivery-service";
+import { syncOrderReferralCommissionSafe } from "@/lib/promotion/referral-commission-service";
 import type { PaymentCurrency } from "@/lib/payments/channel-types";
 import { getSafeErrorMessage } from "@/lib/payments/payment-errors";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
@@ -46,6 +47,7 @@ export async function completePayment(
 
   const result = normalizeResult(data);
   if (result.businessType === "order") {
+    void syncOrderReferralCommissionSafe(service, result.businessId);
     try {
       await deliverDigitalOrder(service, result.businessId, input.source);
     } catch (deliveryError) {

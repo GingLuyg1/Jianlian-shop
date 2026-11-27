@@ -109,8 +109,9 @@ test("admin categories full-count fetch, two-line modal hint, centered icon, sha
   assert.match(ripple, /const DURATION_MS = 2800/);
   assert.match(ripple, /const BLUR_PX = 40/);
   assert.match(ripple, /const WAVE_RINGS = 2/);
-  assert.ok((authScreen.match(/triggerWaterRippleTransition\(/g) ?? []).length >= 4);
-  assert.ok((topBar.match(/triggerWaterRippleTransition\(/g) ?? []).length >= 2);
+  assert.equal((authScreen.match(/triggerWaterRippleTransition\(/g) ?? []).length, 2);
+  assert.match(authScreen, /triggerSuccessWithButtonRipple/);
+  assert.doesNotMatch(topBar, /triggerWaterRippleTransition\(/);
 
   const securityPage = file("app/account/security/page.tsx");
   assert.match(securityPage, /data-account-page="\/account\/security"[\s\S]*md:h-full md:overflow-hidden/);

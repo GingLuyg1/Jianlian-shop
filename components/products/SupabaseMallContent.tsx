@@ -928,7 +928,12 @@ function SupabaseMallContentInner({
           routePendingTarget={routePending?.target ?? ""}
           productListTopRef={productListTopRef}
           showStock={settings.show_stock}
-          hideSales={hideSales}
+          hideSales={
+            hideSales ||
+            /sim\s*卡服务/i.test(resolvedCategory?.name ?? "") ||
+            (productCategory === "sim-cards" && String(resolvedCategory?.slug ?? "").toLowerCase() === "balance") ||
+            resolvedCategory?.id === "94319387-0291-4e58-b9fd-e25fbdfbfaf1"
+          }
           total={effectiveSubcategory ? total || filteredProducts.length : total}
           onDraftSearchChange={setDraftSearch}
           onResetFilters={resetFilters}

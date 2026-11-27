@@ -69,11 +69,14 @@ function isGiftCardPrimaryCategory(category: PublicCategory | null | undefined) 
 }
 
 function isGiftCardProductRow(product: Product) {
+  const categorySlug = String(product.metadata?.categorySlug ?? "").trim().toLowerCase();
+  const categoryId = String(product.metadata?.categoryId ?? "").trim();
+  const labelAndSlug = `${product.categoryLabel ?? ""} ${categorySlug}`;
   return (
     product.category === "gift-cards" ||
-    /礼品卡|充值卡|话费充值|gift-?cards?|recharge-?cards?/i.test(
-      `${product.categoryLabel ?? ""} ${String(product.metadata?.categorySlug ?? "")}`
-    )
+    categoryId === "94319387-0291-4e58-b9fd-e25fbdfbfaf1" ||
+    categorySlug === "balance" ||
+    /礼品卡|充值卡|话费充值|sim\s*卡服务|gift-?cards?|recharge-?cards?/i.test(labelAndSlug)
   );
 }
 

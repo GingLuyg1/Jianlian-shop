@@ -176,18 +176,34 @@ export async function GET(request: Request) {
       commissionQuery = commissionQuery.eq("status", safeStatus);
     }
 
-    // Two independent reads per wave; no extra queries or promotion writes.
-    const [commissionResult, statsResult] = await Promise.all([
-      commissionQuery.range(from, to), supabase
-      .from("referral_commissions")
-      .select("commission_amount,status")
-      .eq("referrer_id", user.id),
+    const [commissionResult, statsResult, transfersResult] = await Promise.all([
+      commissionQuery.range(from, to),
+      supabase
+        .from("referral_commissions")
+        .select("commission_amount,order_amount,status")
+        .eq("referrer_id", user.id),
+      supabase
+        .from("balance_transactions")
+        .select("id,transaction_no,amount,balance_after,status,remark,created_at")
+        .eq("user_id", user.id)
+        .eq("business_type", "promotion")
+        .order("created_at", { ascending: false })
+        .limit(50),
     ]);
     const { data: commissionRows, count: commissionCount, error: commissionError } = commissionResult;
     const { data: allCommissions, error: statsError } = statsResult;
+    const { data: transferRows } = transfersResult;
 
     const commissionStats = statsError
-      ? { total: null, available: null, error: getReferralErrorMessage(statsError, "读取失败") }
+      ? {
+          total: null,
+          available: null,
+          pending: null,
+          withdrawn: null,
+          orderCount: 0,
+          orderAmount: 0,
+          error: getReferralErrorMessage(statsError, "读取失败"),
+        }
       : {
           total: (allCommissions ?? []).reduce(
             (sum, item) =>
@@ -199,6 +215,16 @@ export async function GET(request: Request) {
           available: (allCommissions ?? [])
             .filter((item) => item.status === "available")
             .reduce((sum, item) => sum + Number(item.commission_amount ?? 0), 0),
+          pending: (allCommissions ?? [])
+            .filter((item) => item.status === "pending")
+            .reduce((sum, item) => sum + Number(item.commission_amount ?? 0), 0),
+          withdrawn: (allCommissions ?? [])
+            .filter((item) => item.status === "withdrawn")
+            .reduce((sum, item) => sum + Number(item.commission_amount ?? 0), 0),
+          orderCount: (allCommissions ?? []).filter((item) => item.status !== "cancelled").length,
+          orderAmount: (allCommissions ?? [])
+            .filter((item) => item.status !== "cancelled")
+            .reduce((sum, item) => sum + Number(item.order_amount ?? 0), 0),
           error: "",
         };
 
@@ -209,11 +235,17 @@ export async function GET(request: Request) {
           ? `${((registrations.value / visits.value) * 100).toFixed(2)}%`
           : "0.00%";
 
+    const effectiveMinTransfer = Math.min(
+      PROMOTION_MIN_WITHDRAW_AMOUNT,
+      Number(promotionSettings.minWithdrawAmount || PROMOTION_MIN_WITHDRAW_AMOUNT)
+    );
+
     return NextResponse.json({
       inviteCode,
+      userEmail: user.email ?? "",
       promotionEnabled: true,
-      commissionRate,
-      minWithdrawAmount: promotionSettings.minWithdrawAmount,
+      commissionRate: PROMOTION_COMMISSION_RATE,
+      minWithdrawAmount: effectiveMinTransfer,
       updatedAt: new Date().toISOString(),
       stats: {
         visits,
@@ -225,6 +257,10 @@ export async function GET(request: Request) {
         },
         totalCommission: commissionStats.total,
         availableCommission: commissionStats.available,
+        pendingCommission: commissionStats.pending,
+        withdrawnCommission: commissionStats.withdrawn,
+        qualifiedOrderCount: commissionStats.orderCount,
+        qualifiedOrderAmount: commissionStats.orderAmount,
         commissionError: commissionStats.error,
       },
       records: commissionError
@@ -239,6 +275,15 @@ export async function GET(request: Request) {
             commissionAmount: Number(row.commission_amount ?? 0),
             status: normalizeCommissionStatus(row.status),
           })),
+      transfers: (transferRows ?? []).map((row) => ({
+        id: String(row.id),
+        transactionNo: String(row.transaction_no ?? "-"),
+        amount: Number(row.amount ?? 0),
+        balanceAfter: row.balance_after !== null && row.balance_after !== undefined ? Number(row.balance_after) : null,
+        status: String(row.status ?? "completed"),
+        remark: String(row.remark ?? "推广返佣转入本站账户余额"),
+        createdAt: row.created_at ?? null,
+      })),
       recordError: commissionError
         ? getReferralErrorMessage(commissionError, "读取失败")
         : "",

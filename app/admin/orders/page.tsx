@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { AlertCircle, CheckCircle2, Copy, Eye, Loader2, MapPin, Phone, RefreshCcw, Search, Send, Truck, User } from "lucide-react";
+import { AlertCircle, CheckCircle2, Copy, Eye, Loader2, MapPin, Phone, RefreshCcw, RotateCcw, Search, Send, Truck, User } from "lucide-react";
 import { toast } from "sonner";
 
 import AdminEmptyState from "@/components/admin/AdminEmptyState";
@@ -29,7 +29,9 @@ import AdminStatusBadge, { type AdminStatusTone } from "@/components/admin/v2/Ad
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { createSafeUuid } from "@/lib/browser/safe-storage";
 import { getOrderErrorMessage } from "@/lib/orders/order-queries";
 import {
   getOrderStatusLabel,
@@ -611,6 +613,11 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
     | { kind: "expire_unpaid" }
     | null
   >(null);
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const [refundAmountInput, setRefundAmountInput] = useState("");
+  const [refundReasonInput, setRefundReasonInput] = useState("");
+  const [refundSubmitting, setRefundSubmitting] = useState(false);
+  const refundRequestIdRef = useRef<string>("");
 
   async function executeStatusUpdate(nextStatus: OrderStatus, note: string) {
     setWorking(true);
@@ -705,6 +712,94 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
     if (orderStatus === "refunded" || paymentStatus === "refunded") return Number(order.total_amount ?? 0);
     return 0;
   }, [order.total_amount, orderStatus, paymentStatus, relations]);
+
+  const refundableAmount = useMemo(() => {
+    const total = Number(order.total_amount ?? 0);
+    if (!Number.isFinite(total) || total <= 0) return 0;
+    return Math.max(0, Math.round((total - refundedAmount) * 100) / 100);
+  }, [order.total_amount, refundedAmount]);
+
+  const canDirectRefund =
+    paymentStatus === "paid" &&
+    orderStatus !== "refunded" &&
+    refundableAmount > 0 &&
+    Boolean(order.user_id);
+
+  function openRefundDialog() {
+    if (!canDirectRefund) {
+      toast.error("当前订单不可发起余额退款");
+      return;
+    }
+    refundRequestIdRef.current = `ADMIN-RF-${order.id}-${createSafeUuid().slice(0, 8)}`;
+    setRefundAmountInput(refundableAmount.toFixed(2));
+    setRefundReasonInput("");
+    setRefundDialogOpen(true);
+  }
+
+  async function executeDirectRefund() {
+    const cleanReason = refundReasonInput.trim();
+    if (!cleanReason) {
+      toast.error("请填写退款原因");
+      return;
+    }
+    const parsedAmount = Number(refundAmountInput);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      toast.error("请输入大于 0 的有效退款金额");
+      return;
+    }
+    const roundedAmount = Math.round(parsedAmount * 100) / 100;
+    if (roundedAmount > refundableAmount + 0.0001) {
+      toast.error(`退款金额不能超过当前可退金额 ${formatMoney(refundableAmount, order.currency)}`);
+      return;
+    }
+    setRefundSubmitting(true);
+    try {
+      const response = await fetch(`/api/admin/orders/${order.id}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: roundedAmount,
+          reason: cleanReason,
+          requestId: refundRequestIdRef.current || undefined,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.ok === false) {
+        throw new Error(payload?.error || "订单退款失败");
+      }
+      const res = (payload?.result ?? {}) as {
+        refund_amount?: number;
+        total_refunded?: number;
+        fully_refunded?: boolean;
+        balance_after?: number;
+        order_status?: string;
+        payment_status?: string;
+      };
+      const fullyRefunded = res.fully_refunded === true || roundedAmount >= refundableAmount - 0.0001;
+      const nextOrder = {
+        ...order,
+        status: res.order_status ?? (fullyRefunded ? "refunded" : order.status),
+        payment_status: res.payment_status ?? (fullyRefunded ? "refunded" : order.payment_status),
+        updated_at: new Date().toISOString(),
+      } as OrderRecord;
+      onUpdated(nextOrder);
+      onRefresh();
+      setRefundDialogOpen(false);
+      const balanceText =
+        typeof res.balance_after === "number"
+          ? `，客户最新余额 ${formatMoney(res.balance_after, order.currency)}`
+          : "";
+      toast.success(`已退款 ${formatMoney(res.refund_amount ?? roundedAmount, order.currency)} 至客户账户余额${balanceText}`);
+      if (payload?.auditWarning) {
+        toast.warning(String(payload.auditWarning));
+      }
+      void loadRelations();
+    } catch (err) {
+      toast.error(getOrderErrorMessage(err));
+    } finally {
+      setRefundSubmitting(false);
+    }
+  }
 
   const canShipLogistics =
     isShippingOrder &&
@@ -999,13 +1094,30 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
                     关闭未支付订单并释放预留
                   </Button>
                 ) : null}
+                {canDirectRefund ? (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={working || refundSubmitting}
+                    onClick={openRefundDialog}
+                    data-testid="admin-order-direct-refund-btn"
+                  >
+                    {refundSubmitting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="mr-1.5 h-3.5 w-3.5" />}
+                    退款至客户余额
+                  </Button>
+                ) : null}
                 <Button size="sm" variant="ghost" disabled={working || relationsLoading} onClick={() => void loadRelations()}>
                   重新读取处理记录
                 </Button>
-                {!availableActions.length && !(orderStatus === "pending_payment" && paymentStatus === "unpaid") ? (
+                {!availableActions.length && !(orderStatus === "pending_payment" && paymentStatus === "unpaid") && !canDirectRefund ? (
                   <div className="text-sm text-slate-500">当前状态没有可执行的流转操作。</div>
                 ) : null}
               </div>
+              {paymentStatus === "paid" && orderStatus !== "refunded" && refundableAmount > 0 && !order.user_id ? (
+                <p className="mt-2.5 text-xs text-amber-700">
+                  该订单为游客未绑定账号订单，暂不支持直接退回本站账户余额，请通过线下渠道核实处理。
+                </p>
+              ) : null}
             </CardContent>
           </Card>
 
@@ -1053,6 +1165,112 @@ function AdminOrderDrawer(props: AdminOrderDrawerProps) {
               }
             }}
           />
+
+          <Dialog
+            open={refundDialogOpen}
+            onOpenChange={(next) => {
+              if (!refundSubmitting) setRefundDialogOpen(next);
+            }}
+          >
+            <DialogContent className="sm:max-w-[480px]">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-slate-950">
+                  <RotateCcw className="h-4 w-4 text-rose-600" />
+                  订单退款至客户账户余额
+                </DialogTitle>
+                <DialogDescription>
+                  仅退还产品订单金额至客户本站账户余额，不会自动恢复已发放的数字卡密库存；若该订单已产生未结算推广返佣，将同步撤销。
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3.5 py-1 text-sm">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs">
+                  <div className="flex items-center justify-between py-0.5">
+                    <span className="text-slate-500">订单编号</span>
+                    <span className="font-mono font-semibold text-slate-900">{getOrderNo(order)}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-0.5">
+                    <span className="text-slate-500">客户邮箱</span>
+                    <span className="font-medium text-slate-900">{order.customer_email || "—"}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-0.5">
+                    <span className="text-slate-500">原支付方式</span>
+                    <span className="font-medium text-slate-900">
+                      {order.payment_method ? getPaymentMethodLabel(order.payment_method) : "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-0.5">
+                    <span className="text-slate-500">产品订单金额 / 已退</span>
+                    <span className="font-semibold text-slate-900">
+                      {formatMoney(order.total_amount, order.currency)} / {formatMoney(refundedAmount, order.currency)}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between border-t border-slate-200 pt-1.5">
+                    <span className="text-slate-600">本次最大可退金额</span>
+                    <span className="font-bold text-rose-600">{formatMoney(refundableAmount, order.currency)}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    退款金额（{order.currency || "CNY"}） *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={refundableAmount}
+                      value={refundAmountInput}
+                      onChange={(e) => setRefundAmountInput(e.target.value)}
+                      disabled={refundSubmitting}
+                      className="font-mono"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={refundSubmitting}
+                      onClick={() => setRefundAmountInput(refundableAmount.toFixed(2))}
+                    >
+                      全额
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-700">退款原因 *</label>
+                  <Input
+                    value={refundReasonInput}
+                    onChange={(e) => setRefundReasonInput(e.target.value)}
+                    placeholder="例如：商品缺货/账号异常，管理员核实退回产品订单金额"
+                    disabled={refundSubmitting}
+                    maxLength={200}
+                  />
+                </div>
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={refundSubmitting}
+                  onClick={() => setRefundDialogOpen(false)}
+                >
+                  取消
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={refundSubmitting || !refundReasonInput.trim()}
+                  onClick={() => void executeDirectRefund()}
+                >
+                  {refundSubmitting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
+                  确认退回客户余额
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
     </AdminDetailDrawer>
   );
 }
