@@ -24,6 +24,38 @@ function authorized(request: Request) {
   return expected.length === supplied.length && timingSafeEqual(expected, supplied);
 }
 
+const orderIdPattern = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+
+export async function GET(request: Request) {
+  if (!authorized(request)) return json({ error: "UNAUTHORIZED" }, 401);
+  const rate = checkRateLimit("internal_task", "order_delivery_recovery_candidates");
+  if (!rate.allowed) return rate.response!;
+  const cursor = new URL(request.url).searchParams.get("after");
+  if (cursor !== null && !orderIdPattern.test(cursor)) {
+    return json({ error: "INVALID_CURSOR" }, 400);
+  }
+
+  const service = getSupabaseServiceRoleClient();
+  if (!service) return json({ error: "SERVICE_UNAVAILABLE" }, 503);
+
+  const now = Date.now();
+  let candidates = service.from("orders")
+    .select("id")
+    .eq("payment_status", "paid")
+    .in("status", ["paid", "processing"])
+    .in("fulfillment_status", ["pending", "processing", "partially_delivered"])
+    .in("delivery_type", Array.from(automaticDeliveryTypes))
+    .gte("paid_at", new Date(now - 24 * 60 * 60 * 1000).toISOString())
+    .lte("paid_at", new Date(now - 60_000).toISOString())
+    .order("id")
+    .limit(2);
+  if (cursor) candidates = candidates.gt("id", cursor);
+  const { data, error } = await candidates;
+  if (error || !Array.isArray(data)) return json({ error: "CANDIDATE_READ_FAILED" }, 503);
+  const orderIds = data.map((order) => order.id);
+  return json({ orderIds, nextCursor: orderIds.length === 2 ? orderIds.at(-1) : null });
+}
+
 export async function POST(request: Request) {
   if (!authorized(request)) return json({ error: "UNAUTHORIZED" }, 401);
   const rate = checkRateLimit("internal_task", "order_delivery_recovery");
@@ -32,7 +64,7 @@ export async function POST(request: Request) {
   const body = await readBoundedJsonBody<{ orderId?: unknown } | null>(request, 1024);
   if (!body.ok) return body.response;
   const orderId = typeof body.data?.orderId === "string" ? body.data.orderId.trim().toLowerCase() : "";
-  if (!/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(orderId)) {
+  if (!orderIdPattern.test(orderId)) {
     return json({ error: "INVALID_ORDER_ID" }, 400);
   }
 

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Jianlian Bitrefill cost synchronization
+
+[Timer]
+Unit=jianlian-maintenance@bitrefill-cost-sync.service
+OnCalendar=Mon *-*-* 04:00:00 Asia/Shanghai
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=Jianlian internal maintenance (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory=/www/jianlian-shop
+EnvironmentFile=/etc/jianlian/maintenance-%i.env
+StateDirectory=jianlian-maintenance-%i
+StateDirectoryMode=0700
+TimeoutStartSec=165s
+ReadWritePaths=/run/lock
+ExecStart=/usr/bin/flock -n -E 0 /run/lock/jianlian-maintenance-%i.lock /bin/sh -c 'exec "$$JIANLIAN_NODE_PATH" "$$JIANLIAN_RELEASE_DIR/scripts/ops/run-internal-maintenance-job.mjs" "$$1"' _ %i
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true

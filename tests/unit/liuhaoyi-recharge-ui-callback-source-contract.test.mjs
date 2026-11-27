@@ -102,7 +102,10 @@ test("legacy Liuhaoyi QR field is normalized only for presentation and never wri
   assert.doesNotMatch(sessionService, /qr_code_url:\s*artifact\.qrCodeUrl/);
 });
 
-test("recharge TxHash fallback is restricted to USDT-BEP20", () => {
-  assert.match(paymentPage, /recharge\?\.channelCode === "usdt_bep20" && canTransfer/);
-  assert.match(paymentPage, /\{canSubmitRechargeTxHash \? \([\s\S]{0,220}TxHash fallback（可选）/);
+test("recharge TxHash fallback is restricted to payable BEP20 and TRC20 recharges", () => {
+  assert.match(paymentPage, /const isTrc20Recharge = recharge\?\.channelCode === "usdt_trc20"/);
+  assert.match(paymentPage, /const isUsdtChainRecharge = recharge\?\.channelCode === "usdt_bep20" \|\| isTrc20Recharge/);
+  assert.match(paymentPage, /const canSubmitRechargeTxHash = isUsdtChainRecharge && canTransfer/);
+  assert.match(paymentPage, /const verifyEndpoint = isTrc20Recharge[\s\S]{0,140}trc20[\s\S]{0,100}bep20/);
+  assert.match(paymentPage, /\{canSubmitRechargeTxHash \? \([\s\S]{0,400}TxHash fallback（可选）/);
 });

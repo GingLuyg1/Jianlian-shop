@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Jianlian delivery recovery
+
+[Timer]
+Unit=jianlian-maintenance@delivery-recovery.service
+OnBootSec=2min
+OnUnitInactiveSec=3min
+
+[Install]
+WantedBy=timers.target
