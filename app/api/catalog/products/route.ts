@@ -10,6 +10,7 @@ import {
 } from "@/lib/catalog/effective-category-visibility.mjs";
 import { derivePublicCatalogSkuSummary } from "@/lib/products/public-catalog-sku-summary.mjs";
 import { extractDeliveryModeFromMetadata, isPreorderDeliveryMode } from "@/lib/products/delivery-and-stock";
+import { scoreProductSearch } from "@/lib/catalog/catalog-search";
 
 export const dynamic = "force-dynamic";
 
@@ -164,9 +165,18 @@ export async function GET(request: Request) {
       new Set(filteredProducts.map((product) => product.delivery_type).filter((value): value is string => Boolean(value)))
     ).sort();
 
+    const searchScoreByProduct = new Map<string, number>();
     let visible = filteredProducts
       .map((product) => enrichProduct(product, skuMap.get(product.id) ?? [], categoryMap, publicMetaByProduct.get(product.id) ?? null))
-      .filter((product) => matchSearch(product, skuMap.get(product.id) ?? [], keyword))
+      .filter((product) => {
+        if (!keyword) return true;
+        const score = matchSearchScore(product, skuMap.get(product.id) ?? [], keyword);
+        if (score > 0) {
+          searchScoreByProduct.set(product.id, score);
+          return true;
+        }
+        return false;
+      })
       .filter((product) => !inStockOnly || !isProductOutOfStock(product));
 
     let salesCountByProduct: Map<string, number> | null = null;
@@ -178,7 +188,7 @@ export async function GET(request: Request) {
       }));
     }
 
-    visible.sort((a, b) => compareProducts(a, b, categoryMap, sortMode));
+    visible.sort((a, b) => compareProducts(a, b, categoryMap, sortMode, keyword ? searchScoreByProduct : null));
 
     const total = visible.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -493,74 +503,16 @@ function resolveProductCategoryIds(categories: CategoryRow[], primaryCategoryId:
   return Array.from(ids);
 }
 
-const SEARCH_ALIAS_GROUPS: string[][] = [
-  ["美区", "美国", "us", "usa"],
-  ["英区", "英国", "uk", "gb"],
-  ["日区", "日本", "jp", "japan"],
-  ["土区", "土耳其", "tr", "turkey"],
-  ["港区", "香港", "hk"],
-  ["台区", "台湾", "tw"],
-  ["印区", "印度", "in", "india"],
-  ["韩区", "韩国", "kr", "korea"],
-  ["加区", "加拿大", "ca", "canada"],
-  ["澳区", "澳大利亚", "澳洲", "au", "australia"],
-  ["欧区", "欧洲", "eu", "europe"],
-  ["德区", "德国", "de", "germany"],
-  ["法区", "法国", "fr", "france"],
-  ["埃及", "eg", "egypt"],
-  ["奈飞", "网飞", "netflix"],
-  ["苹果", "apple", "itunes", "app store"],
-  ["谷歌", "google", "google play"],
-  ["索尼", "psn", "playstation"],
-  ["任天堂", "nintendo", "eshop", "switch"],
-  ["战网", "暴雪", "blizzard"],
-  ["亚马逊", "amazon"],
-  ["爱彼迎", "airbnb"],
-  ["我的世界", "minecraft"],
-  ["gpt", "chatgpt", "openai"],
-  ["tg", "telegram", "电报"],
-  ["推特", "twitter", "x-twitter"],
-  ["脸书", "fb", "facebook"],
-  ["油管", "yt", "youtube"],
-  ["ins", "ig", "instagram"],
-  ["话费", "充值卡", "sim 卡服务", "pin"],
-];
-
-function expandSearchToken(token: string): string[] {
-  const candidates = new Set<string>([token]);
-  for (const group of SEARCH_ALIAS_GROUPS) {
-    if (group.includes(token)) {
-      for (const alias of group) candidates.add(alias);
-    }
-  }
-  return Array.from(candidates);
-}
-
-function matchSearch(product: ProductView, skus: SkuRow[], keyword: string) {
-  if (!keyword) return true;
-
-  const haystack = [
-    product.name,
-    product.slug,
-    product.short_description,
-    product.category_path,
-    ...skus.flatMap((sku) => [sku.sku_code, sku.sku_title]),
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
-
-  const normalized = keyword.toLowerCase().trim();
-  if (haystack.includes(normalized)) return true;
-
-  const tokens = normalized
-    .split(/[\s,，、/+|]+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (tokens.length === 0) return true;
-
-  return tokens.every((token) =>
-    expandSearchToken(token).some((variant) => haystack.includes(variant))
+function matchSearchScore(product: ProductView, skus: SkuRow[], keyword: string) {
+  return scoreProductSearch(
+    {
+      name: product.name,
+      slug: product.slug,
+      short_description: product.short_description,
+      category_path: product.category_path,
+      skuTexts: skus.flatMap((sku) => [sku.sku_code, sku.sku_title]),
+    },
+    keyword
   );
 }
 
@@ -583,12 +535,17 @@ function compareProducts(
   a: ProductView,
   b: ProductView,
   categories: Map<string, CategoryRow>,
-  sortMode: CatalogSortMode = "recommended"
+  sortMode: CatalogSortMode = "recommended",
+  searchScores: Map<string, number> | null = null
 ) {
   const aOutOfStock = isProductOutOfStock(a);
   const bOutOfStock = isProductOutOfStock(b);
   const stockWeight = Number(aOutOfStock) - Number(bOutOfStock);
   if (stockWeight !== 0) return stockWeight;
+  if (searchScores && sortMode === "recommended") {
+    const scoreDiff = (searchScores.get(b.id) ?? 0) - (searchScores.get(a.id) ?? 0);
+    if (scoreDiff !== 0) return scoreDiff;
+  }
   if (sortMode === "sales") {
     const salesDiff = (b.sales_count ?? 0) - (a.sales_count ?? 0);
     if (salesDiff !== 0) return salesDiff;

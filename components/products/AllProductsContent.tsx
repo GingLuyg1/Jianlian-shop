@@ -50,6 +50,18 @@ const SORT_OPTIONS: Array<{ value: SortMode; label: string; desc: string }> = [
   { value: "stock", label: "按库存排序", desc: "库存最充足的商品优先" },
 ];
 
+const HOT_SEARCH_TAGS = [
+  "美区苹果",
+  "土区礼品卡",
+  "Giffgaff",
+  "ChatGPT",
+  "Netflix",
+  "Gmail 老号",
+  "PSN 日区",
+  "Xbox",
+  "美国话费",
+];
+
 function formatPrimaryLabel(rawName: string) {
   return rawName
     .replace(/国际\s*sim\s*卡|国际电话卡/gi, "国际 SIM 卡")
@@ -550,7 +562,8 @@ export default function AllProductsContent() {
               </div>
             </div>
 
-            {/* 一级大类滑块切换条 */}
+            {/* 一级大类滑块切换条 + 热门快捷搜索标签 */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5">
             <div className="overflow-x-auto pb-0.5">
               <div
                 ref={tabTrackRef}
@@ -614,6 +627,38 @@ export default function AllProductsContent() {
                   );
                 })}
               </div>
+            </div>
+
+            <div className="hidden flex-wrap items-center gap-1.5 xl:flex">
+              <span className="text-[11px] font-medium text-slate-400">热搜：</span>
+              {HOT_SEARCH_TAGS.map((tag) => {
+                const active = appliedSearch === tag;
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      const next = active ? "" : tag;
+                      setDraftSearch(next);
+                      appliedSearchRef.current = next;
+                      setAppliedSearch(next);
+                      if (next && primaryCategoryId) {
+                        setPrimaryCategoryId("");
+                      }
+                      setPage(1);
+                    }}
+                    className={cn(
+                      "rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all duration-150",
+                      active
+                        ? "border-[#df7334] bg-[#fff1e4] text-[#c85e22]"
+                        : "border-orange-100/90 bg-[#fffaf6] text-slate-600 hover:border-orange-300 hover:bg-orange-50/70 hover:text-[#c85e22]"
+                    )}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
             </div>
           </div>
 

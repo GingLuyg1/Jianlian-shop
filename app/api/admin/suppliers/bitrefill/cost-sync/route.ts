@@ -51,6 +51,7 @@ export async function GET(request: Request) {
   const requestedMode = url.searchParams.get("mode") === "apply" && isCron ? "apply" : "dry_run";
   const updateRetailPrice = isCron && url.searchParams.get("updateRetailPrice") === "1";
   const markupPercent = url.searchParams.get("markupPercent") ? Number(url.searchParams.get("markupPercent")) : undefined;
+  const simMarkupPercent = url.searchParams.get("simMarkupPercent") ? Number(url.searchParams.get("simMarkupPercent")) : undefined;
   const capBufferPercent = url.searchParams.get("capBufferPercent") ? Number(url.searchParams.get("capBufferPercent")) : undefined;
   const maxPriceDriftPercent = url.searchParams.get("maxPriceDriftPercent") ? Number(url.searchParams.get("maxPriceDriftPercent")) : undefined;
   try {
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
       mode: requestedMode,
       updateRetailPrice,
       markupPercent,
+      simMarkupPercent,
       capBufferPercent,
       maxPriceDriftPercent,
       notifyOnAnomaly: true,
@@ -93,6 +95,7 @@ export async function POST(request: Request) {
     updateRetailPrice?: boolean;
     capBufferPercent?: number;
     markupPercent?: number;
+    simMarkupPercent?: number;
     maxPriceDriftPercent?: number;
     notifyOnAnomaly?: boolean;
   };
@@ -103,6 +106,7 @@ export async function POST(request: Request) {
       updateRetailPrice: Boolean(body.updateRetailPrice),
       capBufferPercent: body.capBufferPercent,
       markupPercent: body.markupPercent,
+      simMarkupPercent: body.simMarkupPercent,
       maxPriceDriftPercent: body.maxPriceDriftPercent,
       notifyOnAnomaly: body.notifyOnAnomaly !== false,
     });

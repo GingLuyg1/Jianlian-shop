@@ -12,6 +12,7 @@ const ALERT_RECIPIENT =
   process.env.SUPPLIER_BALANCE_ALERT_EMAIL ||
   ["Gac000189", "gmail.com"].join("@");
 const ALERT_COOLDOWN_MS = 30 * 60 * 1000;
+const SIM_SERVICE_CATEGORY_ID = "94319387-0291-4e58-b9fd-e25fbdfbfaf1";
 const lastCostAlertAt = new Map<string, number>();
 
 export type BitrefillCostAnomalyKind =
@@ -67,6 +68,7 @@ export type BitrefillCostSyncReport = {
   rateSource: string;
   capBufferPercent: number;
   markupPercent: number;
+  simMarkupPercent: number;
   maxPriceDriftPercent: number;
   scannedSkus: number;
   updatedSkus: number;
@@ -163,6 +165,7 @@ export async function notifyBitrefillCostAnomaly(input: {
 export async function notifyBitrefillPriceSyncSummary(input: {
   usdCnyRate: number;
   markupPercent: number;
+  simMarkupPercent?: number;
   maxPriceDriftPercent: number;
   adjustments: BitrefillPriceAdjustment[];
   anomalyCount: number;
@@ -193,7 +196,7 @@ export async function notifyBitrefillPriceSyncSummary(input: {
       <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:680px;margin:0 auto;padding:24px;border:1px solid #e7edf5;border-radius:14px;background:#fafcff;color:#1f2329;">
         <h2 style="margin:0 0 12px;font-size:18px;color:#0f4c81;">Bitrefill 价格自动联动调价简报</h2>
         <p style="margin:0 0 12px;font-size:13px;line-height:1.6;color:#4e5969;">
-          参考汇率：<strong>1 USD = ¥${input.usdCnyRate.toFixed(2)}</strong> · 加价规则：<strong>+${input.markupPercent}%</strong> · 单次熔断阈值：<strong>±${input.maxPriceDriftPercent}%</strong>${input.anomalyCount > 0 ? ` · 另有 <strong>${input.anomalyCount}</strong> 项异常已拦截跳过` : ""}
+          参考汇率：<strong>1 USD = ¥${input.usdCnyRate.toFixed(4)}</strong> · 加价规则：<strong>礼品卡 +${input.markupPercent}% / SIM 卡服务 +${input.simMarkupPercent ?? 12}%</strong> · 单次熔断阈值：<strong>±${input.maxPriceDriftPercent}%</strong>${input.anomalyCount > 0 ? ` · 另有 <strong>${input.anomalyCount}</strong> 项异常已拦截跳过` : ""}
         </p>
         <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5ebf3;font-size:12px;">
           <thead>
@@ -242,6 +245,7 @@ export async function syncBitrefillCostsAndRates(
     updateRetailPrice?: boolean;
     capBufferPercent?: number;
     markupPercent?: number;
+    simMarkupPercent?: number;
     maxPriceDriftPercent?: number;
     notifyOnAnomaly?: boolean;
   } = {},
@@ -251,6 +255,7 @@ export async function syncBitrefillCostsAndRates(
   const updateRetailPrice = Boolean(options.updateRetailPrice);
   const capBufferPercent = clampNumber(options.capBufferPercent, 5, 0, 30);
   const markupPercent = clampNumber(options.markupPercent, 10, 0, 100);
+  const simMarkupPercent = clampNumber(options.simMarkupPercent, 12, 0, 100);
   const maxPriceDriftPercent = clampNumber(options.maxPriceDriftPercent, 15, 1, 50);
   const notifyOnAnomaly = options.notifyOnAnomaly !== false;
 
@@ -295,6 +300,23 @@ export async function syncBitrefillCostsAndRates(
     const meta = row.metadata as Record<string, unknown> | null;
     return meta && String(meta.supplier ?? "").trim() === "bitrefill";
   });
+
+  // Resolve parent category_id for each Bitrefill product so SIM 卡服务 applies simMarkupPercent (12%)
+  // while Gift Cards & other Bitrefill categories apply markupPercent (10%) dynamically on every sync.
+  const productCategoryMap = new Map<string, string>();
+  const distinctProductIds = Array.from(new Set(bitrefillSkus.map((s) => String(s.product_id ?? "")).filter(Boolean)));
+  for (let i = 0; i < distinctProductIds.length; i += 80) {
+    const chunk = distinctProductIds.slice(i, i + 80);
+    const { data: prodRows } = await service
+      .from("products")
+      .select("id,category_id")
+      .in("id", chunk);
+    for (const p of prodRows ?? []) {
+      const pid = typeof p.id === "string" ? p.id : "";
+      const cid = typeof p.category_id === "string" ? p.category_id : "";
+      if (pid && cid) productCategoryMap.set(pid, cid);
+    }
+  }
 
   const apiKey = String(env.BITREFILL_API_KEY ?? "").trim();
   if (!apiKey) {
@@ -415,9 +437,11 @@ export async function syncBitrefillCostsAndRates(
       continue;
     }
 
+    const isSimServiceSku = productCategoryMap.get(String(row.product_id)) === SIM_SERVICE_CATEGORY_ID;
+    const effectiveMarkupPercent = isSimServiceSku ? simMarkupPercent : markupPercent;
     const recommendedMaxUnitCostUsd = Math.ceil(liveUsdCost * (1 + capBufferPercent / 100) * 100) / 100;
     const liveCostCny = Math.round(liveUsdCost * usdCnyRate * 100) / 100;
-    const recommendedRetailCny = Math.round(liveCostCny * (1 + markupPercent / 100) * 100) / 100;
+    const recommendedRetailCny = Math.round(liveCostCny * (1 + effectiveMarkupPercent / 100) * 100) / 100;
     const rawDriftPercent =
       currentRetailCny > 0
         ? ((recommendedRetailCny - currentRetailCny) / currentRetailCny) * 100
@@ -479,7 +503,10 @@ export async function syncBitrefillCostsAndRates(
       };
       if (retailNeedsUpdate) {
         nextMetadata.supplier_previous_retail_cny = currentRetailCny;
-        nextMetadata.supplier_markup_percent = markupPercent;
+        nextMetadata.supplier_markup_percent = effectiveMarkupPercent;
+        nextMetadata.pricing_margin_pct = effectiveMarkupPercent;
+        nextMetadata.usd_cost = Math.round(liveUsdCost * 10000) / 10000;
+        nextMetadata.usd_cny_rate = usdCnyRate;
         nextMetadata.supplier_retail_synced_at = new Date().toISOString();
         patch.price = recommendedRetailCny;
       }
@@ -559,6 +586,7 @@ export async function syncBitrefillCostsAndRates(
     priceReportSent = await notifyBitrefillPriceSyncSummary({
       usdCnyRate,
       markupPercent,
+      simMarkupPercent,
       maxPriceDriftPercent,
       adjustments: priceAdjustments,
       anomalyCount: anomalies.length,
@@ -572,6 +600,7 @@ export async function syncBitrefillCostsAndRates(
     rateSource,
     capBufferPercent,
     markupPercent,
+    simMarkupPercent,
     maxPriceDriftPercent,
     scannedSkus: bitrefillSkus.length,
     updatedSkus,

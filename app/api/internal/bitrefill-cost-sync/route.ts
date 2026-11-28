@@ -49,6 +49,9 @@ export async function GET(request: Request) {
   const markupPercent = url.searchParams.get("markupPercent")
     ? Number(url.searchParams.get("markupPercent"))
     : undefined;
+  const simMarkupPercent = url.searchParams.get("simMarkupPercent")
+    ? Number(url.searchParams.get("simMarkupPercent"))
+    : undefined;
   const capBufferPercent = url.searchParams.get("capBufferPercent")
     ? Number(url.searchParams.get("capBufferPercent"))
     : undefined;
@@ -61,6 +64,7 @@ export async function GET(request: Request) {
       mode,
       updateRetailPrice,
       markupPercent,
+      simMarkupPercent,
       capBufferPercent,
       maxPriceDriftPercent,
       notifyOnAnomaly: true,
