@@ -129,7 +129,9 @@ function noticeForSession(session: Bep20Session | null, order: OrderRecord) {
   }
   if (session.status === "underpaid") return "到账金额不足，不能按足额支付处理。";
   if (session.status === "payment_failed") return "支付处理失败，请联系客服核查。";
-  return "当前有有效支付信息，请仅通过 BNB Smart Chain (BEP20) 转账。";
+  return String(order.payment_method ?? "").toLowerCase() === "usdt_trc20"
+    ? "当前有有效支付信息，请仅通过 TRON Network (TRC20) 转账，系统会自动识别到账。"
+    : "当前有有效支付信息，请仅通过 BNB Smart Chain (BEP20) 转账。";
 }
 
 function DetailRow({
@@ -187,11 +189,17 @@ export function Bep20OrderPaymentSummary({
   const loadInFlightRef = useRef(false);
   const verifyInFlightRef = useRef(false);
 
-  const isBep20Order = String(order.payment_method ?? "").toLowerCase() === "usdt_bep20";
+  const normalizedMethod = String(order.payment_method ?? "").toLowerCase();
+  const isTrc20Order = normalizedMethod === "usdt_trc20";
+  const isBep20Order = normalizedMethod === "usdt_bep20" || isTrc20Order;
   const rawRemaining = secondsLeft(session?.expiresAt) + nowTick * 0;
   const remainingSeconds = Number.isFinite(rawRemaining) ? rawRemaining : 0;
-  const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
-  const submittedTxHashValid = /^0x[0-9a-fA-F]{64}$/.test(session?.submittedTxHash ?? "");
+  const txHashValid = isTrc20Order
+    ? /^[0-9a-fA-F]{64}$/.test(txHash.trim())
+    : /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
+  const submittedTxHashValid = isTrc20Order
+    ? /^[0-9a-fA-F]{64}$/.test(session?.submittedTxHash ?? "")
+    : /^0x[0-9a-fA-F]{64}$/.test(session?.submittedTxHash ?? "");
   const orderStatus = normalizeOrderStatus(order.status);
   const paymentStatus = normalizePaymentStatus(order.payment_status);
   const paymentCompleted = paymentStatus === "paid"
@@ -232,13 +240,14 @@ export function Bep20OrderPaymentSummary({
       else setLoading(true);
       setError("");
       try {
+        const sessionEndpoint = isTrc20Order ? "/api/payments/trc20/session" : "/api/payments/bep20/session";
         const response = options.create
-          ? await fetchWithTimeout("/api/payments/bep20/session", {
+          ? await fetchWithTimeout(sessionEndpoint, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ order: order.order_no }),
             })
-          : await fetchWithTimeout(`/api/payments/bep20/session?order=${encodeURIComponent(order.order_no)}`, { cache: "no-store" });
+          : await fetchWithTimeout(`${sessionEndpoint}?order=${encodeURIComponent(order.order_no)}`, { cache: "no-store" });
         const result = (await response.json().catch(() => null)) as (Bep20Session & ApiError) | null;
         if (!response.ok) throw new Error(result?.error ?? "支付信息读取失败");
         setSession(result);
@@ -255,7 +264,7 @@ export function Bep20OrderPaymentSummary({
         setCreating(false);
       }
     },
-    [creating, isBep20Order, loading, order.order_no]
+    [creating, isBep20Order, isTrc20Order, loading, order.order_no]
   );
 
   async function confirmRenewPaymentSession() {
@@ -284,7 +293,8 @@ export function Bep20OrderPaymentSummary({
     setVerifying(true);
     setError("");
     try {
-      const response = await fetchWithTimeout("/api/payments/bep20/verify", {
+      const verifyEndpoint = isTrc20Order ? "/api/payments/trc20/verify" : "/api/payments/bep20/verify";
+      const response = await fetchWithTimeout(verifyEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -351,7 +361,7 @@ export function Bep20OrderPaymentSummary({
         && !timingVisibility.manualReview
         && (!timingVisibility.terminal || isExpired) ? (
         <div className="space-y-2 rounded-lg bg-slate-50 p-3">
-          <DetailRow label="支付网络" value="BNB Smart Chain (BEP20)" />
+          <DetailRow label="支付网络" value={isTrc20Order ? "TRON Network (TRC20)" : "BNB Smart Chain (BEP20)"} />
           <DetailRow label="应付金额" value={`${session.expectedAmount || "—"} USDT`} copyValue={session.expectedAmount || null} strong />
           <DetailRow label="收款地址" value={shortHash(session.receiveAddress)} copyValue={session.receiveAddress} />
           {timingVisibility.showCountdown ? <DetailRow label="支付时效" value={formatDuration(remainingSeconds)} /> : null}
@@ -365,15 +375,23 @@ export function Bep20OrderPaymentSummary({
 
       {canShowTxInput ? (
         <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-900">交易哈希 TxHash</label>
+          <label className="text-sm font-medium text-slate-900">
+            {isTrc20Order ? "交易哈希 TxHash（可选，正常转账会自动识别）" : "交易哈希 TxHash"}
+          </label>
           <input
             value={txHash}
             onChange={(event) => setTxHash(event.target.value)}
             disabled={!canSubmitTxHash || verifying}
-            placeholder="0x 开头的 32 字节交易哈希"
+            placeholder={isTrc20Order ? "64 位十六进制 TRON 交易哈希（不含 0x）" : "0x 开头的 32 字节交易哈希"}
             className="h-10 w-full rounded-lg border border-border bg-white px-3 font-mono text-base md:text-sm outline-none focus:border-primary disabled:bg-slate-50"
           />
-          {txHash && !txHashValid ? <div className="text-xs text-red-600">请输入合法的 0x 开头 64 位十六进制 TxHash。</div> : null}
+          {txHash && !txHashValid ? (
+            <div className="text-xs text-red-600">
+              {isTrc20Order
+                ? "请输入合法的 64 位十六进制 TRON TxHash（不含 0x 前缀）。"
+                : "请输入合法的 0x 开头 64 位十六进制 TxHash。"}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -420,7 +438,15 @@ export function Bep20OrderPaymentSummary({
         ) : null}
         {submittedTxHashValid ? (
           <Button asChild size="sm" variant="outline">
-            <a href={`https://bscscan.com/tx/${session?.submittedTxHash}`} target="_blank" rel="noopener noreferrer">
+            <a
+              href={
+                isTrc20Order
+                  ? `https://tronscan.org/#/transaction/${session?.submittedTxHash}`
+                  : `https://bscscan.com/tx/${session?.submittedTxHash}`
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <ExternalLink className="mr-2 h-4 w-4" />
               查看链上交易
             </a>

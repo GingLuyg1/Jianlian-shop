@@ -175,7 +175,7 @@ export function canContinueBep20Payment(order: {
   return (
     (status === "pending_payment" || status === "待支付") &&
     (paymentStatus === "unpaid" || paymentStatus === "未支付") &&
-    paymentMethod === "usdt_bep20"
+    (paymentMethod === "usdt_bep20" || paymentMethod === "usdt_trc20")
   );
 }
 

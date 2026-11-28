@@ -215,7 +215,7 @@ function isBep20SchemaMissing(error: unknown) {
 }
 
 function deriveBep20PaymentState(order: OrderRecord, session?: Bep20SessionSummary | null): Bep20PaymentState {
-  if (order.payment_method !== "usdt_bep20") return "not_applicable";
+  if (order.payment_method !== "usdt_bep20" && order.payment_method !== "usdt_trc20") return "not_applicable";
   if (order.payment_status === "paid" || order.status === "paid") return "paid";
   if (["cancelled", "refunded", "failed"].includes(order.status)) return "closed";
 
@@ -244,7 +244,7 @@ function deriveBep20PaymentState(order: OrderRecord, session?: Bep20SessionSumma
 }
 
 async function attachBep20PaymentStates(supabase: SupabaseClient, orders: OrderRecord[]) {
-  const targetOrders = orders.filter((order) => order.payment_method === "usdt_bep20");
+  const targetOrders = orders.filter((order) => order.payment_method === "usdt_bep20" || order.payment_method === "usdt_trc20");
   if (!targetOrders.length) return orders;
 
   const orderIds = targetOrders.map((order) => order.id);
@@ -252,7 +252,7 @@ async function attachBep20PaymentStates(supabase: SupabaseClient, orders: OrderR
     .from("chain_payment_sessions")
     .select("order_id,status,manual_review_decision,expires_at,submitted_tx_hash,failure_reason,created_at")
     .in("order_id", orderIds)
-    .eq("payment_method", "usdt_bep20")
+    .in("payment_method", ["usdt_bep20", "usdt_trc20"])
     .order("created_at", { ascending: false });
 
   if (error) {

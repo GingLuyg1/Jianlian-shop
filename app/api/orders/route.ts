@@ -19,6 +19,7 @@ import { normalizeChannelRow } from "@/lib/payments/recharge-utils";
 import { getPaymentClientIp } from "@/lib/payments/request-client-ip";
 import { derivePaymentClientDevice } from "@/lib/payments/request-client-device.mjs";
 import { createBep20PaymentSession, getBep20ErrorMessage } from "@/lib/payments/bep20-chain-service";
+import { createTrc20PaymentSession, getTrc20ErrorMessage } from "@/lib/payments/trc20-chain-service";
 import { getUserBep20UnderpaymentWalletCredits } from "@/lib/payments/bep20-underpayment-user";
 import { checkRateLimit, checkRequestSize, getUserRateLimitKey } from "@/lib/security/rate-limit";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
@@ -171,6 +172,9 @@ type OrderPostProcessStage =
   | "BEP20_SESSION_STARTED"
   | "BEP20_SESSION_COMPLETED"
   | "BEP20_SESSION_FAILED"
+  | "TRC20_SESSION_STARTED"
+  | "TRC20_SESSION_COMPLETED"
+  | "TRC20_SESSION_FAILED"
   | "LIUHAOYI_SESSION_STARTED"
   | "LIUHAOYI_SESSION_COMPLETED"
   | "LIUHAOYI_SESSION_FAILED"
@@ -367,7 +371,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unsupported payment method." }, { status: 400 });
     }
 
-    if (!["balance", "usdt_bep20", "alipay", "wechat_pay"].includes(paymentMethod)) {
+    if (!["balance", "usdt_bep20", "usdt_trc20", "alipay", "wechat_pay"].includes(paymentMethod)) {
       return NextResponse.json({ error: "This payment method is not available yet." }, { status: 400 });
     }
 
@@ -436,8 +440,9 @@ export async function POST(request: Request) {
       }
     }
 
-    if (isLiuhaoyiPaymentMethod(paymentMethod) || paymentMethod === "usdt_bep20") {
-      const channelCode = paymentMethod === "usdt_bep20" ? "usdt_bep20" : paymentMethod === "wechat_pay" ? "wechat" : "alipay";
+    const isUsdtChainOrder = paymentMethod === "usdt_bep20" || paymentMethod === "usdt_trc20";
+    if (isLiuhaoyiPaymentMethod(paymentMethod) || isUsdtChainOrder) {
+      const channelCode = isUsdtChainOrder ? paymentMethod : paymentMethod === "wechat_pay" ? "wechat" : "alipay";
       const { data: channelData, error: channelError } = await trustedReader
         .from("payment_channels")
         .select("channel,code,enabled,configured,display_name,currency,network,min_amount,minimum_amount,fee_rate,provider,provider_name,public_config,sort_order")
@@ -459,7 +464,7 @@ export async function POST(request: Request) {
       if (!payableAmount) {
         return NextResponse.json({ error: "商品金额格式无效", code: "ORDER_AMOUNT_INVALID" }, { status: 400 });
       }
-      if (paymentMethod !== "usdt_bep20" && isOnlineCnyOverLimit(payableAmount)) {
+      if (!isUsdtChainOrder && isOnlineCnyOverLimit(payableAmount)) {
         return NextResponse.json({ error: ONLINE_PAYMENT_LIMIT_MESSAGE, code: "ONLINE_PAYMENT_LIMIT_EXCEEDED" }, { status: 400 });
       }
       if (channel.provider === "snpay" && channel.feeRate !== 0) {
@@ -481,7 +486,7 @@ export async function POST(request: Request) {
         minimumAmount: 0.01,
         maximumAmount: Math.max(channel.maximumAmount ?? 1000000, capability.maximumAmount ?? 1000000),
       };
-      if (paymentMethod !== "usdt_bep20" && (!providerSupportsChannel(capability, channel.code, "CNY")
+      if (!isUsdtChainOrder && (!providerSupportsChannel(capability, channel.code, "CNY")
         || !providerAmountWithinLimits(capability, effectiveChannel, Number(payableAmount)))) {
         return NextResponse.json({ error: "支付渠道不支持该金额", code: "PROVIDER_AMOUNT_OR_CHANNEL_UNSUPPORTED" }, { status: 400 });
       }
@@ -853,6 +858,34 @@ export async function POST(request: Request) {
           {
             error: getBep20ErrorMessage(chainError),
             code: "BEP20_SESSION_FAILED",
+            request_id: clientRequestId,
+            warning_code: warningCode,
+            order: { id: orderId, ...(savedOrder as Record<string, unknown>) },
+          },
+          { status: typeof (chainError as { status?: unknown })?.status === "number" ? Number((chainError as { status: number }).status) : 503 }
+        );
+      }
+    }
+
+    if (paymentMethod === "usdt_trc20") {
+      logOrderPostProcess({ requestId: clientRequestId, stage: "TRC20_SESSION_STARTED", orderId, orderNo: completedOrder.orderNo });
+      try {
+        const chainPayment = await createTrc20PaymentSession(String(savedOrder.order_no), user.id);
+        logOrderPostProcess({ requestId: clientRequestId, stage: "TRC20_SESSION_COMPLETED", orderId, orderNo: completedOrder.orderNo });
+        logOrderPostProcess({ requestId: clientRequestId, stage: "RESPONSE_BUILD_COMPLETED", orderId, orderNo: completedOrder.orderNo });
+        return NextResponse.json({
+          request_id: clientRequestId,
+          warning_code: warningCode,
+          order: { ...(created as Record<string, unknown>), payment_method: paymentMethod },
+          chainPayment,
+        });
+      } catch (chainError) {
+        logOrderPostProcess({ level: "warn", requestId: clientRequestId, stage: "TRC20_SESSION_FAILED", orderId, orderNo: completedOrder.orderNo, error: chainError });
+        logOrderPostProcess({ requestId: clientRequestId, stage: "RESPONSE_BUILD_COMPLETED", orderId, orderNo: completedOrder.orderNo });
+        return NextResponse.json(
+          {
+            error: getTrc20ErrorMessage(chainError),
+            code: "TRC20_SESSION_FAILED",
             request_id: clientRequestId,
             warning_code: warningCode,
             order: { id: orderId, ...(savedOrder as Record<string, unknown>) },

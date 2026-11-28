@@ -395,7 +395,7 @@ function RechargePaymentPage({ rechargeNo, returnToParam = "" }: { rechargeNo: s
               {isCnyGatewayRecharge
                 ? "请使用支付渠道提供的付款入口完成支付。"
                 : isTrc20Recharge
-                  ? "请按充值单的精确金额完成 USDT-TRC20（TRON Network）转账，并在下方提交交易哈希（TxHash）自动核验入账。"
+                  ? "请按充值单的精确金额完成 USDT-TRC20（TRON Network）转账，系统会自动识别链上到账并秒级入账。"
                   : "请按充值单的精确金额完成 USDT-BEP20 转账，系统会自动识别到账。"}
             </p>
           </div>
@@ -490,7 +490,7 @@ function RechargePaymentPage({ rechargeNo, returnToParam = "" }: { rechargeNo: s
                 ) : canTransfer ? (
                   <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
                     {isTrc20Recharge
-                      ? "请通过 TRON Network (TRC20) 精确转入上方 USDT 金额，等待约 1 分钟确认后在下方提交 64 位 TxHash 即可自动秒级入账，请勿重复付款。"
+                      ? "系统会自动扫描 TRON 链上入账，无需填写 TxHash；请严格按精确金额转账，确认后自动入账，请勿重复付款。"
                       : "普通充值由 Scanner 自动识别，无需填写 TxHash。请勿重复付款。"}
                   </div>
                 ) : (
@@ -602,11 +602,11 @@ function RechargePaymentPage({ rechargeNo, returnToParam = "" }: { rechargeNo: s
                   <div className="space-y-3 border-t pt-4">
                     <div>
                       <div className="text-sm font-medium">
-                        {isTrc20Recharge ? "提交 TRON 交易哈希（TxHash）核验入账" : "TxHash fallback（可选）"}
+                        {isTrc20Recharge ? "TxHash 手动加速核验（可选）" : "TxHash fallback（可选）"}
                       </div>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {isTrc20Recharge
-                          ? "完成 TRON TRC20 转账后，从钱包或交易所提币记录复制 64 位 TxHash（不含 0x）填入下方，验证达到 19 个确认后自动入账。"
+                          ? "正常转账无需填写，系统会自动识别入账；如确认延迟或客服要求，可粘贴 64 位 TRON TxHash（不含 0x）手动核验。"
                           : "仅在自动识别延迟或客服要求时提交，正常充值无需填写。"}
                       </p>
                     </div>
@@ -924,6 +924,8 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
     || remainingSeconds <= 0
   );
   const isBep20Order = order?.payment_method === "usdt_bep20";
+  const isTrc20Order = order?.payment_method === "usdt_trc20";
+  const isChainOrder = isBep20Order || isTrc20Order;
   const preferredExternalChannel = order?.payment_method === "wechat_pay" || order?.payment_method === "wechat"
     ? "wechat"
     : order?.payment_method === "alipay"
@@ -957,6 +959,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
       setOrder(result?.order ?? null);
       const orderPaymentMethod = result?.order?.payment_method;
       if (orderPaymentMethod === "usdt_bep20") setSelectedChannel("usdt_bep20");
+      else if (orderPaymentMethod === "usdt_trc20") setSelectedChannel("usdt_trc20");
       else if (orderPaymentMethod === "wechat_pay" || orderPaymentMethod === "wechat") setSelectedChannel("wechat");
       else if (orderPaymentMethod === "alipay") setSelectedChannel("alipay");
     } catch (loadError) {
@@ -1041,21 +1044,27 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
 
   const loadBep20Session = useCallback(async (options: { create?: boolean; silent?: boolean } = {}) => {
     if (!order?.order_no || creatingSession) return false;
+    const trc20 = order.payment_method === "usdt_trc20";
+    const sessionEndpoint = trc20 ? "/api/payments/trc20/session" : "/api/payments/bep20/session";
+    const defaultErr = trc20 ? "USDT-TRC20 支付单创建失败" : "USDT-BEP20 支付单创建失败";
     if (!options.silent) {
       setCreatingSession(true);
       setError("");
     }
     try {
       const response = options.create
-        ? await fetch("/api/payments/bep20/session", {
+        ? await fetch(sessionEndpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ order: order.order_no }),
           })
-        : await fetch(`/api/payments/bep20/session?order=${encodeURIComponent(order.order_no)}`, { cache: "no-store" });
+        : await fetch(`${sessionEndpoint}?order=${encodeURIComponent(order.order_no)}`, { cache: "no-store" });
       const result = (await response.json().catch(() => null)) as (Bep20ChainSession & { error?: string }) | null;
-      if (!response.ok) throw new Error(result?.error ?? "USDT-BEP20 支付单创建失败");
+      if (!response.ok) throw new Error(result?.error ?? defaultErr);
       setBep20Session(result);
+      if (result?.status === "paid") {
+        void loadOrder({ silent: true });
+      }
       if (options.silent) {
         if (result?.prefillSubmittedTxHash && result.submittedTxHash) {
           setTxHash((current) => current || result.submittedTxHash || "");
@@ -1066,7 +1075,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
       return true;
     } catch (sessionError) {
       if (!options.silent) {
-        const message = getOrderErrorMessage(sessionError, "USDT-BEP20 支付单创建失败");
+        const message = getOrderErrorMessage(sessionError, defaultErr);
         if (options.create) toast.error(message);
         else setError(message);
       }
@@ -1074,18 +1083,23 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
     } finally {
       if (!options.silent) setCreatingSession(false);
     }
-  }, [creatingSession, order?.order_no]);
+  }, [creatingSession, loadOrder, order?.order_no, order?.payment_method]);
 
   const verifyBep20TxHash = useCallback(async (options: { txHash?: string; silent?: boolean } = {}) => {
     const candidateTxHash = String(options.txHash ?? txHash).trim();
-    if (!order?.order_no || bep20VerifyInFlight.current || !/^0x[0-9a-fA-F]{64}$/.test(candidateTxHash)) return false;
+    const trc20 = order?.payment_method === "usdt_trc20";
+    const hashValid = trc20
+      ? /^[0-9a-fA-F]{64}$/.test(candidateTxHash)
+      : /^0x[0-9a-fA-F]{64}$/.test(candidateTxHash);
+    if (!order?.order_no || bep20VerifyInFlight.current || !hashValid) return false;
     bep20VerifyInFlight.current = true;
     if (!options.silent) {
       setVerifyingTx(true);
       setError("");
     }
     try {
-      const response = await fetch("/api/payments/bep20/verify", {
+      const verifyEndpoint = trc20 ? "/api/payments/trc20/verify" : "/api/payments/bep20/verify";
+      const response = await fetch(verifyEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1107,7 +1121,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
       bep20VerifyInFlight.current = false;
       if (!options.silent) setVerifyingTx(false);
     }
-  }, [loadOrder, order?.order_no, txHash]);
+  }, [loadOrder, order?.order_no, order?.payment_method, txHash]);
 
   async function queryStatus(sessionNo: string) {
     const response = await fetchWithTimeout(`/api/payments/status/${encodeURIComponent(sessionNo)}`, { cache: "no-store" });
@@ -1168,14 +1182,14 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
   }, [session?.sessionNo]);
 
   useEffect(() => {
-    if (isBep20Order && order?.order_no && !bep20Session && !loading) {
+    if (isChainOrder && order?.order_no && !bep20Session && !loading) {
       void loadBep20Session();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isBep20Order, order?.order_no, loading]);
+  }, [isChainOrder, order?.order_no, loading]);
 
   useEffect(() => {
-    if (!isBep20Order || !order?.order_no || !bep20Session) return;
+    if (!isChainOrder || !order?.order_no || !bep20Session) return;
     const liveOrderStatus = normalizeOrderStatus(order.status);
     const livePaymentStatus = normalizePaymentStatus(order.payment_status);
     if (["delivered", "completed", "expired", "failed", "cancelled"].includes(liveOrderStatus)) return;
@@ -1196,8 +1210,12 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
         bep20PollInFlight.current = true;
         try {
           const submittedTxHash = String(bep20Session.submittedTxHash ?? "").trim();
-          const shouldRecheckSubmittedTransaction = ["submitted", "confirming"].includes(bep20Session.status)
-            && /^0x[0-9a-fA-F]{64}$/.test(submittedTxHash);
+          const validHash = isTrc20Order
+            ? /^[0-9a-fA-F]{64}$/.test(submittedTxHash)
+            : /^0x[0-9a-fA-F]{64}$/.test(submittedTxHash);
+          const shouldRecheckSubmittedTransaction = !isTrc20Order
+            && ["submitted", "confirming"].includes(bep20Session.status)
+            && validHash;
           if (shouldRecheckSubmittedTransaction) {
             await verifyBep20TxHash({ txHash: submittedTxHash, silent: true });
           }
@@ -1229,7 +1247,8 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
     bep20Session?.chainSessionId,
     bep20Session?.paymentAction,
     bep20Session?.status,
-    isBep20Order,
+    isChainOrder,
+    isTrc20Order,
     loadBep20Session,
     loadOrder,
     order?.order_no,
@@ -1433,10 +1452,18 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                   <Info label="实付金额" value={formatMoney(order.total_amount, order.currency)} strong />
                   <Info label="支付方式" value={paymentMethodLabel} />
                   <Info label="下单时间" value={formatDate(order.created_at)} />
-                  {isBep20Order && bep20Session?.submittedTxHash ? (
+                  {isChainOrder && bep20Session?.submittedTxHash ? (
                     <div className="pt-1">
                       <Button asChild type="button" size="sm" variant="outline" className="w-full rounded-xl text-xs">
-                        <a href={`https://bscscan.com/tx/${bep20Session.submittedTxHash}`} target="_blank" rel="noopener noreferrer">
+                        <a
+                          href={
+                            isTrc20Order
+                              ? `https://tronscan.org/#/transaction/${bep20Session.submittedTxHash}`
+                              : `https://bscscan.com/tx/${bep20Session.submittedTxHash}`
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
                           查看链上交易凭证
                         </a>
@@ -1469,9 +1496,10 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                {isBep20Order ? (
+                {isChainOrder ? (
                   <Bep20PaymentPanel
                     session={bep20Session}
+                    isTrc20={isTrc20Order}
                     orderStatus={order.status}
                     paymentStatus={order.payment_status}
                     loading={creatingSession}
@@ -1655,8 +1683,8 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
               </CardContent>
             </Card>
 
-            {isBep20Order ? (
-              <Bep20PaymentNoticeCard />
+            {isChainOrder ? (
+              <Bep20PaymentNoticeCard isTrc20={isTrc20Order} />
             ) : null}
 
             {normalizedPaymentStatus === "paid" ? (
@@ -1681,6 +1709,7 @@ function OrderPaymentPage({ orderNo }: { orderNo: string }) {
 
 function Bep20PaymentPanel({
   session,
+  isTrc20 = false,
   orderStatus,
   paymentStatus,
   loading,
@@ -1693,6 +1722,7 @@ function Bep20PaymentPanel({
   onCopy,
 }: {
   session: Bep20ChainSession | null;
+  isTrc20?: boolean;
   orderStatus: string | null | undefined;
   paymentStatus: string | null | undefined;
   loading: boolean;
@@ -1704,7 +1734,9 @@ function Bep20PaymentPanel({
   onVerify: () => void;
   onCopy: (value: string) => void;
 }) {
-  const txHashValid = /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
+  const txHashValid = isTrc20
+    ? /^[0-9a-fA-F]{64}$/.test(txHash.trim())
+    : /^0x[0-9a-fA-F]{64}$/.test(txHash.trim());
   const normalizedOrderStatus = normalizeOrderStatus(orderStatus);
 
   if (!session) {
@@ -1736,11 +1768,11 @@ function Bep20PaymentPanel({
     }
     return (
       <div className="space-y-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-        <div className="font-semibold">USDT-BEP20 支付暂未准备好</div>
-        <p>请先创建链上支付单。未配置 BSC RPC 或收款地址时不会生成假地址。</p>
+        <div className="font-semibold">{isTrc20 ? "USDT-TRC20 支付暂未准备好" : "USDT-BEP20 支付暂未准备好"}</div>
+        <p>{isTrc20 ? "请先创建 TRON 链上支付单。未配置 TRON 节点或收款地址时不会生成假地址。" : "请先创建链上支付单。未配置 BSC RPC 或收款地址时不会生成假地址。"}</p>
         <Button type="button" onClick={onCreate} disabled={loading}>
           {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          创建 USDT-BEP20 支付单
+          {isTrc20 ? "创建 USDT-TRC20 支付单" : "创建 USDT-BEP20 支付单"}
         </Button>
       </div>
     );
@@ -1830,10 +1862,17 @@ function Bep20PaymentPanel({
             : "border-orange-200/80 bg-[#fff7ee] text-[#9a4d1f]"
         )}>
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-amber-500 px-2.5 py-0.5 text-[11px] font-bold text-white">
-              BSC · BEP20
+            <span className={cn(
+              "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold text-white",
+              isTrc20 ? "bg-rose-600" : "bg-amber-500"
+            )}>
+              {isTrc20 ? "TRON · TRC20" : "BSC · BEP20"}
             </span>
-            <span>仅支持 BEP20 网络转账，严禁 ERC20 / TRC20 跨链</span>
+            <span>
+              {isTrc20
+                ? "仅支持 TRC20 网络转账，严禁 BEP20 / ERC20 跨链"
+                : "仅支持 BEP20 网络转账，严禁 ERC20 / TRC20 跨链"}
+            </span>
           </div>
           {timingVisibility.showCountdown ? (
             <div className="inline-flex items-center gap-1.5 font-mono text-sm font-bold">
@@ -1850,12 +1889,12 @@ function Bep20PaymentPanel({
             <div className="mt-0.5 text-slate-500">按精确小数转账</div>
           </div>
           <div className="rounded-xl border border-orange-100 bg-white px-2 py-2">
-            <div className="font-bold text-primary">② BEP20 链转出</div>
+            <div className="font-bold text-primary">{isTrc20 ? "② TRC20 链转出" : "② BEP20 链转出"}</div>
             <div className="mt-0.5 text-slate-500">提现手续费另计</div>
           </div>
           <div className="rounded-xl border border-orange-100 bg-white px-2 py-2">
-            <div className="font-bold text-primary">③ 粘贴 TxHash</div>
-            <div className="mt-0.5 text-slate-500">链上确认后秒发卡</div>
+            <div className="font-bold text-primary">{isTrc20 ? "③ 自动识别秒发卡" : "③ 粘贴 TxHash"}</div>
+            <div className="mt-0.5 text-slate-500">{isTrc20 ? "免填 TxHash 自动确认" : "链上确认后秒发卡"}</div>
           </div>
         </div>
 
@@ -1902,7 +1941,9 @@ function Bep20PaymentPanel({
           <div className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-4 text-sm">
             <div>
               <div className="mb-1.5 flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-slate-600">收款地址（BNB Smart Chain · BEP20）</span>
+                <span className="text-xs font-semibold text-slate-600">
+                  {isTrc20 ? "收款地址（TRON Network · TRC20）" : "收款地址（BNB Smart Chain · BEP20）"}
+                </span>
                 <Button
                   type="button"
                   size="sm"
@@ -1945,14 +1986,20 @@ function Bep20PaymentPanel({
 
       {canSubmitTxHash ? <div className="space-y-2 rounded-xl border border-slate-200/80 bg-white p-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <label className="text-sm font-semibold text-foreground">提交交易哈希（TxHash）完成核验</label>
-          <span className="text-[11px] text-muted-foreground">在交易所提币详情中复制 0x 开头的 66 位哈希</span>
+          <label className="text-sm font-semibold text-foreground">
+            {isTrc20 ? "提交交易哈希（TxHash）加速核验（可选）" : "提交交易哈希（TxHash）完成核验"}
+          </label>
+          <span className="text-[11px] text-muted-foreground">
+            {isTrc20
+              ? "系统每 4 秒自动扫描到账，也可粘贴 64 位 TRON 哈希手动触发"
+              : "在交易所提币详情中复制 0x 开头的 66 位哈希"}
+          </span>
         </div>
         <div className="flex gap-2">
           <input
             value={txHash}
             onChange={(event) => onTxHashChange(event.target.value)}
-            placeholder="0x 开头的 32 字节交易哈希"
+            placeholder={isTrc20 ? "64 位十六进制 TRON 交易哈希（不含 0x）" : "0x 开头的 32 字节交易哈希"}
             className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-white px-3 font-mono text-base md:text-sm outline-none focus:border-primary"
           />
           <Button
@@ -1972,7 +2019,13 @@ function Bep20PaymentPanel({
             粘贴
           </Button>
         </div>
-        {txHash && !txHashValid ? <div className="text-xs text-red-600">请输入合法的 0x 开头 64 位十六进制 TxHash。</div> : null}
+        {txHash && !txHashValid ? (
+          <div className="text-xs text-red-600">
+            {isTrc20
+              ? "请输入合法的 64 位十六进制 TRON TxHash（不含 0x 前缀）。"
+              : "请输入合法的 0x 开头 64 位十六进制 TxHash。"}
+          </div>
+        ) : null}
       </div> : null}
 
       {session.message && !isReviewPending && normalizedPaymentStatus !== "paid" ? (
@@ -1990,7 +2043,15 @@ function Bep20PaymentPanel({
         </Button> : null}
         {timingVisibility.hasSubmittedTxHash ? (
           <Button asChild type="button" variant="outline">
-            <a href={`https://bscscan.com/tx/${session.submittedTxHash}`} target="_blank" rel="noopener noreferrer">
+            <a
+              href={
+                isTrc20
+                  ? `https://tronscan.org/#/transaction/${session.submittedTxHash}`
+                  : `https://bscscan.com/tx/${session.submittedTxHash}`
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               <ExternalLink className="mr-2 h-4 w-4" />
               查看链上交易
             </a>
@@ -2002,7 +2063,7 @@ function Bep20PaymentPanel({
   );
 }
 
-function Bep20PaymentNoticeCard() {
+function Bep20PaymentNoticeCard({ isTrc20 = false }: { isTrc20?: boolean }) {
   return (
     <Card className="lg:col-span-2">
       <CardHeader className="pb-3">
@@ -2010,13 +2071,25 @@ function Bep20PaymentNoticeCard() {
       </CardHeader>
       <CardContent>
         <ol className="list-decimal space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
-          <li>仅支持 USDT 通过 BNB Smart Chain（BEP20）转账。</li>
+          <li>
+            {isTrc20
+              ? "仅支持 USDT 通过 TRON Network（TRC20）转账。"
+              : "仅支持 USDT 通过 BNB Smart Chain（BEP20）转账。"}
+          </li>
           <li>请保证收款地址实际到账金额与页面应付金额完全一致。</li>
           <li>交易所或钱包可能收取提现费、网络费，相关手续费需由付款方另行承担，不能从应付金额中扣除。</li>
           <li>订单创建时会锁定本单汇率、应付 USDT 和付款期限，请在有效期内完成转账。</li>
-          <li>超额到账部分将在核验后按订单规则转换为站内余额。</li>
+          <li>
+            {isTrc20
+              ? "TRC20 转账上链确认后系统将自动识别并秒级发卡，无需手动填写 TxHash。"
+              : "超额到账部分将在核验后按订单规则转换为站内余额。"}
+          </li>
           <li>订单过期后请勿继续转账；如已转账或遇到异常，请联系在线客服并提供订单号和 TxHash。</li>
-          <li>请勿通过 ERC20、TRC20、opBNB 或其他网络付款。</li>
+          <li>
+            {isTrc20
+              ? "请勿通过 BEP20、ERC20、opBNB 或其他网络付款。"
+              : "请勿通过 ERC20、TRC20、opBNB 或其他网络付款。"}
+          </li>
         </ol>
       </CardContent>
     </Card>

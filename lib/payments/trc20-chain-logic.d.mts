@@ -10,6 +10,17 @@ export function tronTopicToBase58(topicHex: string): string | null;
 export function isValidTronAddress(address: string): boolean;
 export function normalizeTronTxHash(value: string): string | null;
 export function formatRawTokenAmount(rawAmount: bigint | string | number, decimals?: number): string | null;
+export function decimalToRawTokenAmount(decimalValue: string | number, decimals?: number): bigint | null;
+
+export function matchTronGridTrc20Candidates(input: {
+  transfers: unknown;
+  expectedRecipient: string;
+  expectedContract?: string;
+  expectedRawAmount: bigint | string | number;
+  minTimestampMs?: number;
+  maxTimestampMs?: number;
+  excludedTxHashes?: Set<string>;
+}): string[];
 
 export type Trc20VerifiedEvidence = {
   chainId: number;
@@ -39,4 +50,5 @@ export function verifyTrc20TransferReceipt(input: {
   expectedRecipient: string;
   decimals?: number;
   requiredConfirmations?: number;
+  allowInsufficientConfirmations?: boolean;
 }): Trc20VerifyResult;

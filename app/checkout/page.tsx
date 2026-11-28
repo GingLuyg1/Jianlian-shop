@@ -47,6 +47,10 @@ import { resolveGiftCardBrand } from "@/components/products/details/gift-card-br
 const BrandGiftCardProductDetails = dynamic(() => import("@/components/products/details/BrandGiftCardProductDetails"), {
   loading: () => <InlineDetailLoadingCard />,
 });
+import { isSimTopupServiceProduct } from "@/components/products/details/SimTopupServiceProductDetails";
+const SimTopupServiceProductDetails = dynamic(() => import("@/components/products/details/SimTopupServiceProductDetails"), {
+  loading: () => <InlineDetailLoadingCard />,
+});
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -168,7 +172,7 @@ function createCheckoutClientRequestId() {
 }
 
 const REQUIRED_AGREEMENT_TYPES = ["terms_of_service", "refund_policy", "digital_delivery_policy", "purchase_notice"];
-const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20", "alipay", "wechat_pay"]);
+const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20", "usdt_trc20", "alipay", "wechat_pay"]);
 const CHECKOUT_PAYMENT_OPTIONS = PAYMENT_METHOD_OPTIONS.filter((option) => option.code !== "binance_pay")
   .sort((a, b) => Number(a.code === "usdt_trc20") - Number(b.code === "usdt_trc20"));
 const AGREEMENT_LABELS: Record<string, string> = {
@@ -924,7 +928,7 @@ function CheckoutPageContent() {
   );
 
   const pickDefaultThirdPartyMethod = useCallback((): PaymentMethodCode => {
-    const preference: PaymentMethodCode[] = ["wechat_pay", "alipay", "usdt_bep20"];
+    const preference: PaymentMethodCode[] = ["wechat_pay", "alipay", "usdt_bep20", "usdt_trc20"];
     for (const code of preference) {
       if (!ORDER_ENABLED_PAYMENT_METHODS.has(code)) continue;
       const option = getPaymentMethodOption(code);
@@ -2436,8 +2440,8 @@ function ProductDetailCard({
           <ClaudeRechargeDetails product={product} />
         ) : family === "gemini" ? (
           <GeminiRechargeDetails product={product} />
-        ) : product.id === GIFFGAFF_TOPUP_PRODUCT_ID || (product.name.toLowerCase().includes("giffgaff") && (product.name.includes("充值") || (product.slug || "").includes("topup"))) ? (
-          <GiffgaffTopupDetails product={product} />
+        ) : product.id === GIFFGAFF_TOPUP_PRODUCT_ID || isSimTopupServiceProduct(product) ? (
+          <GiffgaffTopupDetails product={product} skuOptions={skuOptions} />
         ) : isAppleGiftCardProduct(product) ? (
           <AppleGiftCardDetails product={product} skuOptions={skuOptions} />
         ) : resolveGiftCardBrand(product) ? (
@@ -2542,171 +2546,24 @@ function BrandGiftCardDetails({
   return <BrandGiftCardProductDetails product={product} skus={skus} />;
 }
 
-function GiffgaffTopupDetails({ product }: { product: Product }) {
-  const highlights = [
-    {
-      icon: CreditCard,
-      title: "16位充值卡密",
-      text: "下单后按商品面额交付 Giffgaff 充值卡密，发货方式为 16 位卡密。",
-    },
-    {
-      icon: Gift,
-      title: "支持多档面额",
-      text: "支持 10 英镑、15 英镑、20 英镑等充值档位，具体以页面 SKU 选择为准。",
-    },
-    {
-      icon: Smartphone,
-      title: "自助充值",
-      text: "收到卡密后进入 Giffgaff 官网或 App 的 Voucher / Top-up 页面自助兑换。",
-    },
-    {
-      icon: CheckCircle2,
-      title: "即时核验",
-      text: "兑换完成后请第一时间检查号码余额或套餐状态，确认充值是否到账。",
-    },
-    {
-      icon: Clock3,
-      title: "售后时效",
-      text: "卡密类商品请在发货后 24 小时内完成核验，有问题及时联系客服。",
-    },
-    {
-      icon: ShieldCheck,
-      title: "一次性商品",
-      text: "卡密一经发出不支持无理由退换，使用前请确认充值号码和面额。",
-    },
-  ];
-
-  const rules = [
-    ["商品内容", `${product.name}，支持 Giffgaff 号码余额充值。`],
-    ["发货方式", "16 位充值卡密，按下单选择的面额交付。"],
-    [
-      "充值方式",
-      "进入 Giffgaff 官网或 App，选择 Top-up / Redeem a voucher，输入 16 位卡密完成充值。",
-    ],
-    [
-      "使用前确认",
-      "请确认 Giffgaff 手机号、充值面额和账号状态正常，避免卡密兑换到错误号码。",
-    ],
-    [
-      "售后说明",
-      "卡密类商品属于一次性数字商品，非商品问题售出后不支持无理由退换。",
-    ],
-  ];
-
-  const steps = [
-    ["第一步：选择面额", "在下单页选择需要的 10 英镑、15 英镑或 20 英镑充值档位。"],
-    ["第二步：提交订单", "填写接收邮箱并提交订单，等待系统或客服交付 16 位充值卡密。"],
-    [
-      "第三步：打开充值页面",
-      "进入 Giffgaff 官网或 App 的 Top-up / Voucher 兑换入口。",
-    ],
-    [
-      "第四步：输入卡密",
-      "输入收到的 16 位充值卡密并确认兑换，完成后检查余额或套餐状态。",
-    ],
-  ];
-
-  return (
-    <div className="mt-8 w-full space-y-5">
-      <section className="rounded-2xl border border-orange-200 bg-orange-50/70 p-5">
-        <div className="inline-flex rounded-full border border-orange-200 bg-white px-3 py-1 text-xs font-semibold text-orange-700">
-          Giffgaff | 16位卡密充值
-        </div>
-        <h2 className="mt-3 text-2xl font-bold text-slate-950">
-          {product.name}
-        </h2>
-        <p className="mt-2 max-w-3xl text-sm leading-7 text-slate-600">
-          Giffgaff 充值商品采用 16 位卡密交付。下单前请确认需要的充值面额，
-          收到卡密后前往 Giffgaff 官网或 App 自助兑换，并第一时间检查到账状态。
-        </p>
-      </section>
-
-      <section className="overflow-hidden rounded-2xl border border-orange-200 bg-white">
-        <div className="bg-orange-600 px-5 py-4 text-center text-white">
-          <div className="text-xs font-semibold uppercase tracking-wide text-orange-100">
-            Top-up Highlights
-          </div>
-          <div className="mt-1 text-lg font-bold">卡密发货，自助充值</div>
-        </div>
-        <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
-          {highlights.map((item) => {
-            const Icon = item.icon;
-            return (
-              <div
-                key={item.title}
-                className="rounded-xl border border-orange-100 bg-orange-50/40 p-4 text-center"
-              >
-                <Icon className="mx-auto h-7 w-7 text-orange-700" />
-                <div className="mt-2 text-sm font-semibold text-slate-950">
-                  {item.title}
-                </div>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  {item.text}
-                </p>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-orange-200 bg-white p-5">
-        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
-          <ShieldCheck className="h-5 w-5 text-orange-700" />
-          商品说明与充值方式
-        </h3>
-        <div className="mt-4 space-y-3">
-          {rules.map(([label, text]) => (
-            <div
-              key={String(label)}
-              className="rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3 text-sm leading-6"
-            >
-              <span className="font-semibold text-slate-950">{label}：</span>
-              <span className="text-slate-600">{text}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-orange-200 bg-white p-5">
-        <h3 className="flex items-center gap-2 text-base font-bold text-slate-950">
-          <CheckCircle2 className="h-5 w-5 text-orange-700" />
-          使用步骤
-        </h3>
-        <div className="mt-4 space-y-3">
-          {steps.map(([title, text]) => (
-            <div
-              key={String(title)}
-              className="rounded-xl border border-orange-100 bg-orange-50/30 px-4 py-3"
-            >
-              <div className="text-sm font-semibold text-slate-950">
-                {title}
-              </div>
-              <p className="mt-1 text-sm leading-6 text-slate-600">{text}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-rose-200 bg-rose-50/60 p-5">
-        <h3 className="flex items-center gap-2 text-base font-bold text-rose-700">
-          <Clock3 className="h-5 w-5" />
-          售后与注意事项
-        </h3>
-        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
-          {[
-            "收到 16 位卡密后请尽快兑换并核验余额或套餐状态。",
-            "请勿将卡密泄露给他人，卡密一经兑换即无法撤回。",
-            "如果充值失败，请保留页面提示和卡密信息，在售后期内联系在线客服处理。",
-          ].map((item) => (
-            <li key={item} className="flex gap-2">
-              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
-              <span>{item}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-    </div>
+function GiffgaffTopupDetails({
+  product,
+  skuOptions,
+}: {
+  product: Product;
+  skuOptions?: SkuOption[];
+}) {
+  const skus = useMemo(
+    () =>
+      (skuOptions ?? []).map((option) => ({
+        sku_title: option.label,
+        sku_code: option.code ?? option.id,
+        price: option.rmb,
+      })),
+    [skuOptions]
   );
+
+  return <SimTopupServiceProductDetails product={product} skus={skus} />;
 }
 
 function AppleIdDetails({ product }: { product: Product }) {

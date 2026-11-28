@@ -8,8 +8,10 @@ import {
   TRON_REQUIRED_CONFIRMATIONS,
   TRON_USDT_CONTRACT,
   TRON_USDT_DECIMALS,
+  decimalToRawTokenAmount,
   formatRawTokenAmount,
   isValidTronAddress,
+  matchTronGridTrc20Candidates,
   normalizeTronTxHash,
   tronBase58ToHex41,
   tronHexToBase58,
@@ -242,4 +244,99 @@ test("TRC20 candidate migration enforces security boundaries and does not auto-e
   assert.match(rechargePage, /\/assets\/usdt-trc20-icon\.jpg/);
   assert.match(paymentPage, /\/trc20\/verify/);
   assert.match(paymentPage, /TRON Network \(TRC20\)/);
+});
+
+test("Bitget Wallet TRON address validates cleanly and TronGrid auto-scan matcher enforces exact criteria", () => {
+  const walletAddr = "TBe2ak6N5iACv8DfKhypumawTVtcFDvx29";
+  assert.equal(isValidTronAddress(walletAddr), true);
+  assert.equal(tronHexToBase58(tronBase58ToHex41(walletAddr)), walletAddr);
+
+  assert.equal(decimalToRawTokenAmount("14.9254", 6), 14_925_400n);
+  assert.equal(decimalToRawTokenAmount("0.01", 6), 10_000n);
+  assert.equal(decimalToRawTokenAmount("1.0000001", 6), null);
+  assert.equal(decimalToRawTokenAmount("0", 6), null);
+
+  const txOlder = "1111111111111111111111111111111111111111111111111111111111111111";
+  const txNewer = "2222222222222222222222222222222222222222222222222222222222222222";
+  const txUsed = "3333333333333333333333333333333333333333333333333333333333333333";
+  const t0 = Date.parse("2026-11-28T06:00:00.000Z");
+
+  const candidates = matchTronGridTrc20Candidates({
+    expectedRecipient: walletAddr,
+    expectedContract: TRON_USDT_CONTRACT,
+    expectedRawAmount: 9_155_100n,
+    minTimestampMs: t0 - 120_000,
+    maxTimestampMs: t0 + 900_000,
+    excludedTxHashes: new Set([txUsed]),
+    transfers: [
+      // Wrong amount
+      { type: "Transfer", to: walletAddr, value: "9155000", block_timestamp: t0 + 10_000, transaction_id: "4444444444444444444444444444444444444444444444444444444444444444", token_info: { address: TRON_USDT_CONTRACT } },
+      // Wrong contract
+      { type: "Transfer", to: walletAddr, value: "9155100", block_timestamp: t0 + 15_000, transaction_id: "5555555555555555555555555555555555555555555555555555555555555555", token_info: { address: OTHER_RECIPIENT } },
+      // Case-corrupted recipient
+      { type: "Transfer", to: walletAddr.toLowerCase(), value: "9155100", block_timestamp: t0 + 20_000, transaction_id: "6666666666666666666666666666666666666666666666666666666666666666", token_info: { address: TRON_USDT_CONTRACT } },
+      // Out of window (after expiry)
+      { type: "Transfer", to: walletAddr, value: "9155100", block_timestamp: t0 + 900_001, transaction_id: "7777777777777777777777777777777777777777777777777777777777777777", token_info: { address: TRON_USDT_CONTRACT } },
+      // Already used
+      { type: "Transfer", to: walletAddr, value: "9155100", block_timestamp: t0 + 25_000, transaction_id: txUsed, token_info: { address: TRON_USDT_CONTRACT } },
+      // Valid newer
+      { type: "Transfer", to: walletAddr, value: "9155100", block_timestamp: t0 + 60_000, transaction_id: txNewer.toUpperCase(), token_info: { address: TRON_USDT_CONTRACT } },
+      // Valid older
+      { type: "Transfer", to: walletAddr, value: "9155100", block_timestamp: t0 + 30_000, transaction_id: txOlder, token_info: { address: TRON_USDT_CONTRACT } },
+    ],
+  });
+  assert.deepEqual(candidates, [txOlder, txNewer]);
+
+  // allowInsufficientConfirmations returns evidence with live confirmation count for order confirming progress
+  const confirming = verifyTrc20TransferReceipt({
+    ...buildValidReceipt({ blockNumber: 68_000_100, nowBlockNumber: 68_000_105 }),
+    allowInsufficientConfirmations: true,
+  });
+  assert.equal(confirming.ok, true);
+  assert.equal(confirming.evidence.confirmationCount, 6);
+});
+
+test("TRC20 order closed-loop migration, auto-scan routes, and checkout UI enforce security invariants", () => {
+  const orderMigration = readFileSync(
+    new URL("../../supabase/migrations/20261128143000_usdt_trc20_order_closed_loop.sql", import.meta.url),
+    "utf8",
+  );
+  const rechargeDetailRoute = readFileSync(
+    new URL("../../app/api/recharges/[rechargeNo]/route.ts", import.meta.url),
+    "utf8",
+  );
+  const channelsRoute = readFileSync(
+    new URL("../../app/api/recharges/channels/route.ts", import.meta.url),
+    "utf8",
+  );
+  const ordersRoute = readFileSync(
+    new URL("../../app/api/orders/route.ts", import.meta.url),
+    "utf8",
+  );
+  const checkoutPage = readFileSync(
+    new URL("../../app/checkout/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const paymentPage = readFileSync(
+    new URL("../../app/payment/page.tsx", import.meta.url),
+    "utf8",
+  );
+
+  // Order migration security & safety invariants
+  assert.match(orderMigration, /set local lock_timeout = '5s'/i);
+  assert.match(orderMigration, /set local statement_timeout = '60s'/i);
+  assert.match(orderMigration, /chain_payment_sessions_trc20_active_amount_unique/i);
+  assert.match(orderMigration, /create or replace function public\.claim_trc20_chain_transaction/i);
+  assert.match(orderMigration, /revoke all on function public\.claim_trc20_chain_transaction[\s\S]*from public, anon, authenticated/i);
+  assert.match(orderMigration, /grant execute on function public\.claim_trc20_chain_transaction[\s\S]*to service_role/i);
+  assert.doesNotMatch(orderMigration, /\benabled\s*=\s*true\b/i);
+
+  // Plan A auto-scan + channels enablement + Plan B order API + UI wiring
+  assert.match(rechargeDetailRoute, /tryAutoVerifyAccountRechargeTrc20/);
+  assert.match(channelsRoute, /channel\.code === "usdt_trc20"/);
+  assert.match(ordersRoute, /createTrc20PaymentSession/);
+  assert.match(checkoutPage, /"usdt_trc20"/);
+  assert.match(paymentPage, /\/api\/payments\/trc20\/session/);
+  assert.match(paymentPage, /\/api\/payments\/trc20\/verify/);
+  assert.match(paymentPage, /tronscan\.org\/#\/transaction\//);
 });

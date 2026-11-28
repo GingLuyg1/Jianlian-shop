@@ -29,6 +29,7 @@ import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 const AirMobileProductDetails = dynamic(() => import("@/components/products/details/AirMobileProductDetails"));
 const AppleGiftCardProductDetails = dynamic(() => import("@/components/products/details/AppleGiftCardProductDetails"));
 const BrandGiftCardProductDetails = dynamic(() => import("@/components/products/details/BrandGiftCardProductDetails"));
+const SimTopupServiceProductDetails = dynamic(() => import("@/components/products/details/SimTopupServiceProductDetails"));
 const EncMobileProductDetails = dynamic(() => import("@/components/products/details/EncMobileProductDetails"));
 const GiffgaffSimProductDetails = dynamic(() => import("@/components/products/details/GiffgaffSimProductDetails"));
 const HahaSimProductDetails = dynamic(() => import("@/components/products/details/HahaSimProductDetails"));
@@ -42,6 +43,8 @@ const UltraMobileProductDetails = dynamic(() => import("@/components/products/de
 const VodafoneSimProductDetails = dynamic(() => import("@/components/products/details/VodafoneSimProductDetails"));
 import { isAppleGiftCardProduct } from "@/components/products/details/AppleGiftCardProductDetails";
 import { resolveGiftCardBrand } from "@/components/products/details/gift-card-brand-catalog";
+import { isSimTopupServiceProduct } from "@/components/products/details/SimTopupServiceProductDetails";
+import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { getPublicStockDisplay } from "@/lib/products/delivery-and-stock";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
@@ -78,7 +81,7 @@ const REQUIRED_AGREEMENT_TYPES = [
   "digital_delivery_policy",
   "purchase_notice",
 ] as const;
-const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20", "alipay", "wechat_pay"]);
+const ORDER_ENABLED_PAYMENT_METHODS = new Set<PaymentMethodCode>(["balance", "usdt_bep20", "usdt_trc20", "alipay", "wechat_pay"]);
 const AVAILABLE_PAYMENT_OPTIONS = PAYMENT_METHOD_OPTIONS.filter((option) =>
   ORDER_ENABLED_PAYMENT_METHODS.has(option.code)
 );
@@ -576,14 +579,14 @@ export default function ProductDetailPage() {
         className="mx-auto w-full max-w-[1668px] overflow-visible"
       >
         {status === "loading" ? (
-          <Card>
-            <CardContent className="p-8">
-              <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_390px]">
-                <div className="space-y-4">
-                  <div className="h-80 animate-pulse rounded-2xl bg-orange-50" />
-                  <div className="h-32 animate-pulse rounded-2xl bg-orange-50" />
+          <Card className="border-orange-100/90 bg-white/95 shadow-[0_14px_40px_-22px_rgba(133,82,43,0.2)]">
+            <CardContent className="flex min-h-[420px] items-center justify-center p-8">
+              <div className="flex flex-col items-center gap-3.5 rounded-2xl border border-orange-100/90 bg-white/95 px-9 py-7 shadow-[0_16px_40px_-18px_rgba(169,103,52,0.28)]">
+                <OptionLoadingSpinner active size="lg" />
+                <div className="text-center">
+                  <div className="text-sm font-bold text-slate-800">正在加载商品详情</div>
+                  <div className="mt-1 text-xs text-slate-500">同步最新库存与规格信息，请稍候...</div>
                 </div>
-                <div className="h-96 animate-pulse rounded-2xl bg-orange-50" />
               </div>
             </CardContent>
           </Card>
@@ -598,7 +601,7 @@ export default function ProductDetailPage() {
         ) : (
           <div
             data-testid="product-detail-grid"
-            className={`grid gap-5 overflow-visible md:min-h-0 md:overflow-hidden lg:grid-cols-[minmax(0,1fr)_386px] lg:items-stretch ${publicMainPanelHeightClassName}`}
+            className={`page-turn-enter grid gap-5 overflow-visible md:min-h-0 md:overflow-hidden lg:grid-cols-[minmax(0,1fr)_386px] lg:items-stretch ${publicMainPanelHeightClassName}`}
           >
             <div className="relative min-h-0 min-w-0 md:h-full md:overflow-hidden">
               <div
@@ -695,7 +698,9 @@ export default function ProductDetailPage() {
                 </CardContent>
               </Card>
 
-              {((product.name.toLowerCase().includes("giffgaff") || (product.slug || "").includes("giffgaff") || (product.slug || "").startsWith("sim-00")) &&
+              {isSimTopupServiceProduct(product) ? (
+                <SimTopupServiceProductDetails product={product} skus={skus} />
+              ) : ((product.name.toLowerCase().includes("giffgaff") || (product.slug || "").includes("giffgaff") || (product.slug || "").startsWith("sim-00")) &&
                 !product.name.includes("充值") &&
                 !(product.slug || "").includes("topup")) ? (
                 <GiffgaffSimProductDetails product={product} />

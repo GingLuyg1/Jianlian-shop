@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 
 import { getPaymentErrorMessage, isPaymentSchemaUnavailable, normalizeRechargeRow } from "@/lib/payments/recharge-utils";
 import { expireOverdueLiuhaoyiRecharges } from "@/lib/payments/recharge-expiry-service";
+import { tryAutoVerifyAccountRechargeTrc20 } from "@/lib/payments/trc20-chain-service";
 import { getSupabaseServerClient, hasSupabaseServerConfig } from "@/lib/supabase/server";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
 
 export const dynamic = "force-dynamic";
 
 const rechargeDetailSelect =
-  "recharge_no,channel,channel_code,channel_name,currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,payment_address,payment_token_contract,requested_cny_amount,expected_usdt_amount,actual_received_usdt,credited_cny_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,rate_locked_at,expires_at,matched_at,match_method,status,created_at,paid_at";
+  "id,recharge_no,channel,channel_code,channel_name,currency,settlement_currency,network,amount,requested_amount,fee_amount,payable_amount,received_amount,credited_amount,payment_address,payment_token_contract,requested_cny_amount,expected_usdt_amount,actual_received_usdt,credited_cny_amount,locked_market_rate,locked_settlement_rate,rate_source,rate_effective_date,rate_locked_at,expires_at,matched_at,match_method,status,created_at,paid_at";
 
 type RouteContext = {
   params: Promise<{
@@ -65,7 +66,27 @@ export async function GET(_request: Request, props: RouteContext) {
       );
     }
 
-    return NextResponse.json({ data: normalizeRechargeRow(data as Record<string, unknown>) });
+    let currentRow = data as Record<string, unknown>;
+    if (
+      service
+      && (currentRow.channel_code === "usdt_trc20" || currentRow.channel === "usdt_trc20")
+      && ["pending", "waiting_payment"].includes(String(currentRow.status ?? ""))
+    ) {
+      const settled = await tryAutoVerifyAccountRechargeTrc20(service, currentRow);
+      if (settled) {
+        const { data: refreshed } = await supabase
+          .from("account_recharges")
+          .select(rechargeDetailSelect)
+          .eq("recharge_no", rechargeNo)
+          .eq("user_id", authData.user.id)
+          .maybeSingle();
+        if (refreshed) {
+          currentRow = refreshed as Record<string, unknown>;
+        }
+      }
+    }
+
+    return NextResponse.json({ data: normalizeRechargeRow(currentRow) });
   } catch (error) {
     console.error("[Recharge detail]", getPaymentErrorMessage(error, "Recharge detail read failed"));
     return NextResponse.json(

@@ -50,7 +50,7 @@ export const PAYMENT_METHOD_OPTIONS: PaymentMethodOption[] = [
     code: "usdt_trc20",
     label: "USDT-TRC20",
     network: "TRON 网络",
-    description: "TRON 网络，暂未开放",
+    description: "TRON 网络，系统自动识别链上到账，免填 TxHash",
     channelCodes: ["usdt_trc20"],
   },
   {

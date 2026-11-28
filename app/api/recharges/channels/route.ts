@@ -62,15 +62,16 @@ export async function GET() {
           ),
       );
     const effectiveChannels = channels.filter((channel) => {
-      if (channel.code === "usdt_bep20") return true; // Existing chain watcher is not a PaymentProvider adapter.
+      if (channel.code === "usdt_bep20" || channel.code === "usdt_trc20") return true; // Chain watchers are not PaymentProvider adapters.
       const capability = getPaymentProviderCapabilities(channel.provider);
       return capability.supportsCreate && providerSupportsChannel(capability, channel.code, channel.currency);
     }).map((channel) => {
       const capability = getPaymentProviderCapabilities(channel.provider);
-      const normalizedMin = channel.code === "usdt_bep20"
+      const isUsdtChainChannel = channel.code === "usdt_bep20" || channel.code === "usdt_trc20";
+      const normalizedMin = isUsdtChainChannel
         ? 0.01
         : Math.min(0.01, Math.max(channel.minimumAmount, capability.minimumAmount ?? 0));
-      const normalizedMax = channel.code === "usdt_bep20"
+      const normalizedMax = isUsdtChainChannel
         ? undefined
         : Math.max(1000000, Math.min(channel.maximumAmount ?? capability.maximumAmount ?? Number.POSITIVE_INFINITY, capability.maximumAmount ?? Number.POSITIVE_INFINITY));
       return {
