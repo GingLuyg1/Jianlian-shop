@@ -27,6 +27,7 @@ import type { PaymentSubmitForm } from "@/lib/payments/channel-types";
 import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 
 const AirMobileProductDetails = dynamic(() => import("@/components/products/details/AirMobileProductDetails"));
+const AppleGiftCardProductDetails = dynamic(() => import("@/components/products/details/AppleGiftCardProductDetails"));
 const EncMobileProductDetails = dynamic(() => import("@/components/products/details/EncMobileProductDetails"));
 const GiffgaffSimProductDetails = dynamic(() => import("@/components/products/details/GiffgaffSimProductDetails"));
 const HahaSimProductDetails = dynamic(() => import("@/components/products/details/HahaSimProductDetails"));
@@ -38,6 +39,7 @@ const RakutenMobileProductDetails = dynamic(() => import("@/components/products/
 const TMobileProductDetails = dynamic(() => import("@/components/products/details/TMobileProductDetails"));
 const UltraMobileProductDetails = dynamic(() => import("@/components/products/details/UltraMobileProductDetails"));
 const VodafoneSimProductDetails = dynamic(() => import("@/components/products/details/VodafoneSimProductDetails"));
+import { isAppleGiftCardProduct } from "@/components/products/details/AppleGiftCardProductDetails";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { getPublicStockDisplay } from "@/lib/products/delivery-and-stock";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
@@ -682,6 +684,8 @@ export default function ProductDetailPage() {
                 <MovistarSimProductDetails product={product} />
               ) : (product.name.toLowerCase().includes("rakuten") || (product.slug || "").includes("rakuten") || product.name.includes("乐天")) ? (
                 <RakutenMobileProductDetails product={product} />
+              ) : isAppleGiftCardProduct(product) ? (
+                <AppleGiftCardProductDetails product={product} skus={skus} />
               ) : (
                 <>
                   <Card>
