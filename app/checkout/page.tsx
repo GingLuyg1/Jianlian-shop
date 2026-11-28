@@ -2120,13 +2120,39 @@ function ProductDetailCard({
   const router = useRouter();
   const { isMobile } = useMobileStorefront();
   const family = resolveRechargeProductFamily(product);
+  const detailScrollRef = useRef<HTMLDivElement | null>(null);
+  const [scrollEdges, setScrollEdges] = useState({ top: false, bottom: false });
+
+  useEffect(() => {
+    const el = detailScrollRef.current;
+    if (!el || isMobile) {
+      setScrollEdges({ top: false, bottom: false });
+      return;
+    }
+    const updateEdges = () => {
+      const top = el.scrollTop > 8;
+      const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 8;
+      setScrollEdges((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+    };
+    updateEdges();
+    el.addEventListener("scroll", updateEdges, { passive: true });
+    const ro = new ResizeObserver(updateEdges);
+    ro.observe(el);
+    const contentEl = el.firstElementChild;
+    if (contentEl) ro.observe(contentEl);
+    return () => {
+      el.removeEventListener("scroll", updateEdges);
+      ro.disconnect();
+    };
+  }, [product.id, loading, isMobile, isModal]);
+
   return (
     <Card data-testid="checkout-product-detail" className={cn("relative h-auto min-h-0 overflow-hidden lg:h-full", isModal && "!border-0 !bg-transparent !shadow-none !rounded-none")}>
       {!isModal ? (
         <button
           type="button"
           data-route-loading="true"
-          className="absolute right-3 top-3 z-10 inline-flex h-8 items-center gap-1.5 rounded-full border border-orange-200/80 bg-white/95 px-3 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-primary/40 hover:bg-orange-50/80 hover:text-primary active:scale-95 sm:right-4 sm:top-4 sm:h-9 sm:px-3.5 sm:text-[13px]"
+          className="absolute right-3 top-3 z-30 inline-flex h-8 items-center gap-1.5 rounded-full border border-orange-200/80 bg-white/95 px-3 text-xs font-semibold text-slate-700 shadow-sm transition-all hover:border-primary/40 hover:bg-orange-50/80 hover:text-primary active:scale-95 sm:right-4 sm:top-4 sm:h-9 sm:px-3.5 sm:text-[13px]"
           onClick={() => {
             // 点击一次立即退出返回分类列表页面，触发顶部横条加载动画
             if (typeof window !== "undefined") {
@@ -2140,7 +2166,31 @@ function ProductDetailCard({
           <span>返回列表</span>
         </button>
       ) : null}
-      <CardContent className={cn("h-auto p-4 sm:p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges]", isModal && "!p-1 sm:!p-1.5 lg:!py-0 lg:!pl-1 lg:!pr-2", isMobile && "!h-auto !overflow-visible !p-1", loading && "flex flex-col")}>
+      {!isMobile ? (
+        <div
+          aria-hidden="true"
+          data-testid="checkout-detail-scroll-fade-top"
+          className={cn(
+            "pointer-events-none absolute inset-x-0 top-0 z-20 hidden h-10 transition-opacity duration-300 ease-out lg:block",
+            isModal
+              ? "bg-gradient-to-b from-[#fffcf8]/75 via-[#fffcf8]/35 to-transparent"
+              : "bg-gradient-to-b from-[#fffdfa] via-[#fffdfa]/85 to-transparent",
+            scrollEdges.top ? "opacity-100" : "opacity-0"
+          )}
+        />
+      ) : null}
+      <CardContent
+        ref={detailScrollRef}
+        data-scroll-fade-top={scrollEdges.top ? "true" : "false"}
+        data-scroll-fade-bottom={scrollEdges.bottom ? "true" : "false"}
+        className={cn(
+          "h-auto p-4 sm:p-6 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable_both-edges] sidebar-scroll",
+          !isMobile && "detail-scroll-fade",
+          isModal && "!p-1 sm:!p-1.5 lg:!py-0 lg:!pl-1 lg:!pr-2",
+          isMobile && "!h-auto !overflow-visible !p-1",
+          loading && "flex flex-col"
+        )}
+      >
         <div data-testid="checkout-product-detail-content" className={cn("mx-auto w-full max-w-[1040px]", loading && "flex min-h-0 flex-1 flex-col")}>
         {!isModal ? (
           <div className="mb-3 pr-24 shrink-0 text-xs font-medium text-muted-foreground sm:mb-5 sm:text-sm">
@@ -2277,6 +2327,19 @@ function ProductDetailCard({
         )}
         </div>
       </CardContent>
+      {!isMobile ? (
+        <div
+          aria-hidden="true"
+          data-testid="checkout-detail-scroll-fade-bottom"
+          className={cn(
+            "pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden h-12 transition-opacity duration-300 ease-out lg:block",
+            isModal
+              ? "bg-gradient-to-t from-[#fffcf8]/75 via-[#fffcf8]/38 to-transparent"
+              : "bg-gradient-to-t from-[#fffdfa] via-[#fffdfa]/88 to-transparent",
+            scrollEdges.bottom ? "opacity-100" : "opacity-0"
+          )}
+        />
+      ) : null}
     </Card>
   );
 }

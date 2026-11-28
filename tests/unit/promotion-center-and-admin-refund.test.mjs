@@ -268,6 +268,11 @@ test("checkout guards topup/PIN products from SIM detail mismatch, protects dark
   assert.match(mall, /if \(!activeModalProductId\)[\s\S]{0,60}setSelectedProductId\(""\)/);
   assert.match(modalCss, /section:not\(\[class\*="text-white"\]\):not\(\[class\*="bg-gradient-"\]\)/);
   assert.match(modalCss, /--scroll-fade-size:\s*22px/);
+  assert.match(modalCss, /padding:\s*16px;/);
+  assert.match(checkout, /data-testid="checkout-detail-scroll-fade-top"/);
+  assert.match(checkout, /data-testid="checkout-detail-scroll-fade-bottom"/);
+  assert.match(checkout, /detail-scroll-fade/);
+  assert.match(globalsCss, /\.detail-scroll-fade/);
   assert.match(globalsCss, /@keyframes product-artwork-pop/);
   assert.match(tutorials, /scroll-fade-y/);
 });

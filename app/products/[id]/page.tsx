@@ -193,6 +193,29 @@ export default function ProductDetailPage() {
   const [submitError, setSubmitError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [liuhaoyiLimitDialogOpen, setLiuhaoyiLimitDialogOpen] = useState(false);
+  const detailScrollRef = useRef<HTMLDivElement | null>(null);
+  const [detailScrollEdges, setDetailScrollEdges] = useState({ top: false, bottom: false });
+
+  useEffect(() => {
+    const el = detailScrollRef.current;
+    if (!el) {
+      setDetailScrollEdges({ top: false, bottom: false });
+      return;
+    }
+    const updateEdges = () => {
+      const top = el.scrollTop > 8;
+      const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 8;
+      setDetailScrollEdges((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+    };
+    updateEdges();
+    el.addEventListener("scroll", updateEdges, { passive: true });
+    const ro = new ResizeObserver(updateEdges);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateEdges);
+      ro.disconnect();
+    };
+  }, [product?.id, status]);
   const clientRequestIdRef = useRef("");
   const loadSeqRef = useRef(0);
 
@@ -575,10 +598,22 @@ export default function ProductDetailPage() {
             data-testid="product-detail-grid"
             className={`grid gap-5 overflow-visible md:min-h-0 md:overflow-hidden lg:grid-cols-[minmax(0,1fr)_386px] lg:items-stretch ${publicMainPanelHeightClassName}`}
           >
-            <div
-              data-testid="product-detail-left"
-              className="min-h-0 min-w-0 space-y-5 overflow-visible px-1 sidebar-scroll md:h-full md:overflow-x-hidden md:overflow-y-auto md:[scrollbar-gutter:stable_both-edges]"
-            >
+            <div className="relative min-h-0 min-w-0 md:h-full md:overflow-hidden">
+              <div
+                aria-hidden="true"
+                data-testid="product-detail-scroll-fade-top"
+                className={cn(
+                  "pointer-events-none absolute inset-x-0 top-0 z-20 hidden h-10 bg-gradient-to-b from-[#fcf8f3] via-[#fcf8f3]/85 to-transparent transition-opacity duration-300 ease-out md:block",
+                  detailScrollEdges.top ? "opacity-100" : "opacity-0"
+                )}
+              />
+              <div
+                ref={detailScrollRef}
+                data-testid="product-detail-left"
+                data-scroll-fade-top={detailScrollEdges.top ? "true" : "false"}
+                data-scroll-fade-bottom={detailScrollEdges.bottom ? "true" : "false"}
+                className="detail-scroll-fade min-h-0 min-w-0 space-y-5 overflow-visible px-1 sidebar-scroll md:h-full md:overflow-x-hidden md:overflow-y-auto md:[scrollbar-gutter:stable_both-edges]"
+              >
               <button
                 type="button"
                 onClick={() => router.back()}
@@ -731,6 +766,15 @@ export default function ProductDetailPage() {
                   </Card>
                 </>
               )}
+              </div>
+              <div
+                aria-hidden="true"
+                data-testid="product-detail-scroll-fade-bottom"
+                className={cn(
+                  "pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden h-12 bg-gradient-to-t from-[#fcf8f3] via-[#fcf8f3]/88 to-transparent transition-opacity duration-300 ease-out md:block",
+                  detailScrollEdges.bottom ? "opacity-100" : "opacity-0"
+                )}
+              />
             </div>
 
             <aside className="flex min-h-0 min-w-0 overflow-visible md:h-full md:overflow-hidden">

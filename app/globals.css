@@ -253,6 +253,35 @@ body:has([data-storefront-ui]) [role="dialog"]:not([class*="inset-y-0"]) {
   );
 }
 
+@media (min-width: 1024px) {
+  .detail-scroll-fade {
+    --detail-fade-top: 0px;
+    --detail-fade-bottom: 0px;
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--detail-fade-top),
+      #000 calc(100% - var(--detail-fade-bottom)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0,
+      #000 var(--detail-fade-top),
+      #000 calc(100% - var(--detail-fade-bottom)),
+      transparent 100%
+    );
+  }
+
+  .detail-scroll-fade[data-scroll-fade-top="true"] {
+    --detail-fade-top: 32px;
+  }
+
+  .detail-scroll-fade[data-scroll-fade-bottom="true"] {
+    --detail-fade-bottom: 36px;
+  }
+}
+
 /* Catalog motion only: wrappers keep the approved cards and layout unchanged. */
 @media (min-width: 1024px) {
   .catalog-wheel-item {
