@@ -38,7 +38,6 @@ const OneNzProductDetails = dynamic(() => import("@/components/products/details/
 const RakutenMobileProductDetails = dynamic(() => import("@/components/products/details/RakutenMobileProductDetails"));
 const UltraMobileProductDetails = dynamic(() => import("@/components/products/details/UltraMobileProductDetails"));
 const TMobileProductDetails = dynamic(() => import("@/components/products/details/TMobileProductDetails"));
-import RefinedLoadingOrb from "@/components/ui/RefinedLoadingOrb";
 import { isAppleGiftCardProduct } from "@/components/products/details/AppleGiftCardProductDetails";
 const AppleGiftCardProductDetails = dynamic(() => import("@/components/products/details/AppleGiftCardProductDetails"), {
   loading: () => <InlineDetailLoadingCard />,
@@ -2189,12 +2188,18 @@ function InlineDetailLoadingCard() {
     <div
       role="status"
       aria-label="商品详情加载中"
-      className={cn(
-        "relative mt-6 flex min-h-[240px] flex-col items-center justify-center rounded-2xl bg-white/55 px-6 py-10 text-center",
-        modalStyles.loadingBoxEnter
-      )}
+      className={cn("mt-6 space-y-4", modalStyles.loadingBoxEnter)}
     >
-      <RefinedLoadingOrb label="正在加载商品详情" />
+      <div className="catalog-placeholder h-28 w-full rounded-2xl border border-orange-100/70" />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {[0, 1, 2].map((idx) => (
+          <div
+            key={idx}
+            className="catalog-placeholder h-24 rounded-2xl border border-orange-100/70"
+            style={{ animationDelay: `${(idx + 1) * 50}ms` }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -2215,6 +2220,8 @@ function CheckoutLoadingShell({
   const inner = (
     <div
       data-testid="checkout-progressive-loading"
+      role="status"
+      aria-label={productName ? `正在加载「${productName}」` : "正在加载商品详情"}
       className={cn(
         "relative grid min-h-[380px] w-full grid-cols-1 gap-3.5 lg:gap-4",
         isModal
@@ -2235,10 +2242,54 @@ function CheckoutLoadingShell({
         </button>
       ) : null}
 
-      <div className="h-full min-h-[320px] rounded-[18px] bg-white/55" aria-hidden="true" />
-      <div className="hidden h-full rounded-[26px] border border-white/80 bg-white/70 lg:block" aria-hidden="true" />
-      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-        <RefinedLoadingOrb label={productName ? `正在加载「${productName}」` : "正在加载商品详情"} />
+      {/* 左侧详情预加载骨架占位框 */}
+      <div className="flex h-full min-h-0 flex-col gap-5 overflow-hidden rounded-[18px] p-2 sm:p-4">
+        <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
+          <div className="catalog-placeholder mx-auto aspect-square w-full max-w-[160px] rounded-[25%] border border-orange-100/70 sm:max-w-[220px]" />
+          <div className="space-y-3">
+            <div className="catalog-placeholder h-7 w-3/4 rounded-xl border border-orange-100/60" style={{ animationDelay: "40ms" }} />
+            <div className="catalog-placeholder h-4 w-full rounded-lg border border-orange-100/50" style={{ animationDelay: "80ms" }} />
+            <div className="catalog-placeholder h-4 w-2/3 rounded-lg border border-orange-100/50" style={{ animationDelay: "120ms" }} />
+            <div className="catalog-placeholder mt-4 h-20 w-full rounded-2xl border border-orange-100/70" style={{ animationDelay: "160ms" }} />
+          </div>
+        </div>
+        <div className="catalog-placeholder h-28 w-full rounded-2xl border border-orange-100/70" style={{ animationDelay: "200ms" }} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="catalog-placeholder h-28 rounded-2xl border border-orange-100/70"
+              style={{ animationDelay: `${240 + i * 45}ms` }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* 右侧下单表单预加载骨架占位框 */}
+      <div className="hidden h-full flex-col justify-between rounded-[26px] border border-white/85 bg-white/75 p-4 lg:flex">
+        <div className="space-y-3.5">
+          <div className="grid grid-cols-2 gap-2.5">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="catalog-placeholder h-14 rounded-xl border border-orange-100/70"
+                style={{ animationDelay: `${60 + i * 35}ms` }}
+              />
+            ))}
+          </div>
+          <div className="space-y-2.5 pt-1">
+            <div className="catalog-placeholder h-10 w-full rounded-xl border border-orange-100/70" style={{ animationDelay: "200ms" }} />
+            <div className="catalog-placeholder h-10 w-full rounded-xl border border-orange-100/70" style={{ animationDelay: "240ms" }} />
+            <div className="catalog-placeholder h-10 w-full rounded-xl border border-orange-100/70" style={{ animationDelay: "280ms" }} />
+          </div>
+        </div>
+        <div className="space-y-3 border-t border-orange-100/60 pt-3">
+          <div className="catalog-placeholder h-12 w-full rounded-2xl border border-orange-100/70" style={{ animationDelay: "320ms" }} />
+          <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-2">
+            <div className="catalog-placeholder h-10 rounded-full border border-orange-100/70" style={{ animationDelay: "360ms" }} />
+            <div className="catalog-placeholder h-10 rounded-full border border-orange-100/70" style={{ animationDelay: "400ms" }} />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -4019,8 +4070,8 @@ function ProductArtwork({ product }: { product: Product }) {
   };
 
   const Icon = getProductFallbackIcon(product);
-  const pressScale = tilt.pressed ? 0.965 : tilt.active ? 0.992 : 1;
-  const pressGain = tilt.pressed ? 1.35 : 1;
+  const pressScale = tilt.pressed ? 0.955 : tilt.active ? 0.985 : 1;
+  const pressGain = tilt.pressed ? 1.45 : 1.15;
   const effectiveRx = tilt.rx * pressGain;
   const effectiveRy = tilt.ry * pressGain;
 
@@ -4036,7 +4087,7 @@ function ProductArtwork({ product }: { product: Product }) {
       onPointerLeave={handlePointerLeave}
       onDragStart={(event) => event.preventDefault()}
       onContextMenu={(event) => event.preventDefault()}
-      className="group/art relative h-full w-full cursor-pointer select-none [-webkit-touch-callout:none] [perspective:650px]"
+      className="product-artwork-pop group/art relative h-full w-full cursor-pointer select-none [-webkit-touch-callout:none] [perspective:580px]"
     >
       {/* Subtle ambient glow backdrop */}
       <span
@@ -4044,27 +4095,27 @@ function ProductArtwork({ product }: { product: Product }) {
         className="pointer-events-none absolute inset-[12%] -z-0 rounded-full blur-2xl transition-all duration-300 ease-out"
         style={{
           background: `radial-gradient(closest-side, ${glowColor}, transparent 75%)`,
-          opacity: tilt.pressed ? 0.42 : tilt.active ? 0.72 : 0.52,
-          transform: tilt.pressed ? "scale(0.94)" : tilt.active ? "scale(1.02)" : "scale(1)",
+          opacity: tilt.pressed ? 0.38 : tilt.active ? 0.72 : 0.52,
+          transform: tilt.pressed ? "scale(0.92)" : tilt.active ? "scale(1.02)" : "scale(1)",
         }}
       />
 
-      {/* Recharge-card-style 4-edge depressible 3D icon badge matching 25% catalog radius */}
+      {/* Recharge-card-style 4-edge depressible 3D icon badge (decoupled from entrance keyframes so transform is never locked) */}
       <div
-        className="product-artwork-pop relative z-10 h-full w-full overflow-hidden rounded-[25%] bg-transparent ring-1 ring-inset ring-black/[0.06]"
+        className="relative z-10 h-full w-full overflow-hidden rounded-[25%] bg-transparent ring-1 ring-inset ring-black/[0.08]"
         style={{
           transformOrigin: "center",
           transform: tilt.active
-            ? `perspective(650px) rotateX(${effectiveRx.toFixed(2)}deg) rotateY(${effectiveRy.toFixed(2)}deg) scale(${pressScale})`
-            : "perspective(650px) rotateX(0deg) rotateY(0deg) scale(1)",
+            ? `perspective(580px) rotateX(${effectiveRx.toFixed(2)}deg) rotateY(${effectiveRy.toFixed(2)}deg) scale(${pressScale})`
+            : "perspective(580px) rotateX(0deg) rotateY(0deg) scale(1)",
           boxShadow: tilt.pressed
-            ? "0 6px 14px -8px rgba(15,23,42,0.28), 0 2px 6px -4px rgba(15,23,42,0.18)"
+            ? "0 5px 12px -6px rgba(15,23,42,0.32), 0 2px 5px -3px rgba(15,23,42,0.20)"
             : tilt.active
-              ? "0 14px 26px -14px rgba(15,23,42,0.34), 0 6px 12px -8px rgba(15,23,42,0.20)"
+              ? "0 13px 24px -12px rgba(15,23,42,0.34), 0 5px 12px -6px rgba(15,23,42,0.20)"
               : "0 20px 34px -18px rgba(15,23,42,0.30), 0 8px 16px -10px rgba(15,23,42,0.16)",
           transition: tilt.active
-            ? "transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease-out"
-            : "transform 420ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 320ms ease-out",
+            ? "transform 130ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 150ms ease-out"
+            : "transform 420ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 300ms ease-out",
           willChange: "transform",
         }}
       >
@@ -4084,6 +4135,29 @@ function ProductArtwork({ product }: { product: Product }) {
             <Icon className="h-20 w-20 text-primary drop-shadow-sm" />
           </div>
         )}
+
+        {/* Top-left glossy film reflection overlay */}
+        <span
+          aria-hidden="true"
+          data-testid="product-artwork-gloss-film"
+          className="pointer-events-none absolute -inset-[12%] z-20 transition-transform duration-150 ease-out"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(255,255,255,0.48) 0%, rgba(255,255,255,0.25) 22%, rgba(255,255,255,0.10) 41%, rgba(255,255,255,0.01) 49%, rgba(255,255,255,0) 62%, rgba(15,23,42,0.08) 100%)",
+            transform: tilt.active
+              ? `translate3d(${(-effectiveRy * 0.9).toFixed(1)}px, ${(effectiveRx * 0.9).toFixed(1)}px, 0)`
+              : "translate3d(0px, 0px, 0)",
+          }}
+        />
+        {/* Crisp top-left glass film bevel rim */}
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-30 rounded-[25%]"
+          style={{
+            boxShadow:
+              "inset 1.5px 1.5px 1px rgba(255,255,255,0.62), inset -1px -1px 2px rgba(15,23,42,0.12)",
+          }}
+        />
       </div>
     </div>
   );

@@ -6,7 +6,6 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { CheckoutModalProvider } from "./CheckoutModalContext";
-import RefinedLoadingOrb from "@/components/ui/RefinedLoadingOrb";
 import { cn } from "@/lib/utils";
 import styles from "./LiquidGlassCheckoutModal.module.css";
 
@@ -38,15 +37,61 @@ function ModalCheckoutSkeleton() {
   return (
     <div
       data-testid="liquid-glass-checkout-loading"
+      role="status"
+      aria-label="商品详情加载中"
       className={cn(
-        "relative grid h-full min-h-[380px] w-full grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,1fr)_clamp(320px,calc(28%-20px),372px)] lg:gap-4",
+        "grid h-full min-h-[380px] w-full grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,1fr)_clamp(320px,calc(28%-20px),372px)] lg:gap-4",
         styles.loadingBoxEnter
       )}
     >
-      <div className="h-full min-h-[320px] rounded-[18px] bg-white/55" aria-hidden="true" />
-      <div className="hidden h-full rounded-[26px] border border-white/80 bg-white/70 lg:block" aria-hidden="true" />
-      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-        <RefinedLoadingOrb label="正在加载商品详情" />
+      {/* 左侧商品详情骨架占位 */}
+      <div className="flex h-full min-h-0 flex-col gap-5 overflow-hidden rounded-[18px] p-2 sm:p-4">
+        <div className="grid gap-5 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
+          <div className="catalog-placeholder mx-auto aspect-square w-full max-w-[160px] rounded-[25%] border border-orange-100/70 sm:max-w-[220px]" />
+          <div className="space-y-3">
+            <div className="catalog-placeholder h-7 w-3/4 rounded-xl border border-orange-100/60" style={{ animationDelay: "40ms" }} />
+            <div className="catalog-placeholder h-4 w-full rounded-lg border border-orange-100/50" style={{ animationDelay: "80ms" }} />
+            <div className="catalog-placeholder h-4 w-2/3 rounded-lg border border-orange-100/50" style={{ animationDelay: "120ms" }} />
+            <div className="catalog-placeholder mt-4 h-20 w-full rounded-2xl border border-orange-100/70" style={{ animationDelay: "160ms" }} />
+          </div>
+        </div>
+        <div className="catalog-placeholder h-28 w-full rounded-2xl border border-orange-100/70" style={{ animationDelay: "200ms" }} />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div
+              key={i}
+              className="catalog-placeholder h-28 rounded-2xl border border-orange-100/70"
+              style={{ animationDelay: `${240 + i * 45}ms` }}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* 右侧下单表单骨架占位 */}
+      <div className="hidden h-full flex-col justify-between rounded-[26px] border border-white/85 bg-white/75 p-4 lg:flex">
+        <div className="space-y-3.5">
+          <div className="grid grid-cols-2 gap-2.5">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="catalog-placeholder h-14 rounded-xl border border-orange-100/70"
+                style={{ animationDelay: `${60 + i * 35}ms` }}
+              />
+            ))}
+          </div>
+          <div className="space-y-2.5 pt-1">
+            <div className="catalog-placeholder h-10 w-full rounded-xl border border-orange-100/70" style={{ animationDelay: "200ms" }} />
+            <div className="catalog-placeholder h-10 w-full rounded-xl border border-orange-100/70" style={{ animationDelay: "240ms" }} />
+            <div className="catalog-placeholder h-10 w-full rounded-xl border border-orange-100/70" style={{ animationDelay: "280ms" }} />
+          </div>
+        </div>
+        <div className="space-y-3 border-t border-orange-100/60 pt-3">
+          <div className="catalog-placeholder h-12 w-full rounded-2xl border border-orange-100/70" style={{ animationDelay: "320ms" }} />
+          <div className="grid grid-cols-[96px_minmax(0,1fr)] gap-2">
+            <div className="catalog-placeholder h-10 rounded-full border border-orange-100/70" style={{ animationDelay: "360ms" }} />
+            <div className="catalog-placeholder h-10 rounded-full border border-orange-100/70" style={{ animationDelay: "400ms" }} />
+          </div>
+        </div>
       </div>
     </div>
   );

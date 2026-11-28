@@ -7,7 +7,6 @@ import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Search, X }
 import PublicLayout from "@/components/layout/PublicLayout";
 import LiquidGlassCheckoutModal from "@/components/checkout/LiquidGlassCheckoutModal";
 import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
-import RefinedLoadingOrb from "@/components/ui/RefinedLoadingOrb";
 import { rememberProductCardPreview } from "@/lib/catalog/public-product-preview";
 import { loadPublicRechargeChannels } from "@/lib/catalog/public-recharge-channels";
 import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
@@ -676,26 +675,21 @@ export default function AllProductsContent() {
               </button>
             </div>
           ) : loading && products.length === 0 ? (
-            <div className="relative mt-3.5 min-h-[320px] flex-1 overflow-hidden">
-              <div className="grid h-full grid-cols-1 content-start gap-2.5 overflow-hidden xl:grid-cols-2" aria-hidden="true">
-                {Array.from({ length: 12 }).map((_, idx) => (
-                  <div
-                    key={idx}
-                    className="catalog-placeholder flex h-[74px] items-center gap-3 rounded-2xl border border-orange-100/70 px-4"
-                    style={{ animationDelay: `${idx * 45}ms` }}
-                  >
-                    <div className="h-11 w-11 shrink-0 rounded-xl bg-orange-100/55" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-4 w-2/3 rounded bg-orange-100/60" />
-                      <div className="h-3 w-1/2 rounded bg-orange-50/90" />
-                    </div>
-                    <div className="h-5 w-16 rounded bg-orange-100/60" />
+            <div className="mt-3.5 grid min-h-[320px] flex-1 grid-cols-1 content-start gap-2.5 overflow-hidden xl:grid-cols-2" role="status" aria-label="商品列表加载中">
+              {Array.from({ length: 12 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="catalog-placeholder flex h-[74px] items-center gap-3 rounded-2xl border border-orange-100/70 px-4"
+                  style={{ animationDelay: `${idx * 45}ms` }}
+                >
+                  <div className="h-11 w-11 shrink-0 rounded-xl bg-orange-100/55" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-2/3 rounded-md bg-orange-100/60" />
+                    <div className="h-3 w-1/2 rounded-md bg-orange-50/90" />
                   </div>
-                ))}
-              </div>
-              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[#fffdfa]/40 backdrop-blur-[1px]">
-                <RefinedLoadingOrb label="正在加载商品" />
-              </div>
+                  <div className="h-5 w-16 rounded-md bg-orange-100/60" />
+                </div>
+              ))}
             </div>
           ) : products.length === 0 ? (
             <div className="flex min-h-[260px] flex-1 items-center justify-center rounded-2xl bg-white p-8 text-center">
@@ -747,8 +741,21 @@ export default function AllProductsContent() {
           ) : (
             <div className="relative mt-3.5 flex min-h-0 flex-1 flex-col">
               {showOverlayLoader ? (
-                <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-[#fffdfa]/65 backdrop-blur-[2px] transition-opacity duration-200">
-                  <RefinedLoadingOrb label="正在加载商品" />
+                <div className="pointer-events-none absolute inset-0 z-20 grid grid-cols-1 content-start gap-2.5 overflow-hidden rounded-2xl bg-[#fffdfa]/85 xl:grid-cols-2" role="status" aria-label="商品列表刷新中">
+                  {Array.from({ length: 12 }).map((_, idx) => (
+                    <div
+                      key={idx}
+                      className="catalog-placeholder flex h-[74px] items-center gap-3 rounded-2xl border border-orange-100/70 px-4"
+                      style={{ animationDelay: `${idx * 40}ms` }}
+                    >
+                      <div className="h-11 w-11 shrink-0 rounded-xl bg-orange-100/55" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 w-2/3 rounded-md bg-orange-100/60" />
+                        <div className="h-3 w-1/2 rounded-md bg-orange-50/90" />
+                      </div>
+                      <div className="h-5 w-16 rounded-md bg-orange-100/60" />
+                    </div>
+                  ))}
                 </div>
               ) : null}
             <div
