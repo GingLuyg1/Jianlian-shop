@@ -13,6 +13,7 @@ import {
   Headphones,
   Link2,
   Loader2,
+  MessageSquareQuote,
   Percent,
   RefreshCw,
   Search,
@@ -155,31 +156,33 @@ function InfoTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function KpiCard({
+function MetricTile({
   label,
   value,
-  sub,
   icon: Icon,
   highlight = false,
 }: {
   label: string;
   value: string | number;
-  sub: string;
   icon: LucideIcon;
   highlight?: boolean;
 }) {
   return (
-    <div className={cn(glass.inset, "flex flex-col justify-between rounded-2xl px-4 py-3.5 transition-colors hover:bg-white/95")}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-slate-500">{label}</span>
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-100/75 text-primary">
-          <Icon className="h-3.5 w-3.5" />
+    <div className={cn(glass.inset, "flex flex-col justify-between rounded-xl px-3 py-2.5 transition-colors hover:bg-white/95")}>
+      <div className="flex items-center justify-between gap-1.5">
+        <span className="truncate text-[11px] font-medium text-slate-500">{label}</span>
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-orange-100/75 text-primary">
+          <Icon className="h-3 w-3" />
         </span>
       </div>
-      <div className={cn("mt-2 truncate text-xl font-bold tabular-nums text-slate-950", highlight && "text-primary")}>
+      <div
+        className={cn(
+          "mt-1.5 truncate text-base font-bold tabular-nums text-slate-950 sm:text-lg",
+          highlight && "text-primary"
+        )}
+      >
         {value}
       </div>
-      <div className="mt-1 truncate text-[11px] text-slate-400">{sub}</div>
     </div>
   );
 }
@@ -195,7 +198,7 @@ export default function PromotionPage() {
   const loading = requestLoading || loadedEpoch !== identity.epoch;
   const activeRequest = useRef<{ page: number; epoch: number; controller: AbortController; promise?: Promise<void> } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copiedKey, setCopiedKey] = useState<"" | "link" | "code">("");
+  const [copiedKey, setCopiedKey] = useState<"" | "link" | "code" | "pitch">("");
 
   // Transfer-to-balance modal state
   const [transferModalOpen, setTransferModalOpen] = useState(false);
@@ -289,6 +292,9 @@ export default function PromotionPage() {
 
   const inviteCode = data?.inviteCode?.trim() || "";
   const inviteUrl = inviteCode ? `${getPromotionOrigin()}/register?invite=${encodeURIComponent(inviteCode)}` : "";
+  const sharePitch = inviteUrl
+    ? `推荐「简联商城」跨境数字资源一站式平台，涵盖 AI 订阅、数字 / 社媒账号与国际 SIM 卡，通过我的专属链接注册：${inviteUrl}`
+    : "";
   const totalCommission = Number(data?.stats?.totalCommission ?? 0);
   const availableCommission = Number(data?.stats?.availableCommission ?? 0);
   const pendingCommission = Number(data?.stats?.pendingCommission ?? 0);
@@ -299,7 +305,7 @@ export default function PromotionPage() {
   const canTransfer = availableCommission >= minTransferAmount && availableCommission > 0;
   const totalPages = Math.max(1, Math.ceil(Number(data?.count ?? 0) / PAGE_SIZE));
 
-  const copyText = async (value: string, key: "link" | "code", label: string) => {
+  const copyText = async (value: string, key: "link" | "code" | "pitch", label: string) => {
     if (!value) {
       toast.error("请先登录后获取专属邀请信息");
       return;
@@ -385,36 +391,46 @@ export default function PromotionPage() {
           isMobile && "!h-auto !overflow-visible"
         )}
       >
-        {/* 1. 顶部横幅与核心佣金 KPI */}
+        {/* 1. 顶部横幅与统一佣金钱包条 */}
         <section className={cn(glass.surface, "flex flex-col gap-4 rounded-2xl p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between")}>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-sm">
+            <div className="flex items-start gap-3 sm:items-center">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white shadow-sm">
                 <Gift className="h-5 w-5" />
               </span>
-              <div>
-                <div className="flex items-center gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-lg font-bold text-slate-950 sm:text-xl">推广中心</h1>
                   <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
                     3% 订单返佣
                   </span>
+                  <span className="hidden rounded-full border border-emerald-200/80 bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 sm:inline-flex">
+                    海报原生含码 · 支持右键复制
+                  </span>
                 </div>
-                <p className="mt-0.5 text-xs text-slate-500 sm:text-sm">
-                  复制专属链接或海报邀请好友注册，好友购买「数字 / 社媒账号」或「国际 SIM 卡（不含 SIM 卡服务）」即享 3% 返佣，返佣仅支持转入本站账户余额。
+                <p className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm">
+                  分享专属链接或高清二维码海报邀请好友注册，好友购买「数字 / 社媒账号」或「国际 SIM 卡（不含 SIM 卡服务）」即享 3% 返佣，支持一键转入本站账户余额。
                 </p>
               </div>
             </div>
           </div>
 
           <div className="grid shrink-0 grid-cols-2 gap-2.5 sm:flex sm:items-stretch">
-            <div className={cn(glass.inset, "flex min-w-[144px] flex-col justify-center rounded-xl px-4 py-2.5")}>
+            <div className={cn(glass.inset, "flex min-w-[122px] flex-col justify-center rounded-xl px-3.5 py-2.5")}>
               <span className="text-[11px] font-medium text-slate-500">累计佣金</span>
               <span className="mt-1 text-lg font-bold tabular-nums text-slate-950">
                 {loading ? "--" : formatMoney(totalCommission)}
               </span>
             </div>
 
-            <div className={cn(glass.inset, "flex min-w-[208px] items-center justify-between gap-3 rounded-xl px-4 py-2.5")}>
+            <div className={cn(glass.inset, "hidden min-w-[116px] flex-col justify-center rounded-xl px-3.5 py-2.5 md:flex")}>
+              <span className="text-[11px] font-medium text-slate-500">待结算</span>
+              <span className="mt-1 text-lg font-bold tabular-nums text-slate-800">
+                {loading ? "--" : formatMoney(pendingCommission)}
+              </span>
+            </div>
+
+            <div className={cn(glass.inset, "col-span-2 flex min-w-[216px] items-center justify-between gap-3 rounded-xl border-orange-200/80 px-3.5 py-2.5 sm:col-span-1")}>
               <div className="min-w-0">
                 <span className="block text-[11px] font-medium text-slate-500">可转余额</span>
                 <span className="mt-1 block text-lg font-bold tabular-nums text-primary">
@@ -435,12 +451,12 @@ export default function PromotionPage() {
           </div>
         </section>
 
-        {/* 未登录提示横幅 */}
+        {/* 未登录提示 / 错误提示 */}
         {identity.status === "anonymous" ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-orange-200/80 bg-orange-50/85 px-4 py-3 text-sm text-slate-700 shadow-xs">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 shrink-0 text-primary" />
-              <span>登录后即可生成您的固定专属邀请码、动态二维码海报并查看实时返佣明细。</span>
+              <span>当前展示为示例预览海报，登录后将自动把您的专属邀请码嵌入 4 套高清海报并同步实时返佣明细。</span>
             </div>
             <div className="flex items-center gap-2">
               <Button asChild size="sm" variant="outline" className="h-8 rounded-lg bg-white text-xs">
@@ -460,130 +476,147 @@ export default function PromotionPage() {
           </div>
         ) : null}
 
-        {/* 2. 上半双栏：左侧「专属推广入口 + 动态二维码海报」 | 右侧「佣金结算 + 返佣规则」 */}
-        <section className="grid gap-4 xl:grid-cols-[minmax(0,1.18fr)_minmax(0,0.82fr)]">
-          {/* 左侧大卡：专属推广入口 */}
-          <div className={cn(glass.surface, "flex flex-col justify-between rounded-2xl p-4 sm:p-5")}>
-            <div className="mb-4 flex items-center justify-between border-b border-orange-100/80 pb-3">
-              <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100/75 text-primary">
-                  <Link2 className="h-4 w-4" />
-                </span>
-                <div>
-                  <h2 className="text-base font-bold text-slate-950">专属推广入口</h2>
-                  <p className="text-[11px] text-slate-500">每个账户固定专属邀请码，海报二维码随链接自动生成</p>
-                </div>
-              </div>
-              {inviteCode ? (
-                <button
-                  type="button"
-                  onClick={() => void copyText(inviteCode, "code", "专属邀请码")}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50/90 px-3 py-1 text-xs font-semibold text-primary transition hover:bg-orange-100"
-                >
-                  <span>邀请码：{inviteCode}</span>
-                  {copiedKey === "code" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                </button>
-              ) : null}
-            </div>
-
-            <div className="grid flex-1 gap-5 lg:grid-cols-[minmax(0,1fr)_292px] lg:items-center">
-              {/* 左侧：专属邀请链接 + 3小指标 + 3步指引 */}
-              <div className="flex h-full flex-col justify-between gap-4">
-                <div>
-                  <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-700">
-                    <span>专属邀请链接</span>
-                    <span className="font-normal text-slate-400">永久绑定推荐关系</span>
-                  </div>
-                  <div className="flex items-center gap-2 rounded-xl border border-orange-200/80 bg-white/90 p-1.5 pl-3 shadow-2xs">
-                    <div className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700" title={inviteUrl || "登录后生成专属推广链接"}>
-                      {inviteUrl || "登录后自动生成您的专属推广链接"}
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => void copyText(inviteUrl, "link", "专属邀请链接")}
-                      disabled={!inviteUrl}
-                      className="h-8 shrink-0 rounded-lg px-3 text-xs font-semibold"
-                    >
-                      {copiedKey === "link" ? (
-                        <>
-                          <Check className="mr-1 h-3.5 w-3.5" />
-                          已复制
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="mr-1 h-3.5 w-3.5" />
-                          复制链接
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* 3 Mini Stat Tiles */}
-                <div className="grid grid-cols-3 gap-2.5">
-                  <div className={cn(glass.inset, "rounded-xl px-3 py-2.5 text-center")}>
-                    <div className="text-[11px] text-slate-500">邀请注册</div>
-                    <div className="mt-1 text-lg font-bold tabular-nums text-slate-950">
-                      {loading ? "--" : (data?.stats?.registrations?.value ?? 0)}
-                    </div>
-                  </div>
-                  <div className={cn(glass.inset, "rounded-xl px-3 py-2.5 text-center")}>
-                    <div className="text-[11px] text-slate-500">返佣订单</div>
-                    <div className="mt-1 text-lg font-bold tabular-nums text-slate-950">
-                      {loading ? "--" : (data?.stats?.qualifiedOrderCount ?? 0)}
-                    </div>
-                  </div>
-                  <div className={cn(glass.inset, "rounded-xl px-3 py-2.5 text-center")}>
-                    <div className="text-[11px] text-slate-500">返佣比例</div>
-                    <div className="mt-1 text-lg font-bold tabular-nums text-primary">3%</div>
-                  </div>
-                </div>
-
-                {/* 3-Step Guide */}
-                <div className="space-y-2.5 rounded-2xl border border-orange-100/80 bg-orange-50/45 p-3.5">
-                  {[
-                    { step: "1", title: "复制链接或下载右侧专属海报", desc: "4 套高清海报均自动嵌入您的专属邀请二维码" },
-                    { step: "2", title: "好友通过链接或扫码注册", desc: "注册即永久绑定您的推广关系，无需重复填写" },
-                    { step: "3", title: "好友购买指定分类商品享 3% 返佣", desc: "支持「数字 / 社媒账号」与「国际 SIM 卡（除 SIM 卡服务）」" },
-                  ].map((item) => (
-                    <div key={item.step} className="flex items-start gap-2.5">
-                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">
-                        {item.step}
-                      </span>
-                      <div className="min-w-0">
-                        <div className="text-xs font-semibold text-slate-800">{item.title}</div>
-                        <div className="text-[11px] text-slate-500">{item.desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 右侧：4 张动态二维码推广海报轮播 */}
-              <div className="rounded-2xl border border-orange-100/90 bg-white/75 p-3.5 shadow-2xs">
-                <PromotionPosterCarousel inviteUrl={inviteUrl} inviteCode={inviteCode} />
-              </div>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between border-t border-orange-100/80 pt-3">
-              <span className="text-xs text-slate-500">大流量渠道或需定制品牌推广素材？</span>
-              <button
-                type="button"
-                onClick={() => openPublicSupport()}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-orange-50"
-              >
-                <Headphones className="h-3.5 w-3.5" />
-                <span>如需推广素材请联系客服</span>
-              </button>
-            </div>
+        {/* 2. 主工作区：左侧独立大尺寸「专属二维码海报工作台」 | 右侧「链接文案 + 数据 + 佣金结算 + 规则」 */}
+        <section className="grid items-stretch gap-4 xl:grid-cols-[520px_minmax(0,1fr)] 2xl:grid-cols-[560px_minmax(0,1fr)]">
+          {/* 左侧旗舰海报工作台 */}
+          <div className={cn(glass.surface, "flex flex-col rounded-2xl p-4 sm:p-5")}>
+            <PromotionPosterCarousel
+              inviteUrl={inviteUrl}
+              inviteCode={inviteCode}
+              isPersonalized={identity.status === "signed-in" && Boolean(inviteCode)}
+            />
           </div>
 
-          {/* 右列：佣金结算 + 返佣规则 */}
-          <div className="flex flex-col gap-4">
-            {/* 佣金结算 */}
+          {/* 右侧运营操作区 */}
+          <div className="flex min-w-0 flex-col gap-4">
+            {/* A. 专属推广链接、话术与核心数据 */}
             <div className={cn(glass.surface, "rounded-2xl p-4 sm:p-5")}>
-              <div className="mb-3.5 flex items-center justify-between">
+              <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2 border-b border-orange-100/80 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-100/75 text-primary">
+                    <Link2 className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <h2 className="text-base font-bold text-slate-950">专属推广入口</h2>
+                    <p className="text-[11px] text-slate-500">每个账户固定唯一邀请码，链接与左侧 4 套海报实时同步</p>
+                  </div>
+                </div>
+                {inviteCode ? (
+                  <button
+                    type="button"
+                    onClick={() => void copyText(inviteCode, "code", "专属邀请码")}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50/90 px-3 py-1 text-xs font-semibold text-primary transition hover:bg-orange-100"
+                  >
+                    <span>邀请码：{inviteCode}</span>
+                    {copiedKey === "code" ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
+                ) : null}
+              </div>
+
+              {/* 专属邀请链接 */}
+              <div>
+                <div className="mb-1.5 flex items-center justify-between text-xs font-semibold text-slate-700">
+                  <span>专属邀请链接</span>
+                  <span className="font-normal text-slate-400">永久绑定推荐关系</span>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-orange-200/80 bg-white/95 p-1.5 pl-3 shadow-2xs">
+                  <div className="min-w-0 flex-1 truncate font-mono text-xs text-slate-700" title={inviteUrl || "登录后生成专属推广链接"}>
+                    {inviteUrl || "登录后自动生成您的专属推广链接"}
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void copyText(inviteUrl, "link", "专属邀请链接")}
+                    disabled={!inviteUrl}
+                    className="h-8 shrink-0 rounded-lg px-3.5 text-xs font-semibold"
+                  >
+                    {copiedKey === "link" ? (
+                      <>
+                        <Check className="mr-1 h-3.5 w-3.5" />
+                        已复制
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="mr-1 h-3.5 w-3.5" />
+                        复制链接
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {/* 一键推广话术 */}
+              <div className="mt-3 rounded-xl border border-orange-100/90 bg-orange-50/45 p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                    <MessageSquareQuote className="h-3.5 w-3.5 text-primary" />
+                    <span>快捷推广话术（搭配海报发送转化更高）</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void copyText(sharePitch, "pitch", "推广话术与链接")}
+                    disabled={!sharePitch}
+                    className="inline-flex items-center gap-1 rounded-lg border border-orange-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-primary shadow-2xs transition hover:bg-orange-50 disabled:opacity-50"
+                  >
+                    {copiedKey === "pitch" ? (
+                      <>
+                        <Check className="h-3 w-3 text-emerald-600" />
+                        <span>已复制话术</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3 w-3" />
+                        <span>复制话术</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-slate-600">
+                  {sharePitch || "登录后将自动生成包含您专属注册链接的推广话术，一键复制即可搭配左侧二维码海报转发至微信群、朋友圈或社群。"}
+                </p>
+              </div>
+
+              {/* 核心推广数据 4 联卡（无重复堆叠） */}
+              <div className="mt-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                <MetricTile
+                  label="邀请注册"
+                  value={loading ? "--" : (data?.stats?.registrations?.value ?? 0)}
+                  icon={Users}
+                />
+                <MetricTile
+                  label="有效返佣订单"
+                  value={loading ? "--" : (data?.stats?.qualifiedOrderCount ?? 0)}
+                  icon={ShoppingBag}
+                />
+                <MetricTile
+                  label="有效成交额"
+                  value={loading ? "--" : formatMoney(data?.stats?.qualifiedOrderAmount ?? 0)}
+                  icon={CreditCard}
+                />
+                <MetricTile
+                  label="固定返佣率"
+                  value="3.00%"
+                  icon={Percent}
+                  highlight
+                />
+              </div>
+
+              <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 border-t border-orange-100/80 pt-3">
+                <span className="text-xs text-slate-500">大流量渠道或需定制品牌推广素材？</span>
+                <button
+                  type="button"
+                  onClick={() => openPublicSupport()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-orange-200 bg-white px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-orange-50"
+                >
+                  <Headphones className="h-3.5 w-3.5" />
+                  <span>如需推广素材请联系客服</span>
+                </button>
+              </div>
+            </div>
+
+            {/* B. 佣金结算与门槛进度 */}
+            <div className={cn(glass.surface, "rounded-2xl p-4 sm:p-5")}>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100/75 text-primary">
                     <Wallet className="h-4 w-4" />
@@ -616,13 +649,12 @@ export default function PromotionPage() {
                 </div>
               </div>
 
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="mt-2.5 grid gap-2 sm:grid-cols-2">
                 <InfoTile label="商品返佣比例" value="3%" />
                 <InfoTile label="充值提佣倍率" value="暂未开放" />
               </div>
 
-              {/* 最低转余额进度条 */}
-              <div className="mt-3.5 rounded-xl border border-orange-100/90 bg-white/80 p-3">
+              <div className="mt-3 rounded-xl border border-orange-100/90 bg-white/80 p-3">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-slate-600">最低转入余额门槛进度</span>
                   <span className="font-semibold tabular-nums text-primary">
@@ -635,18 +667,60 @@ export default function PromotionPage() {
                     style={{ width: `${progressPct}%` }}
                   />
                 </div>
+                <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-500">
+                  <span>
+                    {canTransfer
+                      ? "已达到最低转入门槛，可随时一键转入本站账户余额"
+                      : `还差 ${formatMoney(shortfallAmount)} 即可一键转入本站账户余额（即时到账，无手续费）`}
+                  </span>
+                  {canTransfer ? (
+                    <button
+                      type="button"
+                      onClick={() => setTransferModalOpen(true)}
+                      className="shrink-0 font-semibold text-primary hover:underline"
+                    >
+                      立即转入 →
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
 
-            {/* 返佣规则 */}
+            {/* C. 推广流程与返佣规则 */}
             <div className={cn(glass.surface, "flex-1 rounded-2xl p-4 sm:p-5")}>
-              <div className="mb-3 flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100/75 text-primary">
-                  <ShieldCheck className="h-4 w-4" />
-                </span>
-                <h2 className="text-base font-bold text-slate-950">返佣规则</h2>
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-100/75 text-primary">
+                    <ShieldCheck className="h-4 w-4" />
+                  </span>
+                  <h2 className="text-base font-bold text-slate-950">推广流程与返佣规则</h2>
+                </div>
+                <span className="text-[11px] text-slate-400">订单支付后自动核算</span>
               </div>
-              <ol className="space-y-2 text-xs leading-5 text-slate-600">
+
+              {/* 3步轻量流程条 */}
+              <div className="mb-3.5 grid gap-2 sm:grid-cols-3">
+                {[
+                  { step: "01", title: "分享海报或链接", desc: "右键复制或下载含码海报" },
+                  { step: "02", title: "好友扫码注册", desc: "自动永久绑定推荐关系" },
+                  { step: "03", title: "有效下单返 3%", desc: "满额一键转入本站余额" },
+                ].map((item) => (
+                  <div
+                    key={item.step}
+                    className="rounded-xl border border-orange-100/85 bg-orange-50/45 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="rounded bg-primary/15 px-1.5 py-0.5 font-mono text-[10px] font-bold text-primary">
+                        {item.step}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-800">{item.title}</span>
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-500">{item.desc}</p>
+                  </div>
+                ))}
+              </div>
+
+              <ol className="space-y-1.5 text-xs leading-5 text-slate-600">
                 <li className="flex items-start gap-2">
                   <span className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[10px] font-bold text-primary">1</span>
                   <span>每个注册账户拥有唯一固定专属邀请码，好友通过您的链接或海报二维码注册后永久绑定推广关系。</span>
@@ -672,55 +746,7 @@ export default function PromotionPage() {
           </div>
         </section>
 
-        {/* 3. 全宽推广数据 6 宫格 */}
-        <section className={cn(glass.surface, "rounded-2xl p-4 sm:p-5")}>
-          <div className="mb-3.5 flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-950">推广数据</h2>
-            <span className="text-xs text-slate-400">数据随订单支付与结算自动更新</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-            <KpiCard
-              label="邀请注册人数"
-              value={loading ? "--" : (data?.stats?.registrations?.value ?? 0)}
-              sub="已绑定推广关系好友"
-              icon={Users}
-            />
-            <KpiCard
-              label="有效返佣订单"
-              value={loading ? "--" : (data?.stats?.qualifiedOrderCount ?? 0)}
-              sub="数字/社媒账号及国际 SIM 卡"
-              icon={ShoppingBag}
-            />
-            <KpiCard
-              label="有效推广成交额"
-              value={loading ? "--" : formatMoney(data?.stats?.qualifiedOrderAmount ?? 0)}
-              sub="符合返佣分类商品实付金额"
-              icon={CreditCard}
-            />
-            <KpiCard
-              label="当前返佣比例"
-              value="3.00%"
-              sub="指定商品分类固定返佣"
-              icon={Percent}
-            />
-            <KpiCard
-              label="累计已获佣金"
-              value={loading ? "--" : formatMoney(totalCommission)}
-              sub="含可转与已转入余额部分"
-              icon={Gift}
-              highlight
-            />
-            <KpiCard
-              label="当前可转余额"
-              value={loading ? "--" : formatMoney(availableCommission)}
-              sub="满额可一键转入本站余额"
-              icon={Wallet}
-              highlight
-            />
-          </div>
-        </section>
-
-        {/* 4. 底部全宽记录卡片：返佣记录 / 转入余额记录 */}
+        {/* 3. 底部全宽记录卡片：返佣记录 / 转入余额记录 */}
         <section className={cn(glass.surface, "rounded-2xl p-4 sm:p-5")}>
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-orange-100/80 pb-3.5">
             <div className="flex items-center gap-2">
@@ -796,17 +822,17 @@ export default function PromotionPage() {
                 ))}
               </div>
 
-              <div className="mt-3 overflow-x-auto">
+              <div className={cn(glass.table, "mt-3 overflow-x-auto rounded-xl")} data-empty={filteredRecords.length === 0 ? "true" : undefined}>
                 <table className="w-full min-w-[680px] text-left text-xs sm:text-sm">
                   <thead>
-                    <tr className="border-b border-orange-100/80 text-xs text-slate-500">
-                      <th className="py-2.5 pr-3 font-semibold">被邀请好友</th>
+                    <tr className="border-b border-orange-100/80 text-xs">
+                      <th className="py-2.5 pl-4 pr-3 font-semibold">被邀请好友</th>
                       <th className="py-2.5 px-3 font-semibold">订单编号</th>
                       <th className="py-2.5 px-3 text-right font-semibold">有效金额</th>
                       <th className="py-2.5 px-3 text-center font-semibold">佣金率</th>
                       <th className="py-2.5 px-3 text-right font-semibold">返佣金额</th>
                       <th className="py-2.5 px-3 text-center font-semibold">状态</th>
-                      <th className="py-2.5 pl-3 text-right font-semibold">时间</th>
+                      <th className="py-2.5 pl-3 pr-4 text-right font-semibold">时间</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-orange-100/60">
@@ -824,8 +850,8 @@ export default function PromotionPage() {
                       </tr>
                     ) : (
                       filteredRecords.map((row) => (
-                        <tr key={row.id} className="transition-colors hover:bg-orange-50/40">
-                          <td className="py-3 pr-3 font-medium text-slate-800">{row.referredUser}</td>
+                        <tr key={row.id} className="transition-colors">
+                          <td className="py-3 pl-4 pr-3 font-medium text-slate-800">{row.referredUser}</td>
                           <td className="py-3 px-3 font-mono text-xs text-slate-600">{row.orderNo}</td>
                           <td className="py-3 px-3 text-right tabular-nums text-slate-700">{formatMoney(row.orderAmount)}</td>
                           <td className="py-3 px-3 text-center tabular-nums text-slate-600">{(row.commissionRate * 100).toFixed(0)}%</td>
@@ -835,7 +861,7 @@ export default function PromotionPage() {
                               {statusLabels[row.status]}
                             </span>
                           </td>
-                          <td className="py-3 pl-3 text-right text-xs tabular-nums text-slate-500">{formatDateTime(row.paidAt)}</td>
+                          <td className="py-3 pl-3 pr-4 text-right text-xs tabular-nums text-slate-500">{formatDateTime(row.paidAt)}</td>
                         </tr>
                       ))
                     )}
@@ -871,16 +897,16 @@ export default function PromotionPage() {
               </div>
             </>
           ) : (
-            <div className="mt-3 overflow-x-auto">
+            <div className={cn(glass.table, "mt-3 overflow-x-auto rounded-xl")} data-empty={filteredTransfers.length === 0 ? "true" : undefined}>
               <table className="w-full min-w-[640px] text-left text-xs sm:text-sm">
                 <thead>
-                  <tr className="border-b border-orange-100/80 text-xs text-slate-500">
-                    <th className="py-2.5 pr-3 font-semibold">流水编号</th>
+                  <tr className="border-b border-orange-100/80 text-xs">
+                    <th className="py-2.5 pl-4 pr-3 font-semibold">流水编号</th>
                     <th className="py-2.5 px-3 font-semibold">说明</th>
                     <th className="py-2.5 px-3 text-right font-semibold">转入金额</th>
                     <th className="py-2.5 px-3 text-right font-semibold">转入后余额</th>
                     <th className="py-2.5 px-3 text-center font-semibold">状态</th>
-                    <th className="py-2.5 pl-3 text-right font-semibold">时间</th>
+                    <th className="py-2.5 pl-3 pr-4 text-right font-semibold">时间</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-orange-100/60">
@@ -898,8 +924,8 @@ export default function PromotionPage() {
                     </tr>
                   ) : (
                     filteredTransfers.map((row) => (
-                      <tr key={row.id} className="transition-colors hover:bg-orange-50/40">
-                        <td className="py-3 pr-3 font-mono text-xs text-slate-600">{row.transactionNo}</td>
+                      <tr key={row.id} className="transition-colors">
+                        <td className="py-3 pl-4 pr-3 font-mono text-xs text-slate-600">{row.transactionNo}</td>
                         <td className="py-3 px-3 text-slate-700">{row.remark}</td>
                         <td className="py-3 px-3 text-right font-semibold tabular-nums text-emerald-700">+{formatMoney(row.amount)}</td>
                         <td className="py-3 px-3 text-right tabular-nums text-slate-700">
@@ -910,7 +936,7 @@ export default function PromotionPage() {
                             已转入余额
                           </span>
                         </td>
-                        <td className="py-3 pl-3 text-right text-xs tabular-nums text-slate-500">{formatDateTime(row.createdAt)}</td>
+                        <td className="py-3 pl-3 pr-4 text-right text-xs tabular-nums text-slate-500">{formatDateTime(row.createdAt)}</td>
                       </tr>
                     ))
                   )}
