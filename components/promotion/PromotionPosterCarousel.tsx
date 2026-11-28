@@ -381,7 +381,7 @@ export default function PromotionPosterCarousel({
       </div>
 
       {/* Studio Header Bar */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-orange-100/80 pb-3">
+      <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-orange-100/80 pb-2.5">
         <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-100/80 text-primary">
             <ImageIcon className="h-4 w-4" />
@@ -490,27 +490,27 @@ export default function PromotionPosterCarousel({
         </div>
 
         {/* Studio Action Bar directly replacing the old small hint text beneath the poster */}
-        <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <div className="mt-2.5 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-1.5 sm:gap-2">
           <button
             type="button"
             data-testid="promotion-poster-copy-btn"
             onClick={() => void handleCopyPosterImage()}
             disabled={copyingImage || !activeComposited}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] px-4 text-xs font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
+            className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] px-2.5 text-xs font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98] disabled:opacity-60 sm:px-3"
           >
             {copyingImage ? (
               <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>正在复制图片...</span>
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                <span>复制中...</span>
               </>
             ) : copiedPosterId === poster.id ? (
               <>
-                <Check className="h-3.5 w-3.5" />
-                <span>已复制含码海报</span>
+                <Check className="h-3.5 w-3.5 shrink-0" />
+                <span>已复制海报</span>
               </>
             ) : (
               <>
-                <Copy className="h-3.5 w-3.5" />
+                <Copy className="h-3.5 w-3.5 shrink-0" />
                 <span>一键复制海报</span>
               </>
             )}
@@ -521,16 +521,16 @@ export default function PromotionPosterCarousel({
             data-testid="promotion-poster-download-btn"
             onClick={() => void handleDownloadPoster()}
             disabled={downloading || !activeComposited}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-white px-4 text-xs font-semibold text-slate-800 shadow-2xs transition hover:border-primary/45 hover:bg-orange-50/70 hover:text-primary active:scale-[0.98] disabled:opacity-60"
+            className="inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-orange-200 bg-white px-2.5 text-xs font-semibold text-slate-800 shadow-2xs transition hover:border-primary/45 hover:bg-orange-50/70 hover:text-primary active:scale-[0.98] disabled:opacity-60 sm:px-3"
           >
             {downloading ? (
               <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>正在导出原图...</span>
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                <span>导出中...</span>
               </>
             ) : (
               <>
-                <Download className="h-3.5 w-3.5" />
+                <Download className="h-3.5 w-3.5 shrink-0" />
                 <span>下载高清原图</span>
               </>
             )}
@@ -542,9 +542,9 @@ export default function PromotionPosterCarousel({
             onClick={() => setLightboxOpen(true)}
             disabled={!activeComposited}
             aria-label="查看大图"
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200/80 bg-orange-50/60 px-3.5 text-xs font-semibold text-primary transition hover:border-primary/45 hover:bg-orange-100/70 active:scale-[0.98] disabled:opacity-60"
+            className="inline-flex h-9 items-center justify-center gap-1 whitespace-nowrap rounded-xl border border-orange-200/80 bg-orange-50/60 px-2.5 text-xs font-semibold text-primary transition hover:border-primary/45 hover:bg-orange-100/70 active:scale-[0.98] disabled:opacity-60 sm:px-3"
           >
-            <ZoomIn className="h-3.5 w-3.5" />
+            <ZoomIn className="h-3.5 w-3.5 shrink-0" />
             <span>大图</span>
           </button>
         </div>

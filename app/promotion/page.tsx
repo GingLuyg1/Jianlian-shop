@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRightLeft,
@@ -476,10 +476,20 @@ export default function PromotionPage() {
           </div>
         ) : null}
 
-        {/* 2. 主工作区：左侧独立大尺寸「专属二维码海报工作台」 | 右侧「链接文案 + 数据 + 佣金结算 + 规则」 */}
-        <section className="grid items-start gap-4 xl:grid-cols-[480px_minmax(0,1fr)] 2xl:grid-cols-[520px_minmax(0,1fr)]">
-          {/* 左侧旗舰海报工作台（桌面端吸顶，紧凑无多余左右留白） */}
-          <div className={cn(glass.surface, "flex flex-col rounded-2xl p-3.5 sm:p-4 xl:sticky xl:top-0")}>
+        {/* 2. 主工作区：左侧按视口高度等比例自适应的「专属二维码海报工作台」（首屏即可看到完整卡片与按钮） | 右侧「链接文案 + 数据 + 佣金结算 + 规则」 */}
+        <section
+          style={
+            {
+              "--promo-poster-col": `clamp(368px, calc((100dvh - ${identity.status === "anonymous" ? 444 : 384}px) * 0.75 + 64px), 484px)`,
+            } as CSSProperties
+          }
+          className="grid items-start gap-4 xl:grid-cols-[var(--promo-poster-col)_minmax(0,1fr)]"
+        >
+          {/* 左侧旗舰海报工作台（桌面端吸顶，打开即可完整展示海报框与底部操作按钮） */}
+          <div
+            data-testid="promotion-poster-card"
+            className={cn(glass.surface, "flex flex-col rounded-2xl p-3.5 sm:p-4 xl:sticky xl:top-0")}
+          >
             <PromotionPosterCarousel
               inviteUrl={inviteUrl}
               inviteCode={inviteCode}
