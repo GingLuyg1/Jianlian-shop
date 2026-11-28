@@ -124,14 +124,14 @@ export default function PublicTopInfoBar({
       )}
     >
       <div className={cn(
-        "mx-auto grid max-w-[1540px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 py-2 px-[var(--storefront-content-padding-x)]",
+        "mx-auto grid max-w-[1540px] grid-cols-[minmax(0,1fr)_auto] items-start gap-2 py-2 px-[var(--storefront-content-padding-x)]",
         isMobile && "!flex !py-1.5",
-        !isMobile && pathname === "/" && "sm:h-[62px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-2.5 sm:py-0 xl:grid-cols-[minmax(0,1fr)_142px_150px]",
-        !isMobile && pathname !== "/" && "sm:h-[52px] sm:items-start sm:pt-[13px] sm:pb-[3px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-2.5 xl:grid-cols-[minmax(0,1fr)_142px_150px]"
+        !isMobile && pathname === "/" && "sm:h-[132px] sm:items-start sm:pt-[13px] sm:pb-0 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-2.5 xl:grid-cols-[minmax(0,1fr)_142px_150px]",
+        !isMobile && pathname !== "/" && "sm:h-[122px] sm:items-start sm:pt-[13px] sm:pb-[3px] sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:gap-2.5 xl:grid-cols-[minmax(0,1fr)_142px_150px]"
       )}>
         {announcementText ? (
           <div className={cn("relative z-10 col-span-2 min-w-0 flex-1 overflow-hidden", !isMobile && "sm:col-span-1")}>
-            <div className="flex h-8 items-center gap-2 rounded-xl border border-orange-100 bg-white px-2.5 shadow-sm shadow-orange-100/60 sm:h-9 sm:px-3">
+            <div className="flex h-[102px] items-center gap-2.5 rounded-2xl border border-orange-100 bg-white px-3 shadow-sm shadow-orange-100/60 sm:h-[106px] sm:px-4">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-100 text-primary">
                 <Megaphone className="h-3.5 w-3.5" />
               </span>

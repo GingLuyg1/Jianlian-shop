@@ -85,7 +85,7 @@ test("Liquid Glass Checkout Modal integrates cleanly with checkout page and seco
 
   const css = read("components/checkout/LiquidGlassCheckoutModal.module.css");
   assert.match(css, /backdrop-filter:\s*blur\(/);
-  assert.match(css, /width:\s*min\(1540px/);
+  assert.match(css, /width:\s*min\(1520px/);
   assert.match(css, /rgba\(255,\s*250,\s*245,\s*0\.74\)/);
   assert.match(css, /rgba\(255,\s*255,\s*255,\s*0\.78\)/);
 

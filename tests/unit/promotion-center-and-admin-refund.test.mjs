@@ -263,7 +263,17 @@ test("checkout guards topup/PIN products from SIM detail mismatch, protects dark
   assert.match(checkout, /rounded-\[25%\]/);
   assert.match(checkout, /draggable=\{false\}/);
   assert.match(checkout, /scale-\[1\.03\]/);
+  assert.match(checkout, /onPointerDown=\{handlePointerDown\}/);
+  assert.match(checkout, /perspective\(650px\)/);
+  assert.match(checkout, /--checkout-purchase-width:clamp\(320px,calc\(28%-20px\),372px\)/);
+  assert.match(checkout, /RefinedLoadingOrb/);
   assert.doesNotMatch(checkout, /radial-gradient\(circle at/);
+  assert.match(modalCss, /width:\s*min\(1520px,\s*calc\(100vw - 60px\)\)/);
+  assert.match(file("components/products/AllProductsContent.tsx"), /catalog-placeholder/);
+  assert.match(file("components/products/AllProductsContent.tsx"), /RefinedLoadingOrb/);
+  assert.match(file("components/layout/PublicTopInfoBar.tsx"), /sm:h-\[106px\]/);
+  assert.match(file("components/layout/PublicTopInfoBar.tsx"), /sm:h-\[122px\]/);
+  assert.match(file("components/layout/PublicTopInfoBar.tsx"), /sm:h-\[132px\]/);
   assert.match(mall, /activeModalProductId=\{quickCheckoutProduct\}/);
   assert.match(mall, /if \(!activeModalProductId\)[\s\S]{0,60}setSelectedProductId\(""\)/);
   assert.match(modalCss, /section:not\(\[class\*="text-white"\]\):not\(\[class\*="bg-gradient-"\]\)/);

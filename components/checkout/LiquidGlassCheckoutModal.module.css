@@ -28,7 +28,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(1540px, calc(100vw - 40px));
+  width: min(1520px, calc(100vw - 60px));
   height: min(92dvh, 920px);
   max-height: calc(100dvh - 36px);
   border-radius: 30px;

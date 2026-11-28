@@ -62,7 +62,7 @@ test("Storefront shell shares responsive sidebar and main offset tokens", () => 
 test("Checkout purchase panel is compact and keeps the order contract intact", () => {
   const checkout = file("app/checkout/page.tsx");
 
-  assert.match(checkout, /--checkout-purchase-width:clamp\(327px,calc\(24vw-13px\),359px\)/);
+  assert.match(checkout, /--checkout-purchase-width:clamp\(307px,calc\(24vw-33px\),339px\)/);
   assert.match(checkout, /lg:grid-cols-\[minmax\(0,1fr\)_var\(--checkout-purchase-width\)\]/);
   assert.match(checkout, /py-(?:3|4)/);
   assert.match(checkout, /lg:h-\[calc\(100dvh-(?:62|82)px\)\]/);

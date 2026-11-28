@@ -7,6 +7,7 @@ import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Search, X }
 import PublicLayout from "@/components/layout/PublicLayout";
 import LiquidGlassCheckoutModal from "@/components/checkout/LiquidGlassCheckoutModal";
 import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
+import RefinedLoadingOrb from "@/components/ui/RefinedLoadingOrb";
 import { rememberProductCardPreview } from "@/lib/catalog/public-product-preview";
 import { loadPublicRechargeChannels } from "@/lib/catalog/public-recharge-channels";
 import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
@@ -675,10 +676,25 @@ export default function AllProductsContent() {
               </button>
             </div>
           ) : loading && products.length === 0 ? (
-            <div className="flex min-h-[320px] flex-1 items-center justify-center">
-              <div className="flex flex-col items-center gap-3 rounded-2xl border border-orange-100/90 bg-white/95 px-8 py-6 shadow-[0_14px_34px_-18px_rgba(169,103,52,0.28)]">
-                <OptionLoadingSpinner active size="lg" />
-                <span className="text-xs font-medium text-slate-500">正在加载商品列表...</span>
+            <div className="relative mt-3.5 min-h-[320px] flex-1 overflow-hidden">
+              <div className="grid h-full grid-cols-1 content-start gap-2.5 overflow-hidden xl:grid-cols-2" aria-hidden="true">
+                {Array.from({ length: 12 }).map((_, idx) => (
+                  <div
+                    key={idx}
+                    className="catalog-placeholder flex h-[74px] items-center gap-3 rounded-2xl border border-orange-100/70 px-4"
+                    style={{ animationDelay: `${idx * 45}ms` }}
+                  >
+                    <div className="h-11 w-11 shrink-0 rounded-xl bg-orange-100/55" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-2/3 rounded bg-orange-100/60" />
+                      <div className="h-3 w-1/2 rounded bg-orange-50/90" />
+                    </div>
+                    <div className="h-5 w-16 rounded bg-orange-100/60" />
+                  </div>
+                ))}
+              </div>
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[#fffdfa]/40 backdrop-blur-[1px]">
+                <RefinedLoadingOrb label="正在加载商品" />
               </div>
             </div>
           ) : products.length === 0 ? (
@@ -731,11 +747,8 @@ export default function AllProductsContent() {
           ) : (
             <div className="relative mt-3.5 flex min-h-0 flex-1 flex-col">
               {showOverlayLoader ? (
-                <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-white/70 backdrop-blur-[2px] transition-opacity duration-200">
-                  <div className="flex flex-col items-center gap-2.5 rounded-2xl border border-orange-100/90 bg-white/95 px-7 py-5 shadow-[0_14px_34px_-18px_rgba(169,103,52,0.28)]">
-                    <OptionLoadingSpinner active size="lg" />
-                    <span className="text-xs font-medium text-slate-500">正在加载商品...</span>
-                  </div>
+                <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-[#fffdfa]/65 backdrop-blur-[2px] transition-opacity duration-200">
+                  <RefinedLoadingOrb label="正在加载商品" />
                 </div>
               ) : null}
             <div

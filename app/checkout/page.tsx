@@ -38,7 +38,7 @@ const OneNzProductDetails = dynamic(() => import("@/components/products/details/
 const RakutenMobileProductDetails = dynamic(() => import("@/components/products/details/RakutenMobileProductDetails"));
 const UltraMobileProductDetails = dynamic(() => import("@/components/products/details/UltraMobileProductDetails"));
 const TMobileProductDetails = dynamic(() => import("@/components/products/details/TMobileProductDetails"));
-import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
+import RefinedLoadingOrb from "@/components/ui/RefinedLoadingOrb";
 import { isAppleGiftCardProduct } from "@/components/products/details/AppleGiftCardProductDetails";
 const AppleGiftCardProductDetails = dynamic(() => import("@/components/products/details/AppleGiftCardProductDetails"), {
   loading: () => <InlineDetailLoadingCard />,
@@ -1403,7 +1403,7 @@ function CheckoutPageContent() {
         data-testid="checkout-layout"
         className={cn(
           "grid min-h-0 grid-cols-1 gap-3.5 lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]",
-          isModal ? "lg:h-full [--checkout-purchase-width:clamp(340px,28%,392px)]" : "lg:h-[calc(100dvh-84px)]",
+          isModal ? "lg:h-full [--checkout-purchase-width:clamp(320px,calc(28%-20px),372px)]" : "lg:h-[calc(100dvh-154px)]",
           isMobile && "!grid-cols-1 !h-auto",
           modalStyles.contentEnter
         )}
@@ -1458,7 +1458,7 @@ function CheckoutPageContent() {
                         ? "请输入接收物流通知的邮箱"
                         : "请输入接收卡密的邮箱"
                     }
-                    className="h-9 bg-slate-50 text-base md:text-sm"
+                    className="h-9 rounded-xl border-slate-200/90 bg-slate-50 text-base md:text-sm"
                     disabled={orderConfigurationLocked}
                   />
                 </div>
@@ -1478,14 +1478,14 @@ function CheckoutPageContent() {
                       autoComplete="off"
                       placeholder="请输入优惠券码"
                       disabled={orderConfigurationLocked || couponLoading}
-                      className="h-9 flex-1 bg-slate-50 text-base md:text-sm"
+                      className="h-9 flex-1 rounded-xl border-slate-200/90 bg-slate-50 text-base md:text-sm"
                     />
                     {appliedCoupon ? (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-9 shrink-0 px-2.5 text-xs"
+                        className="h-9 shrink-0 rounded-xl px-2.5 text-xs"
                         disabled={orderConfigurationLocked}
                         onClick={() => {
                           setAppliedCoupon(null);
@@ -1500,7 +1500,7 @@ function CheckoutPageContent() {
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="h-9 shrink-0 px-3 text-xs"
+                        className="h-9 shrink-0 rounded-xl px-3 text-xs"
                         disabled={orderConfigurationLocked || couponLoading || !couponCode.trim()}
                         onClick={() => void handleApplyCoupon()}
                       >
@@ -1525,7 +1525,7 @@ function CheckoutPageContent() {
                     value={customerNote}
                     onChange={(event) => setCustomerNote(event.target.value)}
                     placeholder={settings.default_order_note_hint}
-                    className="h-9 bg-slate-50 text-base md:text-sm"
+                    className="h-9 rounded-xl border-slate-200/90 bg-slate-50 text-base md:text-sm"
                   />
                 </div>
 
@@ -1539,7 +1539,7 @@ function CheckoutPageContent() {
                         value={customerName}
                         onChange={(event) => setCustomerName(event.target.value)}
                         placeholder="收件人姓名"
-                        className="h-9 w-full bg-slate-50 px-2.5 text-base md:text-sm"
+                        className="h-9 w-full rounded-xl border-slate-200/90 bg-slate-50 px-2.5 text-base md:text-sm"
                       />
                     </div>
                     <div>
@@ -1552,7 +1552,7 @@ function CheckoutPageContent() {
                         placeholder="联系电话"
                         inputMode="tel"
                         autoComplete="tel"
-                        className="h-9 w-full bg-slate-50 px-2.5 text-base md:text-sm"
+                        className="h-9 w-full rounded-xl border-slate-200/90 bg-slate-50 px-2.5 text-base md:text-sm"
                       />
                     </div>
                     <div className="sm:col-span-2">
@@ -1567,7 +1567,7 @@ function CheckoutPageContent() {
                           setShippingRegion(nextAddress);
                         }}
                         placeholder="请输入省市区街道门牌等详细收货地址"
-                        className="h-9 w-full bg-slate-50 text-base md:text-sm"
+                        className="h-9 w-full rounded-xl border-slate-200/90 bg-slate-50 text-base md:text-sm"
                       />
                     </div>
                   </div>
@@ -1629,7 +1629,7 @@ function CheckoutPageContent() {
 
               <div className="shrink-0 border-t border-border pt-2.5">
                 <div data-testid="checkout-submit-controls" className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-2">
-                  <div className="flex h-10 items-center rounded-lg border border-border bg-white">
+                  <div className="flex h-10 items-center rounded-full border border-border bg-white">
                     <button
                       type="button"
                       className="flex h-10 w-8 items-center justify-center text-muted-foreground hover:text-foreground"
@@ -1740,7 +1740,7 @@ function CheckoutPageContent() {
   }
 
   return (
-    <PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={cn("max-w-none py-3 lg:mt-0 lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]", isMobile && "!h-auto !overflow-visible")}>
+    <PublicLayout mobileNavigationUntilLg viewportLocked={!isMobile} contentClassName={cn("mx-auto max-w-[1520px] py-3 lg:mt-0 lg:overflow-hidden [--checkout-purchase-width:clamp(307px,calc(24vw-33px),339px)]", isMobile && "!h-auto !overflow-visible")}>
       {checkoutBody}
     </PublicLayout>
   );
@@ -1844,7 +1844,7 @@ function PaymentMethodSelect({
         role="combobox"
         data-testid="checkout-payment-trigger"
         className={cn(
-          "flex h-12 min-h-[48px] w-full items-center justify-between gap-2.5 rounded-xl border px-3 py-2 text-left text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20",
+          "flex h-12 min-h-[48px] w-full items-center justify-between gap-2.5 rounded-2xl border px-3 py-2 text-left text-sm transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary/20",
           open
             ? "border-primary/50 bg-white shadow-sm ring-2 ring-primary/10"
             : "border-[#ead9cc] bg-[#fffaf6] hover:border-primary/40 hover:bg-white"
@@ -1899,7 +1899,7 @@ function PaymentMethodSelect({
         <div className="overflow-hidden">
           <div
             onMouseLeave={() => setHoveredMethod(null)}
-            className="rounded-xl border border-[#ead9cc]/90 bg-[#fffdfb] p-2 shadow-sm"
+            className="rounded-2xl border border-[#ead9cc]/90 bg-[#fffdfb] p-2 shadow-sm"
           >
             {!isGuestUser ? (() => {
               const balanceActive = selected === "balance";
@@ -2190,15 +2190,11 @@ function InlineDetailLoadingCard() {
       role="status"
       aria-label="商品详情加载中"
       className={cn(
-        "mt-6 flex min-h-[220px] flex-col items-center justify-center rounded-2xl border border-orange-200/70 bg-white/85 px-6 py-10 text-center shadow-xs backdrop-blur-sm",
+        "relative mt-6 flex min-h-[240px] flex-col items-center justify-center rounded-2xl bg-white/55 px-6 py-10 text-center",
         modalStyles.loadingBoxEnter
       )}
     >
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-200/70 bg-gradient-to-br from-orange-50 via-amber-50/70 to-white">
-        <OptionLoadingSpinner active size="lg" />
-      </div>
-      <div className="mt-3 text-sm font-bold text-slate-900">正在加载官方商品详情…</div>
-      <p className="mt-1 text-xs text-slate-500">请稍候，详情内容即将呈现</p>
+      <RefinedLoadingOrb label="正在加载商品详情" />
     </div>
   );
 }
@@ -2220,8 +2216,10 @@ function CheckoutLoadingShell({
     <div
       data-testid="checkout-progressive-loading"
       className={cn(
-        "relative flex min-h-[380px] w-full flex-col items-center justify-center p-4",
-        isModal ? "h-full" : "lg:h-[calc(100dvh-84px)]",
+        "relative grid min-h-[380px] w-full grid-cols-1 gap-3.5 lg:gap-4",
+        isModal
+          ? "h-full lg:grid-cols-[minmax(0,1fr)_clamp(320px,calc(28%-20px),372px)]"
+          : "lg:h-[calc(100dvh-154px)] lg:grid-cols-[minmax(0,1fr)_clamp(307px,calc(24vw-33px),339px)]",
         modalStyles.loadingBoxEnter
       )}
     >
@@ -2237,26 +2235,16 @@ function CheckoutLoadingShell({
         </button>
       ) : null}
 
-      <div className="flex w-full max-w-[360px] flex-col items-center rounded-[24px] border border-orange-200/70 bg-white/88 px-7 py-8 text-center shadow-[0_20px_50px_-24px_rgba(169,103,52,0.28)] backdrop-blur-xl">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-orange-200/70 bg-gradient-to-br from-orange-50 via-amber-50/70 to-white shadow-inner">
-          <OptionLoadingSpinner active size="lg" />
-        </div>
-        <div className="mt-4 text-sm font-bold tracking-tight text-slate-900">
-          {productName ? `正在加载「${productName}」` : "正在加载商品详情"}
-        </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-          正在同步实时规格、库存与官方详情，请稍候…
-        </p>
-        <div className="mt-4 flex w-full items-center gap-2">
-          <div className="h-1.5 flex-1 animate-pulse rounded-full bg-orange-100/90 motion-reduce:animate-none" />
-          <div className="h-1.5 w-14 animate-pulse rounded-full bg-orange-200/80 motion-reduce:animate-none" />
-        </div>
+      <div className="h-full min-h-[320px] rounded-[18px] bg-white/55" aria-hidden="true" />
+      <div className="hidden h-full rounded-[26px] border border-white/80 bg-white/70 lg:block" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+        <RefinedLoadingOrb label={productName ? `正在加载「${productName}」` : "正在加载商品详情"} />
       </div>
     </div>
   );
   if (isModal) return inner;
   return (
-    <PublicLayout mobileNavigationUntilLg viewportLocked contentClassName="max-w-none py-3 lg:mt-0 lg:overflow-hidden">
+    <PublicLayout mobileNavigationUntilLg viewportLocked contentClassName="mx-auto max-w-[1520px] py-3 lg:mt-0 lg:overflow-hidden">
       {inner}
     </PublicLayout>
   );
@@ -3942,7 +3930,7 @@ function SkuSelector({
               onClick={() => onSelectSku(sku.id)}
               disabled={disabled || sku.status !== "active" || Number(sku.stock ?? 0) <= 0}
               className={cn(
-                "min-w-0 rounded-lg border bg-white px-2.5 py-2 text-center transition-colors disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-70",
+                "min-w-0 rounded-xl border bg-white px-2.5 py-2 text-center transition-colors disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400 disabled:opacity-70",
                 selected
                   ? "border-primary bg-primary/5"
                   : "border-border hover:border-primary/30"
@@ -3979,57 +3967,104 @@ function resolveArtworkGlowColor(product: Product): string {
 function ProductArtwork({ product }: { product: Product }) {
   const imageSrc = getProductImage(product);
   const stageRef = useRef<HTMLDivElement>(null);
-  const [tilt, setTilt] = useState({ rx: 0, ry: 0, active: false });
+  const frameRef = useRef(0);
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0, active: false, pressed: false });
   const glowColor = resolveArtworkGlowColor(product);
 
-  const handlePointerMove = (event: React.MouseEvent<HTMLDivElement>) => {
+  useEffect(() => {
+    return () => {
+      if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    };
+  }, []);
+
+  const updateTiltFromClient = (clientX: number, clientY: number, pressed?: boolean) => {
     const el = stageRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const px = (event.clientX - rect.left) / Math.max(1, rect.width);
-    const py = (event.clientY - rect.top) / Math.max(1, rect.height);
+    const px = Math.min(1, Math.max(0, (clientX - rect.left) / Math.max(1, rect.width)));
+    const py = Math.min(1, Math.max(0, (clientY - rect.top) / Math.max(1, rect.height)));
     const ry = (px - 0.5) * 20;
     const rx = (0.5 - py) * 20;
-    setTilt({ rx, ry, active: true });
+    if (frameRef.current) cancelAnimationFrame(frameRef.current);
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = 0;
+      setTilt((prev) => ({
+        rx,
+        ry,
+        active: true,
+        pressed: pressed !== undefined ? pressed : prev.pressed,
+      }));
+    });
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "mouse" && !tilt.pressed) return;
+    updateTiltFromClient(event.clientX, event.clientY);
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    updateTiltFromClient(event.clientX, event.clientY, true);
+  };
+
+  const handlePointerUp = () => {
+    setTilt((prev) => (prev.active ? { ...prev, pressed: false } : { rx: 0, ry: 0, active: false, pressed: false }));
   };
 
   const handlePointerLeave = () => {
-    setTilt({ rx: 0, ry: 0, active: false });
+    if (frameRef.current) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = 0;
+    }
+    setTilt({ rx: 0, ry: 0, active: false, pressed: false });
   };
 
   const Icon = getProductFallbackIcon(product);
+  const pressScale = tilt.pressed ? 0.965 : tilt.active ? 0.992 : 1;
+  const pressGain = tilt.pressed ? 1.35 : 1;
+  const effectiveRx = tilt.rx * pressGain;
+  const effectiveRy = tilt.ry * pressGain;
 
   return (
     <div
       ref={stageRef}
       data-testid="product-artwork-stage"
-      onMouseMove={handlePointerMove}
-      onMouseLeave={handlePointerLeave}
+      data-tilting={tilt.active ? "true" : undefined}
+      onPointerMove={handlePointerMove}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerLeave}
+      onPointerLeave={handlePointerLeave}
       onDragStart={(event) => event.preventDefault()}
       onContextMenu={(event) => event.preventDefault()}
-      className="group/art relative h-full w-full select-none [-webkit-touch-callout:none] [perspective:900px]"
+      className="group/art relative h-full w-full cursor-pointer select-none [-webkit-touch-callout:none] [perspective:650px]"
     >
-      {/* Ambient colored glow backdrop (inspired by premium 3D product showcases) */}
+      {/* Subtle ambient glow backdrop */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-[10%] -z-0 rounded-full blur-2xl transition-all duration-500 ease-out"
+        className="pointer-events-none absolute inset-[12%] -z-0 rounded-full blur-2xl transition-all duration-300 ease-out"
         style={{
           background: `radial-gradient(closest-side, ${glowColor}, transparent 75%)`,
-          opacity: tilt.active ? 0.92 : 0.58,
-          transform: tilt.active ? "scale(1.12)" : "scale(1)",
+          opacity: tilt.pressed ? 0.42 : tilt.active ? 0.72 : 0.52,
+          transform: tilt.pressed ? "scale(0.94)" : tilt.active ? "scale(1.02)" : "scale(1)",
         }}
       />
 
-      {/* Interactive 3D tilted icon badge matching catalog 25% corner radius ratio */}
+      {/* Recharge-card-style 4-edge depressible 3D icon badge matching 25% catalog radius */}
       <div
-        className="product-artwork-pop relative z-10 h-full w-full overflow-hidden rounded-[25%] bg-transparent shadow-[0_22px_38px_-18px_rgba(15,23,42,0.34),0_8px_18px_-10px_rgba(15,23,42,0.18)] ring-1 ring-inset ring-black/[0.06]"
+        className="product-artwork-pop relative z-10 h-full w-full overflow-hidden rounded-[25%] bg-transparent ring-1 ring-inset ring-black/[0.06]"
         style={{
+          transformOrigin: "center",
           transform: tilt.active
-            ? `rotateX(${tilt.rx.toFixed(2)}deg) rotateY(${tilt.ry.toFixed(2)}deg) translateY(-4px) scale(1.035)`
-            : "rotateX(0deg) rotateY(0deg) translateY(0px) scale(1)",
+            ? `perspective(650px) rotateX(${effectiveRx.toFixed(2)}deg) rotateY(${effectiveRy.toFixed(2)}deg) scale(${pressScale})`
+            : "perspective(650px) rotateX(0deg) rotateY(0deg) scale(1)",
+          boxShadow: tilt.pressed
+            ? "0 6px 14px -8px rgba(15,23,42,0.28), 0 2px 6px -4px rgba(15,23,42,0.18)"
+            : tilt.active
+              ? "0 14px 26px -14px rgba(15,23,42,0.34), 0 6px 12px -8px rgba(15,23,42,0.20)"
+              : "0 20px 34px -18px rgba(15,23,42,0.30), 0 8px 16px -10px rgba(15,23,42,0.16)",
           transition: tilt.active
-            ? "transform 120ms ease-out, box-shadow 260ms ease-out"
-            : "transform 520ms cubic-bezier(0.2, 0.9, 0.25, 1.02), box-shadow 420ms ease-out",
+            ? "transform 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 180ms ease-out"
+            : "transform 420ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 320ms ease-out",
           willChange: "transform",
         }}
       >

@@ -11,7 +11,7 @@ test("checkout keeps a compact purchase column and aligns product detail surface
   const checkout = file("app/checkout/page.tsx");
   const publicSidebar = file("components/layout/PublicSidebar.tsx");
 
-  assert.match(checkout, /--checkout-purchase-width:clamp\(327px,calc\(24vw-13px\),359px\)/);
+  assert.match(checkout, /--checkout-purchase-width:clamp\(307px,calc\(24vw-33px\),339px\)/);
   assert.match(publicSidebar, /py-2\.5 text-left text-sm font-medium/);
   assert.match(checkout, /<label className="mb-(?:1|1\.5) block text-(?:xs|sm) font-medium">\s*<span className="text-red-500">\*<\/span>联系邮箱/);
   assert.match(checkout, /<label className="mb-(?:1|1\.5) block text-(?:xs|sm) font-medium">\s*提交信息或备注/);

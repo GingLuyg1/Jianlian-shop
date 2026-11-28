@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { CheckoutModalProvider } from "./CheckoutModalContext";
-import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
+import RefinedLoadingOrb from "@/components/ui/RefinedLoadingOrb";
 import { cn } from "@/lib/utils";
 import styles from "./LiquidGlassCheckoutModal.module.css";
 
@@ -39,24 +39,14 @@ function ModalCheckoutSkeleton() {
     <div
       data-testid="liquid-glass-checkout-loading"
       className={cn(
-        "flex h-full min-h-[380px] w-full items-center justify-center p-4",
+        "relative grid h-full min-h-[380px] w-full grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,1fr)_clamp(320px,calc(28%-20px),372px)] lg:gap-4",
         styles.loadingBoxEnter
       )}
     >
-      <div className="flex w-full max-w-[340px] flex-col items-center rounded-[24px] border border-orange-200/70 bg-white/85 px-7 py-8 text-center shadow-[0_20px_50px_-24px_rgba(169,103,52,0.28)] backdrop-blur-xl">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-orange-200/70 bg-gradient-to-br from-orange-50 via-amber-50/70 to-white shadow-inner">
-          <OptionLoadingSpinner active size="lg" />
-        </div>
-        <div className="mt-4 text-sm font-bold tracking-tight text-slate-900">
-          正在加载商品详情
-        </div>
-        <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
-          正在同步实时规格、库存与官方说明，请稍候…
-        </p>
-        <div className="mt-4 flex w-full items-center gap-2">
-          <div className="h-1.5 flex-1 animate-pulse rounded-full bg-orange-100/90" />
-          <div className="h-1.5 w-12 animate-pulse rounded-full bg-orange-200/75" />
-        </div>
+      <div className="h-full min-h-[320px] rounded-[18px] bg-white/55" aria-hidden="true" />
+      <div className="hidden h-full rounded-[26px] border border-white/80 bg-white/70 lg:block" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+        <RefinedLoadingOrb label="正在加载商品详情" />
       </div>
     </div>
   );
