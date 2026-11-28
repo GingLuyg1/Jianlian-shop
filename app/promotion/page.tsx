@@ -477,9 +477,9 @@ export default function PromotionPage() {
         ) : null}
 
         {/* 2. 主工作区：左侧独立大尺寸「专属二维码海报工作台」 | 右侧「链接文案 + 数据 + 佣金结算 + 规则」 */}
-        <section className="grid items-start gap-4 xl:grid-cols-[536px_minmax(0,1fr)] 2xl:grid-cols-[580px_minmax(0,1fr)]">
-          {/* 左侧旗舰海报工作台（桌面端吸顶，避免顶部留白，随右侧内容平滑联动） */}
-          <div className={cn(glass.surface, "flex flex-col rounded-2xl p-4 sm:p-5 xl:sticky xl:top-0")}>
+        <section className="grid items-start gap-4 xl:grid-cols-[480px_minmax(0,1fr)] 2xl:grid-cols-[520px_minmax(0,1fr)]">
+          {/* 左侧旗舰海报工作台（桌面端吸顶，紧凑无多余左右留白） */}
+          <div className={cn(glass.surface, "flex flex-col rounded-2xl p-3.5 sm:p-4 xl:sticky xl:top-0")}>
             <PromotionPosterCarousel
               inviteUrl={inviteUrl}
               inviteCode={inviteCode}

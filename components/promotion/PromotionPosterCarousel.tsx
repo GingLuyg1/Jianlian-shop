@@ -9,7 +9,6 @@ import {
   Download,
   ImageIcon,
   Loader2,
-  MousePointerClick,
   RefreshCw,
   ZoomIn,
 } from "lucide-react";
@@ -25,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { PROMOTION_POSTERS, type PromotionPosterSpec } from "@/lib/promotion";
 import { cn } from "@/lib/utils";
+
+const AUTOPLAY_INTERVAL_MS = 4000;
 
 type PromotionPosterCarouselProps = {
   inviteUrl: string;
@@ -133,6 +134,7 @@ export default function PromotionPosterCarousel({
   isPersonalized,
 }: PromotionPosterCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [manualFlipTick, setManualFlipTick] = useState(0);
   const [compositedMap, setCompositedMap] = useState<Record<string, CompositedPosterAsset>>({});
   const [composeError, setComposeError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
@@ -140,6 +142,11 @@ export default function PromotionPosterCarousel({
   const [copiedPosterId, setCopiedPosterId] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  // Autoplay pause states: hover, contextmenu open, or document hidden
+  const [isHovering, setIsHovering] = useState(false);
+  const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
+  const [isDocumentHidden, setIsDocumentHidden] = useState(false);
 
   const qrHiddenContainerRef = useRef<HTMLDivElement | null>(null);
   const activeIndexRef = useRef(activeIndex);
@@ -151,14 +158,76 @@ export default function PromotionPosterCarousel({
 
   const activeEntry = compositedMap[poster.id];
   const activeComposited = activeEntry?.urlKey === effectiveUrl ? activeEntry : null;
+  const isAutoplayPaused = isHovering || isContextMenuOpen || lightboxOpen || isDocumentHidden;
 
   const handlePrev = useCallback(() => {
     setActiveIndex((prev) => (prev - 1 + PROMOTION_POSTERS.length) % PROMOTION_POSTERS.length);
+    setManualFlipTick((v) => v + 1);
   }, []);
 
   const handleNext = useCallback(() => {
     setActiveIndex((prev) => (prev + 1) % PROMOTION_POSTERS.length);
+    setManualFlipTick((v) => v + 1);
   }, []);
+
+  // Track page visibility so background tabs do not spin timers unnecessarily
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      setIsDocumentHidden(document.hidden);
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, []);
+
+  // Detect dismissal of native browser context menu to resume autoplay cleanly
+  useEffect(() => {
+    if (!isContextMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (event.button === 2) return;
+      setIsContextMenuOpen(false);
+    };
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button === 2) return;
+      setIsContextMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsContextMenuOpen(false);
+      }
+    };
+    const handleWindowFocus = () => {
+      setIsContextMenuOpen(false);
+    };
+    const handleScroll = () => {
+      setIsContextMenuOpen(false);
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown, true);
+    window.addEventListener("mousedown", handleMouseDown, true);
+    window.addEventListener("keydown", handleKeyDown, true);
+    window.addEventListener("focus", handleWindowFocus);
+    window.addEventListener("scroll", handleScroll, true);
+
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown, true);
+      window.removeEventListener("mousedown", handleMouseDown, true);
+      window.removeEventListener("keydown", handleKeyDown, true);
+      window.removeEventListener("focus", handleWindowFocus);
+      window.removeEventListener("scroll", handleScroll, true);
+    };
+  }, [isContextMenuOpen]);
+
+  // Automatic carousel rotation when not hovered, right-clicked, or zoomed
+  useEffect(() => {
+    if (isAutoplayPaused || PROMOTION_POSTERS.length <= 1) return;
+
+    const timer = window.setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % PROMOTION_POSTERS.length);
+    }, AUTOPLAY_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [isAutoplayPaused, manualFlipTick]);
 
   // Pre-composite the active poster first, then warm all 4 posters into real PNG images
   // with the QR code baked directly into the bitmap so native right-click Copy/Save works.
@@ -313,21 +382,14 @@ export default function PromotionPosterCarousel({
 
       {/* Studio Header Bar */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-orange-100/80 pb-3">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-orange-100/80 text-primary">
             <ImageIcon className="h-4 w-4" />
           </span>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-slate-950">专属二维码海报</h2>
-              <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-primary ring-1 ring-inset ring-orange-200/80">
-                {activeIndex + 1} / {PROMOTION_POSTERS.length} · {poster.label}
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500">
-              768×1024 原图实时合成二维码，支持右键直接复制或另存
-            </p>
-          </div>
+          <h2 className="text-base font-bold text-slate-950">专属二维码海报</h2>
+          <span className="rounded-full bg-orange-50 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-primary ring-1 ring-inset ring-orange-200/80">
+            {activeIndex + 1} / {PROMOTION_POSTERS.length} · {poster.label}
+          </span>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -354,44 +416,25 @@ export default function PromotionPosterCarousel({
               合成中...
             </span>
           )}
-
-          {/* Compact mobile prev/next buttons so poster keeps maximum horizontal width on small screens */}
-          <div className="flex items-center gap-1 sm:hidden">
-            <button
-              type="button"
-              onClick={handlePrev}
-              aria-label="上一张推广海报"
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-orange-200/80 bg-white text-slate-600 transition hover:border-primary/40 hover:text-primary"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={handleNext}
-              aria-label="下一张推广海报"
-              className="flex h-7 w-7 items-center justify-center rounded-full border border-orange-200/80 bg-white text-slate-600 transition hover:border-primary/40 hover:text-primary"
-            >
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Flagship Enlarged Poster Preview Stage */}
-      <div className="relative flex flex-col items-center justify-center rounded-2xl border border-orange-100/90 bg-[radial-gradient(circle_at_top,_rgba(255,237,213,0.52),_rgba(255,255,255,0.92)_68%)] px-2 py-3.5 sm:px-3 sm:py-4">
-        <div className="flex w-full items-center justify-center gap-1.5 sm:gap-2">
-          <button
-            type="button"
-            onClick={handlePrev}
-            aria-label="上一张推广海报"
-            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-orange-200/85 bg-white/95 text-slate-600 shadow-xs transition hover:border-primary/45 hover:bg-orange-50 hover:text-primary active:scale-95 sm:flex"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-
+      {/* Flagship Edge-to-Edge Autoplay Poster Stage */}
+      <div
+        data-testid="promotion-poster-stage"
+        data-autoplay-paused={isAutoplayPaused ? "true" : "false"}
+        onMouseEnter={() => setIsHovering(true)}
+        onMouseLeave={() => {
+          setIsHovering(false);
+          setIsContextMenuOpen(false);
+        }}
+        onContextMenu={() => setIsContextMenuOpen(true)}
+        className="flex flex-col rounded-2xl border border-orange-100/90 bg-[radial-gradient(circle_at_top,_rgba(255,237,213,0.48),_rgba(255,255,255,0.92)_68%)] px-3.5 py-2.5 sm:px-4 sm:py-3"
+      >
+        <div className="mx-auto relative w-full max-w-[440px] xl:max-w-none">
           <div
             data-testid="promotion-poster-preview"
-            className="relative aspect-[3/4] w-full max-w-[336px] overflow-hidden rounded-2xl bg-white shadow-[0_20px_44px_-22px_rgba(120,62,20,0.36)] ring-1 ring-slate-900/10 sm:max-w-[388px] xl:max-w-[404px] 2xl:max-w-[436px]"
+            className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-white shadow-[0_20px_44px_-22px_rgba(120,62,20,0.34)] ring-1 ring-slate-900/10"
           >
             {activeComposited ? (
               <img
@@ -402,7 +445,7 @@ export default function PromotionPosterCarousel({
                 alt={`简联商城专属推广海报 - ${poster.label}${inviteCode ? ` (${inviteCode})` : ""}`}
                 onClick={() => setLightboxOpen(true)}
                 title="点击放大查看；右键可直接「复制图片」或「图片另存为」（已包含专属二维码）"
-                className="block h-full w-full cursor-zoom-in object-contain transition-transform duration-300 hover:scale-[1.008]"
+                className="block h-full w-full cursor-zoom-in object-contain transition-transform duration-300 hover:scale-[1.006]"
               />
             ) : composeError ? (
               <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-orange-50/40 px-6 text-center">
@@ -424,130 +467,87 @@ export default function PromotionPosterCarousel({
             )}
           </div>
 
+          {/* Left / Right manual flip arrows centered directly on the left & right edges of the poster */}
           <button
             type="button"
+            data-testid="promotion-poster-prev-btn"
+            onClick={handlePrev}
+            aria-label="上一张推广海报"
+            className="absolute left-0 top-1/2 z-10 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-orange-200/90 bg-white/95 text-slate-700 shadow-md backdrop-blur-md transition hover:border-primary/50 hover:bg-orange-50 hover:text-primary active:scale-95"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+
+          <button
+            type="button"
+            data-testid="promotion-poster-next-btn"
             onClick={handleNext}
             aria-label="下一张推广海报"
-            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-orange-200/85 bg-white/95 text-slate-600 shadow-xs transition hover:border-primary/45 hover:bg-orange-50 hover:text-primary active:scale-95 sm:flex"
+            className="absolute right-0 top-1/2 z-10 flex h-9 w-9 translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-orange-200/90 bg-white/95 text-slate-700 shadow-md backdrop-blur-md transition hover:border-primary/50 hover:bg-orange-50 hover:text-primary active:scale-95"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Right-click / long-press native hint bar */}
-        <div className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] text-slate-500">
-          <MousePointerClick className="h-3.5 w-3.5 shrink-0 text-primary/80" />
-          <span className="hidden sm:inline">
-            右键海报可直接「复制图片 / 另存为」（已连带二维码），点击图片可全屏放大
-          </span>
-          <span className="sm:hidden">
-            长按海报可直接保存完整二维码图片，点击图片可放大查看
-          </span>
+        {/* Studio Action Bar directly replacing the old small hint text beneath the poster */}
+        <div className="mt-2.5 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <button
+            type="button"
+            data-testid="promotion-poster-copy-btn"
+            onClick={() => void handleCopyPosterImage()}
+            disabled={copyingImage || !activeComposited}
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] px-4 text-xs font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
+          >
+            {copyingImage ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>正在复制图片...</span>
+              </>
+            ) : copiedPosterId === poster.id ? (
+              <>
+                <Check className="h-3.5 w-3.5" />
+                <span>已复制含码海报</span>
+              </>
+            ) : (
+              <>
+                <Copy className="h-3.5 w-3.5" />
+                <span>一键复制海报</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            data-testid="promotion-poster-download-btn"
+            onClick={() => void handleDownloadPoster()}
+            disabled={downloading || !activeComposited}
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-white px-4 text-xs font-semibold text-slate-800 shadow-2xs transition hover:border-primary/45 hover:bg-orange-50/70 hover:text-primary active:scale-[0.98] disabled:opacity-60"
+          >
+            {downloading ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <span>正在导出原图...</span>
+              </>
+            ) : (
+              <>
+                <Download className="h-3.5 w-3.5" />
+                <span>下载高清原图</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            data-testid="promotion-poster-zoom-btn"
+            onClick={() => setLightboxOpen(true)}
+            disabled={!activeComposited}
+            aria-label="查看大图"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200/80 bg-orange-50/60 px-3.5 text-xs font-semibold text-primary transition hover:border-primary/45 hover:bg-orange-100/70 active:scale-[0.98] disabled:opacity-60"
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+            <span>大图</span>
+          </button>
         </div>
-      </div>
-
-      {/* 4-Poster Visual Thumbnail Filmstrip */}
-      <div className="mt-3.5 grid grid-cols-4 gap-2.5">
-        {PROMOTION_POSTERS.map((item, idx) => {
-          const isActive = idx === activeIndex;
-          const thumbEntry = compositedMap[item.id];
-          const thumbSrc = thumbEntry?.urlKey === effectiveUrl ? thumbEntry.dataUrl : item.src;
-
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setActiveIndex(idx)}
-              aria-pressed={isActive}
-              data-testid={`promotion-poster-thumb-${item.id}`}
-              className={cn(
-                "group flex flex-col items-center rounded-xl border p-1.5 transition-all",
-                isActive
-                  ? "border-primary bg-orange-50/80 shadow-xs ring-2 ring-primary/20"
-                  : "border-orange-100/90 bg-white/85 hover:border-primary/40 hover:bg-orange-50/35"
-              )}
-            >
-              <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg bg-slate-100 ring-1 ring-black/5">
-                <img
-                  src={thumbSrc}
-                  alt={item.label}
-                  className={cn(
-                    "h-full w-full object-cover transition-transform duration-200",
-                    isActive ? "scale-[1.01]" : "opacity-90 group-hover:scale-[1.03] group-hover:opacity-100"
-                  )}
-                />
-              </div>
-              <span
-                className={cn(
-                  "mt-1.5 w-full truncate text-center text-[11px] font-semibold",
-                  isActive ? "text-primary" : "text-slate-600 group-hover:text-slate-900"
-                )}
-              >
-                {item.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Studio Action Bar: One-click Copy Image / Download HD / Fullscreen Zoom */}
-      <div className="mt-3.5 grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-        <button
-          type="button"
-          data-testid="promotion-poster-copy-btn"
-          onClick={() => void handleCopyPosterImage()}
-          disabled={copyingImage || !activeComposited}
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#ea580c] to-[#f97316] px-4 text-xs font-semibold text-white shadow-sm transition hover:brightness-105 active:scale-[0.98] disabled:opacity-60"
-        >
-          {copyingImage ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span>正在复制图片...</span>
-            </>
-          ) : copiedPosterId === poster.id ? (
-            <>
-              <Check className="h-3.5 w-3.5" />
-              <span>已复制含码海报</span>
-            </>
-          ) : (
-            <>
-              <Copy className="h-3.5 w-3.5" />
-              <span>一键复制海报</span>
-            </>
-          )}
-        </button>
-
-        <button
-          type="button"
-          data-testid="promotion-poster-download-btn"
-          onClick={() => void handleDownloadPoster()}
-          disabled={downloading || !activeComposited}
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200 bg-white px-4 text-xs font-semibold text-slate-800 shadow-2xs transition hover:border-primary/45 hover:bg-orange-50/70 hover:text-primary active:scale-[0.98] disabled:opacity-60"
-        >
-          {downloading ? (
-            <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              <span>正在导出原图...</span>
-            </>
-          ) : (
-            <>
-              <Download className="h-3.5 w-3.5" />
-              <span>下载高清原图</span>
-            </>
-          )}
-        </button>
-
-        <button
-          type="button"
-          data-testid="promotion-poster-zoom-btn"
-          onClick={() => setLightboxOpen(true)}
-          disabled={!activeComposited}
-          aria-label="查看大图"
-          className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-orange-200/80 bg-orange-50/60 px-3.5 text-xs font-semibold text-primary transition hover:border-primary/45 hover:bg-orange-100/70 active:scale-[0.98] disabled:opacity-60"
-        >
-          <ZoomIn className="h-3.5 w-3.5" />
-          <span>大图</span>
-        </button>
       </div>
 
       {/* Fullscreen High-Res Poster Lightbox Dialog */}
@@ -561,21 +561,12 @@ export default function PromotionPosterCarousel({
               </span>
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              完整 768×1024 合成原图，可直接右键图片「复制图片 / 图片另存为」，或使用下方快捷操作。
+              可直接右键图片「复制图片 / 图片另存为」，或使用下方快捷操作。
             </DialogDescription>
           </DialogHeader>
 
-          <div className="flex items-center justify-center gap-2 sm:gap-3">
-            <button
-              type="button"
-              onClick={handlePrev}
-              aria-label="查看上一张海报"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-orange-200 bg-white text-slate-600 shadow-xs transition hover:border-primary/45 hover:bg-orange-50 hover:text-primary"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-
-            <div className="flex max-h-[78vh] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-orange-100 bg-orange-50/35 p-2 sm:p-3">
+          <div className="relative flex items-center justify-center">
+            <div className="flex max-h-[78vh] w-full items-center justify-center overflow-hidden rounded-2xl border border-orange-100 bg-orange-50/35 p-2 sm:p-3">
               {activeComposited ? (
                 <img
                   data-testid="promotion-poster-lightbox-image"
@@ -594,9 +585,18 @@ export default function PromotionPosterCarousel({
 
             <button
               type="button"
+              onClick={handlePrev}
+              aria-label="查看上一张海报"
+              className="absolute left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-900/10 bg-white/90 text-slate-700 shadow-md backdrop-blur-md transition hover:border-primary/45 hover:bg-white hover:text-primary"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
               onClick={handleNext}
               aria-label="查看下一张海报"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-orange-200 bg-white text-slate-600 shadow-xs transition hover:border-primary/45 hover:bg-orange-50 hover:text-primary"
+              className="absolute right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-900/10 bg-white/90 text-slate-700 shadow-md backdrop-blur-md transition hover:border-primary/45 hover:bg-white hover:text-primary"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -608,7 +608,10 @@ export default function PromotionPosterCarousel({
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => setActiveIndex(idx)}
+                  onClick={() => {
+                    setActiveIndex(idx);
+                    setManualFlipTick((v) => v + 1);
+                  }}
                   className={cn(
                     "rounded-full px-2.5 py-1 text-[11px] font-semibold transition",
                     idx === activeIndex

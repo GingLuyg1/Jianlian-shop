@@ -32,9 +32,14 @@ test("promotion center is exposed in storefront navigation, excludes trend chart
   assert.match(posterCarousel, /toDataURL\("image\/png"\)/);
   assert.match(posterCarousel, /data-testid="promotion-poster-image"/);
   assert.match(posterCarousel, /data-composited="true"/);
+  assert.match(posterCarousel, /data-autoplay-paused=/);
+  assert.match(posterCarousel, /AUTOPLAY_INTERVAL_MS/);
+  assert.match(posterCarousel, /onContextMenu/);
   assert.match(posterCarousel, /ClipboardItem/);
   assert.match(posterCarousel, /data-testid="promotion-poster-lightbox-image"/);
   assert.doesNotMatch(posterCarousel, /promotion-poster-qr-slot/);
+  assert.doesNotMatch(posterCarousel, /promotion-poster-thumb-/);
+  assert.doesNotMatch(posterCarousel, /768×1024 原图实时合成二维码/);
   assert.doesNotMatch(posterCarousel, /draggable=\{false\}/);
 
   assert.match(promotionPage, /推广中心/);
