@@ -15,6 +15,11 @@ import { deliverDigitalOrder, getDeliveryErrorMessage } from "@/lib/delivery/del
 import { completePayment } from "@/lib/payments/complete-payment-service";
 import { createPaymentExpiryWindow } from "@/lib/payments/payment-expiry.mjs";
 import { getSupabaseServiceRoleClient } from "@/lib/supabase/service-role";
+import {
+  deriveOrderUsdtRateFromMarket,
+  loadLatestRechargeDailyRate,
+  type RechargeDailyRateRow,
+} from "@/lib/payments/recharge-rate-service";
 
 const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 const ACTIVE_CHAIN_SESSION_STATUSES = [
@@ -332,7 +337,8 @@ export async function createBep20PaymentSession(orderNo: string, userId: string)
   const existing = await getReusableChainSession(service, order.id);
   if (existing) return toBep20SessionResponse(order.order_no, existing, config);
 
-  const pricing = createPricingSnapshot(order, config);
+  const dailyRate = await loadLatestRechargeDailyRate(service).catch(() => null);
+  const pricing = createPricingSnapshot(order, config, dailyRate);
   const expiresAt = createPaymentExpiryWindow().expiresAt;
   const paymentSession = await ensurePaymentSession(service, order, config, pricing, expiresAt);
   const orderPaymentId = await ensureOrderPaymentRecord(service, order, paymentSession, pricing);
@@ -1059,7 +1065,11 @@ async function assertConfiguredTokenDecimals(config: Bep20Config) {
   }
 }
 
-function createPricingSnapshot(order: OrderRow, config: Bep20Config): PricingSnapshot {
+function createPricingSnapshot(
+  order: OrderRow,
+  config: Bep20Config,
+  dailyRate?: RechargeDailyRateRow | null,
+): PricingSnapshot {
   const orderCurrency = String(order.currency || "CNY").trim().toUpperCase();
   const orderAmount = normalizeDecimal(order.total_amount, 18);
   if (decimalToScaled(orderAmount, 18) <= BigInt(0)) {
@@ -1090,13 +1100,19 @@ function createPricingSnapshot(order: OrderRow, config: Bep20Config): PricingSna
     throw new Bep20PaymentError("ORDER_CURRENCY_UNSUPPORTED", "当前订单币种暂不支持 USDT-BEP20 定价。", 400);
   }
 
-  if (config.pricingMode !== "manual_fixed_rate" || !config.fixedRate) {
+  const dynamicRate = dailyRate ? deriveOrderUsdtRateFromMarket(dailyRate.market_rate) : null;
+  const resolvedRateRaw = dynamicRate ?? config.fixedRate;
+  const resolvedRateSource = dynamicRate && dailyRate
+    ? `daily_dynamic_rate:${dailyRate.effective_date}`
+    : "manual_fixed_rate";
+
+  if (!resolvedRateRaw) {
     throw new Bep20PaymentError("USDT_RATE_NOT_AVAILABLE", "USDT 汇率不可用，不能创建链上支付单。", 503);
   }
 
-  const rate = normalizeDecimal(config.fixedRate, 18);
+  const rate = normalizeDecimal(resolvedRateRaw, 18);
   const rateUnits = decimalToScaled(rate, 18);
-  if (rateUnits <= BigInt(0)) throw new Bep20PaymentError("CNY_USDT_FIXED_RATE_INVALID", "CNY/USDT 固定汇率必须大于 0。", 503);
+  if (rateUnits <= BigInt(0)) throw new Bep20PaymentError("CNY_USDT_FIXED_RATE_INVALID", "CNY/USDT 汇率必须大于 0。", 503);
   const orderUnits = decimalToScaled(orderAmount, 18);
   const expectedUnits = ceilDiv(orderUnits * pow10(config.amountScale), rateUnits);
   if (expectedUnits <= BigInt(0)) throw new Bep20PaymentError("USDT_AMOUNT_TOO_SMALL", "USDT 应付金额过小，无法创建链上支付单。", 400);
@@ -1107,7 +1123,7 @@ function createPricingSnapshot(order: OrderRow, config: Bep20Config): PricingSna
     orderAmount,
     paymentCurrency: "USDT",
     exchangeRate: rate,
-    exchangeRateSource: "manual_fixed_rate",
+    exchangeRateSource: resolvedRateSource,
     exchangeRateFetchedAt: fetchedAt.toISOString(),
     exchangeRateExpiresAt: expiresAt.toISOString(),
     expectedAmount,

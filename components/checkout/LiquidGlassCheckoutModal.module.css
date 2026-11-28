@@ -288,11 +288,45 @@
   }
 }
 
+.contentEnter {
+  animation: lgContentEnter 320ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.loadingBoxEnter {
+  animation: lgLoadingBoxEnter 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes lgContentEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.992);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes lgLoadingBoxEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translate3d(0, 0, 0);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .backdrop,
   .backdropClosing,
   .shell,
-  .shellClosing {
+  .shellClosing,
+  .contentEnter,
+  .loadingBoxEnter {
     animation-duration: 1ms !important;
   }
 }

@@ -1870,7 +1870,15 @@ function Bep20PaymentPanel({
               <span className="text-sm font-bold text-slate-700">{session.asset || "USDT"}</span>
             </div>
             <div className="mt-1 text-[11px] text-slate-500">
-              订单金额 {session.orderAmount} {session.orderCurrency} · 锁定汇率 {session.exchangeRate}（{session.exchangeRateSource}）
+              订单金额 {session.orderAmount} {session.orderCurrency} · 锁定汇率 {session.exchangeRate}（
+              {session.exchangeRateSource.startsWith("daily_dynamic_rate")
+                ? "今日动态汇率"
+                : session.exchangeRateSource === "manual_fixed_rate"
+                  ? "固定汇率"
+                  : session.exchangeRateSource === "order_currency_usdt"
+                    ? "USDT 计价"
+                    : session.exchangeRateSource}
+              ）
             </div>
           </div>
           <Button

@@ -38,10 +38,15 @@ const OneNzProductDetails = dynamic(() => import("@/components/products/details/
 const RakutenMobileProductDetails = dynamic(() => import("@/components/products/details/RakutenMobileProductDetails"));
 const UltraMobileProductDetails = dynamic(() => import("@/components/products/details/UltraMobileProductDetails"));
 const TMobileProductDetails = dynamic(() => import("@/components/products/details/TMobileProductDetails"));
+import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
 import { isAppleGiftCardProduct } from "@/components/products/details/AppleGiftCardProductDetails";
-const AppleGiftCardProductDetails = dynamic(() => import("@/components/products/details/AppleGiftCardProductDetails"));
+const AppleGiftCardProductDetails = dynamic(() => import("@/components/products/details/AppleGiftCardProductDetails"), {
+  loading: () => <InlineDetailLoadingCard />,
+});
 import { resolveGiftCardBrand } from "@/components/products/details/gift-card-brand-catalog";
-const BrandGiftCardProductDetails = dynamic(() => import("@/components/products/details/BrandGiftCardProductDetails"));
+const BrandGiftCardProductDetails = dynamic(() => import("@/components/products/details/BrandGiftCardProductDetails"), {
+  loading: () => <InlineDetailLoadingCard />,
+});
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -460,6 +465,7 @@ function CheckoutPageContent() {
   const [productRow, setProductRow] = useState<PublicProductRow | null>(null);
   const [productSkus, setProductSkus] = useState<PublicProductSkuRow[]>([]);
   const [productLoading, setProductLoading] = useState(true);
+  const [detailReady, setDetailReady] = useState(false);
   const [storedReturnTo, setStoredReturnTo] = useState<string | null>(null);
   const [submitLoading, setSubmitLoading] = useState(false);
   const [error, setError] = useState("");
@@ -673,9 +679,8 @@ function CheckoutPageContent() {
 
     async function loadProduct() {
       const cachedPreview = peekPublicProductPreview(productId) || peekPublicProductPreviewFromStorage(productId);
-      if (!cachedPreview) {
-        setProductLoading(true);
-      }
+      setDetailReady(false);
+      setProductLoading(true);
       setError("");
       if (cachedPreview) {
         setProductRow(cachedPreview);
@@ -723,7 +728,10 @@ function CheckoutPageContent() {
         setProductRow(null);
         setProductSkus([]);
       } finally {
-        if (active) setProductLoading(false);
+        if (active) {
+          setProductLoading(false);
+          setDetailReady(true);
+        }
       }
     }
 
@@ -1057,8 +1065,14 @@ function CheckoutPageContent() {
     modalCtx.onLockBackdropChange(modalBackdropLocked);
   }, [isModal, modalBackdropLocked, modalCtx]);
 
-  if (productLoading && !product) {
-    return <CheckoutLoadingShell isModal={isModal} />;
+  if (productLoading || !detailReady) {
+    return (
+      <CheckoutLoadingShell
+        isModal={isModal}
+        productName={productRow?.name}
+        onClose={modalCtx?.onClose}
+      />
+    );
   }
 
   if (!product || !productRow) {
@@ -1381,11 +1395,13 @@ function CheckoutPageContent() {
     <>
       {isModal ? <div className="mb-2.5 flex w-full lg:hidden">{modalActionRow}</div> : null}
       <div
+        key={product.id}
         data-testid="checkout-layout"
         className={cn(
           "grid min-h-0 grid-cols-1 gap-3.5 lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]",
           isModal ? "lg:h-full [--checkout-purchase-width:clamp(340px,28%,392px)]" : "lg:h-[calc(100dvh-84px)]",
-          isMobile && "!grid-cols-1 !h-auto"
+          isMobile && "!grid-cols-1 !h-auto",
+          modalStyles.contentEnter
         )}
       >
         <ProductDetailCard
@@ -2164,24 +2180,82 @@ function TermsDialog({
     </Dialog>
   );
 }
-function ProductDetailSkeleton() {
-  return <div data-testid="checkout-detail-skeleton" role="status" aria-label="商品详情加载中" className="mt-8 flex min-h-[240px] flex-1 flex-col justify-evenly gap-5 rounded-2xl border border-orange-100 bg-gradient-to-br from-orange-50/60 to-white p-6">
-    <div className="h-6 w-36 animate-pulse rounded-lg bg-orange-100/65 motion-reduce:animate-none" />
-    {["w-full", "w-5/6", "w-full", "w-2/3"].map((width, index) => <div key={index} className={cn(width, "h-4 animate-pulse rounded-md bg-slate-100 motion-reduce:animate-none")} />)}
-  </div>;
+function InlineDetailLoadingCard() {
+  return (
+    <div
+      role="status"
+      aria-label="商品详情加载中"
+      className={cn(
+        "mt-6 flex min-h-[220px] flex-col items-center justify-center rounded-2xl border border-orange-200/70 bg-white/85 px-6 py-10 text-center shadow-xs backdrop-blur-sm",
+        modalStyles.loadingBoxEnter
+      )}
+    >
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-orange-200/70 bg-gradient-to-br from-orange-50 via-amber-50/70 to-white">
+        <OptionLoadingSpinner active size="lg" />
+      </div>
+      <div className="mt-3 text-sm font-bold text-slate-900">正在加载官方商品详情…</div>
+      <p className="mt-1 text-xs text-slate-500">请稍候，详情内容即将呈现</p>
+    </div>
+  );
 }
 
-function CheckoutLoadingShell({ isModal = false }: { isModal?: boolean } = {}) {
+function ProductDetailSkeleton() {
+  return <InlineDetailLoadingCard />;
+}
+
+function CheckoutLoadingShell({
+  isModal = false,
+  productName,
+  onClose,
+}: {
+  isModal?: boolean;
+  productName?: string | null;
+  onClose?: () => void;
+} = {}) {
   const inner = (
-    <div data-testid="checkout-progressive-loading" className={cn("grid min-h-0 grid-cols-1 gap-3.5 lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]", isModal ? "lg:h-full [--checkout-purchase-width:clamp(340px,28%,392px)]" : "lg:h-[calc(100dvh-84px)]")}>
-      <Card className={cn("min-h-0 overflow-auto", isModal && "!border-0 !bg-transparent !shadow-none")}><CardContent className={cn("p-4 sm:p-6", isModal && "!p-1")}><div className="h-7 w-40 animate-pulse rounded-lg bg-orange-100/60 motion-reduce:animate-none" /><ProductDetailSkeleton /></CardContent></Card>
-      <Card className={cn("min-h-0 !rounded-[26px]", isModal && "!bg-white/75 !border-white/85")}><CardContent className="space-y-5 p-4"><h2 className="text-base font-semibold">订单信息</h2>{["联系邮箱", "提交信息或备注", "支付方式"].map(label => <div key={label}><p className="mb-2 text-sm text-muted-foreground">{label}</p><div className="h-10 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none" /></div>)}<p className="text-xs text-muted-foreground">商品信息就绪后可继续填写。</p></CardContent></Card>
+    <div
+      data-testid="checkout-progressive-loading"
+      className={cn(
+        "relative flex min-h-[380px] w-full flex-col items-center justify-center p-4",
+        isModal ? "h-full" : "lg:h-[calc(100dvh-84px)]",
+        modalStyles.loadingBoxEnter
+      )}
+    >
+      {isModal && onClose ? (
+        <button
+          type="button"
+          onClick={onClose}
+          className={cn("absolute right-1 top-1 z-20", modalStyles.closeCircle)}
+          aria-label="关闭弹窗"
+          title="关闭并返回列表"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      ) : null}
+
+      <div className="flex w-full max-w-[360px] flex-col items-center rounded-[24px] border border-orange-200/70 bg-white/88 px-7 py-8 text-center shadow-[0_20px_50px_-24px_rgba(169,103,52,0.28)] backdrop-blur-xl">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-orange-200/70 bg-gradient-to-br from-orange-50 via-amber-50/70 to-white shadow-inner">
+          <OptionLoadingSpinner active size="lg" />
+        </div>
+        <div className="mt-4 text-sm font-bold tracking-tight text-slate-900">
+          {productName ? `正在加载「${productName}」` : "正在加载商品详情"}
+        </div>
+        <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+          正在同步实时规格、库存与官方详情，请稍候…
+        </p>
+        <div className="mt-4 flex w-full items-center gap-2">
+          <div className="h-1.5 flex-1 animate-pulse rounded-full bg-orange-100/90 motion-reduce:animate-none" />
+          <div className="h-1.5 w-14 animate-pulse rounded-full bg-orange-200/80 motion-reduce:animate-none" />
+        </div>
+      </div>
     </div>
   );
   if (isModal) return inner;
-  return <PublicLayout mobileNavigationUntilLg viewportLocked contentClassName="max-w-none py-3 lg:mt-0 lg:overflow-hidden [--checkout-purchase-width:clamp(327px,calc(24vw-13px),359px)]">
-    {inner}
-  </PublicLayout>;
+  return (
+    <PublicLayout mobileNavigationUntilLg viewportLocked contentClassName="max-w-none py-3 lg:mt-0 lg:overflow-hidden">
+      {inner}
+    </PublicLayout>
+  );
 }
 
 function ProductDetailCard({

@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { toast } from "sonner";
 
 import { CheckoutModalProvider } from "./CheckoutModalContext";
+import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
 import { cn } from "@/lib/utils";
 import styles from "./LiquidGlassCheckoutModal.module.css";
 
@@ -37,26 +38,25 @@ function ModalCheckoutSkeleton() {
   return (
     <div
       data-testid="liquid-glass-checkout-loading"
-      className="grid h-full min-h-[380px] grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_clamp(340px,28%,392px)]"
+      className={cn(
+        "flex h-full min-h-[380px] w-full items-center justify-center p-4",
+        styles.loadingBoxEnter
+      )}
     >
-      <div className="space-y-4 p-2">
-        <div className="grid gap-5 sm:grid-cols-[190px_minmax(0,1fr)]">
-          <div className="aspect-square w-full animate-pulse rounded-2xl bg-slate-100/80" />
-          <div className="space-y-3 pt-1">
-            <div className="h-7 w-3/4 animate-pulse rounded-lg bg-slate-100/80" />
-            <div className="h-4 w-full animate-pulse rounded-md bg-slate-100/70" />
-            <div className="h-4 w-2/3 animate-pulse rounded-md bg-slate-100/70" />
-            <div className="mt-4 h-20 w-full animate-pulse rounded-xl bg-white/60" />
-          </div>
+      <div className="flex w-full max-w-[340px] flex-col items-center rounded-[24px] border border-orange-200/70 bg-white/85 px-7 py-8 text-center shadow-[0_20px_50px_-24px_rgba(169,103,52,0.28)] backdrop-blur-xl">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-orange-200/70 bg-gradient-to-br from-orange-50 via-amber-50/70 to-white shadow-inner">
+          <OptionLoadingSpinner active size="lg" />
         </div>
-        <div className="h-44 w-full animate-pulse rounded-2xl bg-white/55" />
-      </div>
-      <div className="rounded-[26px] border border-white/80 bg-white/75 p-4 shadow-xs space-y-4">
-        <div className="h-8 w-36 ml-auto animate-pulse rounded-full bg-white/80" />
-        <div className="h-12 w-full animate-pulse rounded-xl bg-slate-100/80" />
-        <div className="h-11 w-full animate-pulse rounded-xl bg-slate-100/80" />
-        <div className="h-11 w-full animate-pulse rounded-xl bg-slate-100/80" />
-        <div className="h-12 w-full animate-pulse rounded-xl bg-orange-100/80" />
+        <div className="mt-4 text-sm font-bold tracking-tight text-slate-900">
+          正在加载商品详情
+        </div>
+        <p className="mt-1.5 text-xs leading-relaxed text-slate-500">
+          正在同步实时规格、库存与官方说明，请稍候…
+        </p>
+        <div className="mt-4 flex w-full items-center gap-2">
+          <div className="h-1.5 flex-1 animate-pulse rounded-full bg-orange-100/90" />
+          <div className="h-1.5 w-12 animate-pulse rounded-full bg-orange-200/75" />
+        </div>
       </div>
     </div>
   );

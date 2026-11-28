@@ -162,11 +162,17 @@ export function resolveGiftCardBrand(
   const joined = `${id} ${slug} ${spid}`;
 
   // Avoid catching digital accounts (e.g. Steam account or Twitch account under digital-accounts)
+  const catPath = String(product.metadata?.category_path ?? "").toLowerCase();
+  const looksLikeGiftCard =
+    slug.startsWith("bitrefill-") ||
+    id.startsWith("bitrefill-") ||
+    Boolean(spid) ||
+    /礼品卡|充值卡|点卡|激活码|会员卡|游戏时间卡|gift\s*card/i.test(name);
   const isAccountProduct =
-    product.category === "digital-accounts" ||
     id.startsWith("dig-") ||
     slug.startsWith("dig-") ||
-    (/账号|成品号|白号|老号/.test(name) && !/礼品卡|充值卡|点卡|激活码|会员卡|游戏时间卡|gift\s*card/i.test(name));
+    catPath.startsWith("digital-accounts") ||
+    (!looksLikeGiftCard && (product.category === "digital-accounts" || /账号|成品号|白号|老号/.test(name)));
   if (isAccountProduct) return null;
 
   if (/playstation|sony-playstation|\bpsn\b/.test(joined) || /playstation|psn/i.test(nameLower)) return "playstation";

@@ -16,7 +16,7 @@ export default function OptionLoadingSpinner({
   className,
 }: {
   active: boolean;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   className?: string;
 }) {
   const [phase, setPhase] = useState<Phase>(active ? "entering" : "hidden");
@@ -82,8 +82,8 @@ export default function OptionLoadingSpinner({
 
   if (phase === "hidden") return null;
 
-  const pixelSize = size === "sm" ? 15 : 18;
-  const strokeWidth = size === "sm" ? 2.1 : 2.3;
+  const pixelSize = size === "sm" ? 15 : size === "lg" ? 36 : 18;
+  const strokeWidth = size === "sm" ? 2.1 : size === "lg" ? 3.2 : 2.3;
   const radius = (pixelSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const dashOffset = circumference - (Math.min(100, Math.max(8, progress)) / 100) * circumference;

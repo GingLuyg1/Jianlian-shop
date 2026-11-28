@@ -49,8 +49,10 @@ export function resolveCheckoutCategory(product: Evidence, source?: string | nul
   const fromRoute = safeSource?.split(/[/?#]/)[2];
   if (categories.includes(fromRoute as ProductCategory)) return fromRoute as ProductCategory;
   if (resolveRechargeProductFamily(product) !== "other") return "ai-membership";
-  const slug = product.slug ?? product.id ?? "";
-  if (slug.startsWith("gift-")) return "gift-cards";
+  const slug = (product.slug ?? product.id ?? "").toLowerCase();
+  if (slug.startsWith("gift-") || slug.startsWith("bitrefill-") || /礼品卡|充值卡|gift\s*card/i.test(product.name)) {
+    if (!/giffgaff|话费|sim\s*卡/i.test(`${slug} ${product.name}`)) return "gift-cards";
+  }
   if (slug.startsWith("sms-")) return "sms-code";
   if (slug.startsWith("sim-") || /giffgaff|电话卡/i.test(product.name)) return "sim-cards";
   return "digital-accounts";
