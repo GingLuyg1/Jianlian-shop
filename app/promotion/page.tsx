@@ -381,12 +381,12 @@ export default function PromotionPage() {
   return (
     <PublicLayout
       mobileNavigationUntilLg
-      contentClassName={cn("mx-auto w-full max-w-[1540px] px-4 py-3 md:px-6", isMobile && "!px-3 !py-2.5")}
+      contentClassName={cn("max-w-none px-4 py-3 md:px-6", isMobile && "!px-3 !py-2.5")}
     >
       <div
         data-testid="promotion-center-page"
         className={cn(
-          "flex flex-col gap-4 overflow-y-auto pb-8 pr-0.5 sidebar-scroll",
+          "mx-auto flex w-full max-w-[1540px] flex-col gap-4 overflow-y-auto pb-8 sidebar-scroll",
           publicMainPanelHeightClassName,
           isMobile && "!h-auto !overflow-visible"
         )}

@@ -184,7 +184,7 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   }
 
   if (isOrdersPage && checking) {
-    return <PublicLayout contentClassName="max-w-none px-4 py-3 md:px-6">
+    return <PublicLayout contentClassName={cn("max-w-none px-4 py-3 md:px-6", isMobile && "!px-3")}>
       <div data-account-orders-ready={false} className={`mx-auto flex w-full max-w-[1540px] flex-col ${publicMainPanelHeightClassName}`}>
         <section className={cn(glass.surface, "relative flex min-h-[440px] flex-1 flex-col overflow-hidden")}>
           <div className={cn(glass.hero, "px-6 py-6")}><h1 className="text-xl font-semibold">订单查询</h1><p className="mt-2 text-sm text-muted-foreground">订单记录、支付进度与卡密查询</p></div>
@@ -202,8 +202,8 @@ export default function AccountShell({ children }: { children: ReactNode }) {
 
   if (checking) {
     return (
-      <PublicLayout contentClassName="px-4 py-6 md:px-6">
-        <div className="mx-auto w-full max-w-[1640px] space-y-4">
+      <PublicLayout contentClassName={cn("max-w-none px-4 py-3 md:px-6", isMobile && "!px-3")}>
+        <div className="mx-auto w-full max-w-[1540px] space-y-4">
           <div className="h-12 animate-pulse rounded-xl bg-orange-100" />
           <div className="grid min-h-0 min-w-0 flex-1 overflow-hidden gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
             <div className="h-72 animate-pulse rounded-xl bg-white" />
@@ -228,8 +228,8 @@ export default function AccountShell({ children }: { children: ReactNode }) {
 
   if (pathname === "/account/orders") {
     return (
-      <PublicLayout contentClassName="max-w-none px-4 py-3 md:px-6">
-        <div className={cn(`mx-auto flex w-full max-w-[1640px] flex-col gap-3 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`, isMobile && "!h-auto !overflow-visible")}>
+      <PublicLayout contentClassName={cn("max-w-none px-4 py-3 md:px-6", isMobile && "!px-3")}>
+        <div className={cn(`mx-auto flex w-full max-w-[1540px] flex-col gap-3 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`, isMobile && "!h-auto !overflow-visible")}>
           {!ordersLoginRequired ? emailNotice : null}
           {children}
         </div>
@@ -238,8 +238,8 @@ export default function AccountShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <PublicLayout contentClassName="w-full max-w-none px-4 py-3 md:px-6">
-      <div className={cn(`mx-auto flex w-full max-w-[1640px] flex-col gap-4 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`, isMobile && "!h-auto !overflow-visible")}>
+    <PublicLayout contentClassName={cn("max-w-none px-4 py-3 md:px-6", isMobile && "!px-3")}>
+      <div className={cn(`mx-auto flex w-full max-w-[1540px] flex-col gap-4 overflow-visible md:min-h-0 md:overflow-hidden ${publicMainPanelHeightClassName}`, isMobile && "!h-auto !overflow-visible")}>
         {emailNotice}
 
         <div className={cn(`${center.workspace} grid min-w-0 flex-1 grid-cols-1 gap-5 overflow-visible md:min-h-0 md:grid-cols-[248px_minmax(0,1fr)] md:overflow-hidden`, isMobile && "!grid-cols-1 !gap-3 !overflow-visible")}>

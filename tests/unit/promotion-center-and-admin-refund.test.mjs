@@ -56,6 +56,29 @@ test("promotion center is exposed in storefront navigation, excludes trend chart
   assert.match(transferRoute, /requestId/);
 });
 
+test("sidebar keeps all 12 items unclipped with overflow-hidden indicator frame, and all 4 account section pages share the exact 1540px recharge width", () => {
+  const sidebar = file("components/layout/PublicSidebar.tsx");
+  const sidebarGlass = file("components/layout/PublicSidebarGlass.module.css");
+  const slidingCss = file("components/layout/SidebarSlidingList.module.css");
+  const recharge = file("components/account/AccountRechargeContent.tsx");
+  const promotion = file("app/promotion/page.tsx");
+  const accountShell = file("components/account/AccountShell.tsx");
+
+  assert.match(sidebar, /h-\[40px\]/);
+  assert.match(sidebarGlass, /height:62px/);
+  assert.match(slidingCss, /overflow:\s*hidden;/);
+
+  for (const [name, src] of [
+    ["AccountRechargeContent", recharge],
+    ["PromotionPage", promotion],
+    ["AccountShell", accountShell],
+  ]) {
+    assert.match(src, /max-w-none px-4 py-3 md:px-6/, `${name} must use max-w-none padded stage`);
+    assert.match(src, /max-w-\[1540px\]/, `${name} must use canonical 1540px max content width`);
+    assert.doesNotMatch(src, /max-w-\[1640px\]/, `${name} must not drift to 1640px`);
+  }
+});
+
 test("SIM card service category hides sales counts across storefront lists and checkout", () => {
   const mall = file("components/products/SupabaseMallContent.tsx");
   const allProducts = file("components/products/AllProductsContent.tsx");

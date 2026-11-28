@@ -128,7 +128,7 @@ function formatCategoryNavLabel(rawName: string) {
         <li
           key={item.href}
           data-testid="sidebar-category-skeleton"
-          className="mx-auto flex h-[46px] w-[calc(100%-6px)] items-center gap-2.5 rounded-xl px-3 text-sm text-muted-foreground"
+          className="mx-auto flex h-[40px] w-[calc(100%-6px)] items-center gap-2.5 rounded-xl px-3 text-sm text-muted-foreground"
           aria-hidden={status !== "error"}
         >
           {status === "error" && item.href === "/products/sim-cards" ? (
@@ -175,7 +175,7 @@ function formatCategoryNavLabel(rawName: string) {
           }}
           className={cn(
             selectionMotion.item,
-            "relative mx-auto flex h-[46px] w-[calc(100%-6px)] items-center justify-start gap-2.5 whitespace-nowrap rounded-xl px-3 text-left text-sm transition-colors duration-150",
+            "relative mx-auto flex h-[40px] w-[calc(100%-6px)] items-center justify-start gap-2.5 whitespace-nowrap rounded-xl px-3 text-left text-sm transition-colors duration-150",
             "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
         >
@@ -224,17 +224,17 @@ function formatCategoryNavLabel(rawName: string) {
       </div>
 
       <SidebarSlidingList activeKey={pathname} layoutKey={`${confirmed}:${visibleMenuItems.map((item) => item.href).join(",")}`}>
-        <nav className="sidebar-scroll flex-1 overflow-y-auto px-2 pb-4 pt-0">
+        <nav className="sidebar-scroll flex-1 overflow-y-auto px-2 pb-2.5 pt-0">
           {navigationGroups.map((group) => group.items.length > 0 ? (
             <section key={group.title || "home"} aria-label={group.title || "首页"}>
               {group.title ? <h2 className={styles.groupTitle}>{group.title}</h2> : null}
-              <ul className="space-y-1.5">{group.items.map(renderLink)}</ul>
+              <ul className="space-y-1">{group.items.map(renderLink)}</ul>
             </section>
           ) : null)}
         </nav>
       </SidebarSlidingList>
 
-      <div className="shrink-0 border-t border-orange-100/70 px-3 py-4">
+      <div className="shrink-0 border-t border-orange-100/70 px-3 py-3">
         <button
           type="button"
           onClick={onSupportOpen}
