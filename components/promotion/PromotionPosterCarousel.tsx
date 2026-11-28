@@ -297,7 +297,7 @@ export default function PromotionPosterCarousel({
   }, [downloading, ensureActiveAsset, inviteCode, poster.id, poster.label]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col">
       {/* Hidden high-resolution QR canvas baked directly into every composited poster PNG */}
       <div ref={qrHiddenContainerRef} className="sr-only" aria-hidden="true">
         <QRCodeCanvas
@@ -378,20 +378,20 @@ export default function PromotionPosterCarousel({
       </div>
 
       {/* Flagship Enlarged Poster Preview Stage */}
-      <div className="relative flex flex-1 flex-col items-center justify-center rounded-2xl border border-orange-100/90 bg-[radial-gradient(circle_at_top,_rgba(255,237,213,0.52),_rgba(255,255,255,0.92)_68%)] px-2.5 py-4 sm:px-3.5 sm:py-5">
-        <div className="flex w-full items-center justify-center gap-2 sm:gap-2.5">
+      <div className="relative flex flex-col items-center justify-center rounded-2xl border border-orange-100/90 bg-[radial-gradient(circle_at_top,_rgba(255,237,213,0.52),_rgba(255,255,255,0.92)_68%)] px-2 py-3.5 sm:px-3 sm:py-4">
+        <div className="flex w-full items-center justify-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={handlePrev}
             aria-label="上一张推广海报"
-            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-orange-200/85 bg-white/95 text-slate-600 shadow-xs transition hover:border-primary/45 hover:bg-orange-50 hover:text-primary active:scale-95 sm:flex"
+            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-orange-200/85 bg-white/95 text-slate-600 shadow-xs transition hover:border-primary/45 hover:bg-orange-50 hover:text-primary active:scale-95 sm:flex"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
 
           <div
             data-testid="promotion-poster-preview"
-            className="relative aspect-[3/4] w-full max-w-[332px] overflow-hidden rounded-2xl bg-white shadow-[0_20px_44px_-22px_rgba(120,62,20,0.36)] ring-1 ring-slate-900/10 sm:max-w-[376px] xl:max-w-[392px] 2xl:max-w-[420px]"
+            className="relative aspect-[3/4] w-full max-w-[336px] overflow-hidden rounded-2xl bg-white shadow-[0_20px_44px_-22px_rgba(120,62,20,0.36)] ring-1 ring-slate-900/10 sm:max-w-[388px] xl:max-w-[404px] 2xl:max-w-[436px]"
           >
             {activeComposited ? (
               <img
@@ -428,7 +428,7 @@ export default function PromotionPosterCarousel({
             type="button"
             onClick={handleNext}
             aria-label="下一张推广海报"
-            className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full border border-orange-200/85 bg-white/95 text-slate-600 shadow-xs transition hover:border-primary/45 hover:bg-orange-50 hover:text-primary active:scale-95 sm:flex"
+            className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-orange-200/85 bg-white/95 text-slate-600 shadow-xs transition hover:border-primary/45 hover:bg-orange-50 hover:text-primary active:scale-95 sm:flex"
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -552,7 +552,7 @@ export default function PromotionPosterCarousel({
 
       {/* Fullscreen High-Res Poster Lightbox Dialog */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-        <DialogContent className="max-w-2xl rounded-2xl border-orange-100 bg-[#fffdf9] p-4 sm:p-5">
+        <DialogContent className="max-w-3xl rounded-2xl border-orange-100 bg-[#fffdf9] p-4 sm:p-5">
           <DialogHeader className="pr-8 text-left">
             <DialogTitle className="flex flex-wrap items-center gap-2 text-base font-bold text-slate-950">
               <span>{poster.label} · 高清二维码海报</span>
@@ -575,14 +575,14 @@ export default function PromotionPosterCarousel({
               <ChevronLeft className="h-4 w-4" />
             </button>
 
-            <div className="flex max-h-[70vh] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-orange-100 bg-orange-50/35 p-2 sm:p-3">
+            <div className="flex max-h-[78vh] flex-1 items-center justify-center overflow-hidden rounded-2xl border border-orange-100 bg-orange-50/35 p-2 sm:p-3">
               {activeComposited ? (
                 <img
                   data-testid="promotion-poster-lightbox-image"
                   data-composited="true"
                   src={activeComposited.dataUrl}
                   alt={`简联商城高清推广海报 - ${poster.label}`}
-                  className="max-h-[65vh] w-auto max-w-full rounded-xl object-contain shadow-lg"
+                  className="max-h-[74vh] w-auto max-w-full rounded-xl object-contain shadow-lg"
                 />
               ) : (
                 <div className="flex h-80 items-center justify-center text-xs text-slate-500">
