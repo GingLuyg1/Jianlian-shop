@@ -255,7 +255,7 @@ function HeroCarousel() {
       ) : null}
 
       {/* 2. 内层轮播轨道容器（圆角和轮播溢出裁剪只放在内层） */}
-      <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm h-[188px] xl:h-[200px] 2xl:h-[224px]">
+      <section className="relative overflow-hidden rounded-2xl border border-orange-100 bg-[#fff6ed] shadow-sm h-[258px] xl:h-[270px] 2xl:h-[294px]">
         <div
           className={cn(
             "flex h-full w-[200%]",

@@ -271,9 +271,9 @@ test("checkout guards topup/PIN products from SIM detail mismatch, protects dark
   assert.match(modalCss, /width:\s*min\(1520px,\s*calc\(100vw - 60px\)\)/);
   assert.match(file("components/products/AllProductsContent.tsx"), /catalog-placeholder/);
   assert.match(file("components/products/AllProductsContent.tsx"), /RefinedLoadingOrb/);
-  assert.match(file("components/layout/PublicTopInfoBar.tsx"), /sm:h-\[106px\]/);
-  assert.match(file("components/layout/PublicTopInfoBar.tsx"), /sm:h-\[122px\]/);
-  assert.match(file("components/layout/PublicTopInfoBar.tsx"), /sm:h-\[132px\]/);
+  assert.match(file("components/layout/PublicTopInfoBar.tsx"), /sm:h-\[52px\]/);
+  assert.match(file("components/layout/PublicTopInfoBar.tsx"), /sm:h-\[62px\]/);
+  assert.match(file("app/page.tsx"), /h-\[258px\] xl:h-\[270px\] 2xl:h-\[294px\]/);
   assert.match(mall, /activeModalProductId=\{quickCheckoutProduct\}/);
   assert.match(mall, /if \(!activeModalProductId\)[\s\S]{0,60}setSelectedProductId\(""\)/);
   assert.match(modalCss, /section:not\(\[class\*="text-white"\]\):not\(\[class\*="bg-gradient-"\]\)/);

@@ -1403,7 +1403,7 @@ function CheckoutPageContent() {
         data-testid="checkout-layout"
         className={cn(
           "grid min-h-0 grid-cols-1 gap-3.5 lg:gap-4 lg:grid-cols-[minmax(0,1fr)_var(--checkout-purchase-width)]",
-          isModal ? "lg:h-full [--checkout-purchase-width:clamp(320px,calc(28%-20px),372px)]" : "lg:h-[calc(100dvh-154px)]",
+          isModal ? "lg:h-full [--checkout-purchase-width:clamp(320px,calc(28%-20px),372px)]" : "lg:h-[calc(100dvh-84px)]",
           isMobile && "!grid-cols-1 !h-auto",
           modalStyles.contentEnter
         )}
@@ -2219,7 +2219,7 @@ function CheckoutLoadingShell({
         "relative grid min-h-[380px] w-full grid-cols-1 gap-3.5 lg:gap-4",
         isModal
           ? "h-full lg:grid-cols-[minmax(0,1fr)_clamp(320px,calc(28%-20px),372px)]"
-          : "lg:h-[calc(100dvh-154px)] lg:grid-cols-[minmax(0,1fr)_clamp(307px,calc(24vw-33px),339px)]",
+          : "lg:h-[calc(100dvh-84px)] lg:grid-cols-[minmax(0,1fr)_clamp(307px,calc(24vw-33px),339px)]",
         modalStyles.loadingBoxEnter
       )}
     >
