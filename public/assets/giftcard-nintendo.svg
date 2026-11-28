@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="nin-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#EF4444"/>
+      <stop offset="100%" stop-color="#C80010"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#nin-bg)"/>
+  <path fill="#fff" d="M27.8 14H22c-4.4 0-8 3.6-8 8v20c0 4.4 3.6 8 8 8h5.8c1 0 1.8-.8 1.8-1.8V15.8c0-1-.8-1.8-1.8-1.8Zm-1.8 32.4H22c-2.4 0-4.4-2-4.4-4.4V22c0-2.4 2-4.4 4.4-4.4h4v28.8Z"/>
+  <circle cx="22.5" cy="25.5" r="3" fill="#fff"/>
+  <path fill="#fff" d="M42 14h-5.8c-1 0-1.8.8-1.8 1.8v32.4c0 1 .8 1.8 1.8 1.8H42c4.4 0 8-3.6 8-8V22c0-4.4-3.6-8-8-8Zm-1.4 24.5a3.2 3.2 0 1 1 0-6.4 3.2 3.2 0 0 1 0 6.4Z"/>
+</svg>

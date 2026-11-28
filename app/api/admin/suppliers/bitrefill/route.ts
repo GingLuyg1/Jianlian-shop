@@ -86,6 +86,16 @@ const COUNTRY_ZH: Record<string, string> = {
   PH: "菲律宾",
   MY: "马来西亚",
   EU: "欧洲",
+  AR: "阿根廷",
+  RO: "罗马尼亚",
+  HR: "克罗地亚",
+  CZ: "捷克",
+  SK: "斯洛伐克",
+  HU: "匈牙利",
+  LU: "卢森堡",
+  LB: "黎巴嫩",
+  BH: "巴林",
+  XI: "国际通用",
 };
 
 const BRAND_TRANSLATIONS: Array<[RegExp, string]> = [
@@ -101,6 +111,10 @@ const BRAND_TRANSLATIONS: Array<[RegExp, string]> = [
   [/\bnintendo\b/i, "Nintendo 任天堂 eShop 充值卡"],
   [/\broblox\b/i, "Roblox 游戏充值卡"],
   [/\bamazon\b/i, "Amazon 亚马逊购物礼品卡"],
+  [/\bairbnb\b/i, "Airbnb 爱彼迎全球民宿礼品卡"],
+  [/\bminecraft\b/i, "Minecraft 我的世界国际版激活码/点卡"],
+  [/\bblizzard\b|\bbattle\.?net\b/i, "Blizzard 暴雪战网余额充值卡"],
+  [/\btwitch\b/i, "Twitch 直播平台官方礼品卡"],
   [/\bebay\b/i, "eBay 购物礼品卡"],
   [/\bwalmart\b/i, "Walmart 沃尔玛超市礼品卡"],
   [/\btarget\b/i, "Target 塔吉特百货礼品卡"],

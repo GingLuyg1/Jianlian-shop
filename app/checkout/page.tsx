@@ -40,6 +40,8 @@ const UltraMobileProductDetails = dynamic(() => import("@/components/products/de
 const TMobileProductDetails = dynamic(() => import("@/components/products/details/TMobileProductDetails"));
 import { isAppleGiftCardProduct } from "@/components/products/details/AppleGiftCardProductDetails";
 const AppleGiftCardProductDetails = dynamic(() => import("@/components/products/details/AppleGiftCardProductDetails"));
+import { resolveGiftCardBrand } from "@/components/products/details/gift-card-brand-catalog";
+const BrandGiftCardProductDetails = dynamic(() => import("@/components/products/details/BrandGiftCardProductDetails"));
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -356,6 +358,7 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
 
   return {
     id: row.slug || row.id,
+    slug: row.slug,
     name: row.name,
     category: resolveCheckoutCategory(row),
     categoryLabel: "商品详情",
@@ -366,7 +369,11 @@ function mapCheckoutProduct(row: PublicProductRow): Product {
     originalPrice: row.original_price,
     stock,
     sortOrder: row.sort_order,
-    metadata: { ...(row.metadata ?? {}), salesCount },
+    metadata: {
+      ...(row.metadata ?? {}),
+      ...(row.category_id ? { categoryId: row.category_id } : {}),
+      salesCount,
+    },
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     currency: "CNY",
@@ -2284,6 +2291,8 @@ function ProductDetailCard({
           <GiffgaffTopupDetails product={product} />
         ) : isAppleGiftCardProduct(product) ? (
           <AppleGiftCardDetails product={product} skuOptions={skuOptions} />
+        ) : resolveGiftCardBrand(product) ? (
+          <BrandGiftCardDetails product={product} skuOptions={skuOptions} />
         ) : product.id.startsWith("dig-apple-id-") ? (
           <AppleIdDetails product={product} />
         ) : product.id === "sim-nz-001" || product.name.toLowerCase().includes("one nz") ? (
@@ -2362,6 +2371,26 @@ function AppleGiftCardDetails({
   );
 
   return <AppleGiftCardProductDetails product={product} skus={skus} />;
+}
+
+function BrandGiftCardDetails({
+  product,
+  skuOptions,
+}: {
+  product: Product;
+  skuOptions?: SkuOption[];
+}) {
+  const skus = useMemo(
+    () =>
+      (skuOptions ?? []).map((option) => ({
+        sku_title: option.label,
+        sku_code: option.code ?? option.id,
+        price: option.rmb,
+      })),
+    [skuOptions]
+  );
+
+  return <BrandGiftCardProductDetails product={product} skus={skus} />;
 }
 
 function GiffgaffTopupDetails({ product }: { product: Product }) {
@@ -4111,6 +4140,15 @@ function getProductImage(product: Product) {
   if (product.id.startsWith("dig-twitch-") || name.includes("twitch")) {
     return "/assets/digital-twitch.svg";
   }
+  if (name.includes("playstation") || name.includes("psn")) return "/assets/giftcard-playstation.svg";
+  if (name.includes("xbox") || name.includes("game pass")) return "/assets/giftcard-xbox.svg";
+  if (name.includes("nintendo") || name.includes("任天堂")) return "/assets/giftcard-nintendo.svg";
+  if (name.includes("amazon") || name.includes("亚马逊")) return "/assets/giftcard-amazon.svg";
+  if (name.includes("airbnb") || name.includes("爱彼迎")) return "/assets/giftcard-airbnb.svg";
+  if (name.includes("minecraft") || name.includes("我的世界")) return "/assets/giftcard-minecraft.svg";
+  if (name.includes("blizzard") || name.includes("战网") || name.includes("暴雪")) return "/assets/giftcard-blizzard.svg";
+  if (name.includes("google play")) return "/assets/giftcard-google-play.png";
+  if (name.includes("netflix") || name.includes("奈飞")) return "/assets/giftcard-netflix.png";
   if (product.category === "gift-cards") return "/assets/apple-gift-card-icon.jpg";
   if (name.includes("ultra")) return "/assets/ultra-mobile-icon.svg";
   if (name.includes("one nz") || name.includes("onenz") || product.id === "sim-nz-001") return "/assets/one-nz-card.png";

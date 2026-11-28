@@ -50,14 +50,16 @@ export function isAppleGiftCardProduct(product: AppleGiftCardDetailProduct | nul
   if (!product) return false;
   const id = String(product.id ?? "").toLowerCase();
   const slug = String(product.slug ?? "").toLowerCase();
+  const spid = String(product.metadata?.supplier_product_id ?? "").toLowerCase();
   const name = String(product.name ?? "");
   const nameLower = name.toLowerCase();
   const catId = String(product.category_id ?? product.metadata?.categoryId ?? "");
-  const catSlug = String(product.metadata?.categorySlug ?? "").toLowerCase();
+  const catSlug = String(product.metadata?.categorySlug ?? product.metadata?.category_slug ?? "").toLowerCase();
 
   if (id.startsWith("gift-apple-") || slug.startsWith("gift-apple-")) return true;
   if (catId === APPLE_GIFT_CARD_CATEGORY_ID || catSlug === "apple-gift-card") return true;
-  if (/^bitrefill-(?:itunes|apple|app-store)/i.test(slug)) return true;
+  if (/^bitrefill-(?:itunes|apple|app-store)/i.test(slug) || /^bitrefill-(?:itunes|apple|app-store)/i.test(id)) return true;
+  if (/^(?:itunes|apple|app-store)/i.test(spid)) return true;
   if (
     /礼品卡|gift\s*card/i.test(name) &&
     (nameLower.includes("apple") || nameLower.includes("itunes") || nameLower.includes("app store") || name.includes("苹果")) &&
@@ -747,6 +749,72 @@ export default function AppleGiftCardProductDetails({
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* 2.5. 官方 16 位卡密交付格式预览 & 三大官方保障承诺 */}
+      <section className="rounded-2xl border border-orange-200/90 bg-gradient-to-br from-orange-50 via-amber-50/40 to-white p-5 shadow-sm sm:p-6">
+        <div className="flex items-center gap-2 text-orange-900">
+          <KeyRound className="h-5 w-5 text-orange-600" />
+          <h3 className="text-base font-bold text-slate-900">Apple 16 位官方卡密交付标准与格式预览</h3>
+        </div>
+        <p className="mt-1 text-xs leading-5 text-slate-600 sm:text-sm">
+          支付完成后，系统自动对接持牌正规上游采购并派发以字母 X 开头的 16 位 Apple 官方数字兑换码（可在「我的订单」一键复制）：
+        </p>
+
+        <div className="mt-3 overflow-x-auto rounded-xl border border-orange-200 bg-white/95 p-4 font-mono text-xs text-slate-800 shadow-inner">
+          <div className="text-slate-400">// Apple App Store &amp; iTunes 16 位官方兑换码（示例格式）</div>
+          <div className="mt-1.5 text-sm font-bold tracking-wider text-orange-700 sm:text-base">
+            X123-ABCD-4567-EFGH
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-2.5 font-sans text-[11px] font-medium text-slate-600 sm:grid-cols-4">
+            <div>① 16 位官方 PIN 码</div>
+            <div>② 严格对应 {region.regionLabel} ({region.code})</div>
+            <div>③ 入账 Apple 账户余额</div>
+            <div>④ 余额永久有效不过期</div>
+          </div>
+        </div>
+
+        <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-orange-900">
+          <span className="inline-flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5 text-orange-600" />
+            正规持牌白卡杜绝黑卡封号
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5 text-orange-600" />
+            无需外币卡直扣 AI / iCloud+ 订阅
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5 text-orange-600" />
+            7×24h 支付完成后秒级自动发货
+          </span>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-sky-200/90 bg-gradient-to-br from-sky-50 via-blue-50/40 to-white p-5 shadow-sm sm:p-6">
+        <div className="flex items-center gap-2">
+          <ShieldCheck className="h-5 w-5 text-sky-600" />
+          <h3 className="text-base font-bold text-slate-900">三大正版安全与售后保障承诺</h3>
+        </div>
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-sky-100 bg-white/95 p-4 shadow-2xs">
+            <div className="text-xs font-bold text-sky-900 sm:text-sm">100% 官方一手白卡</div>
+            <div className="mt-1.5 text-xs leading-5 text-slate-600">
+              严选持牌正规海外数字卡密通道直采，坚决拒绝盗刷黑卡，保护您长期沉淀的 Apple ID 资产与订阅安全。
+            </div>
+          </div>
+          <div className="rounded-xl border border-sky-100 bg-white/95 p-4 shadow-2xs">
+            <div className="text-xs font-bold text-sky-900 sm:text-sm">7×24h 无人值守秒发</div>
+            <div className="mt-1.5 text-xs leading-5 text-slate-600">
+              支付宝 / 微信 / USDT / 站内余额付款后即刻触发自动采购，数十秒内即可在站内查看并复制 16 位官方兑换码。
+            </div>
+          </div>
+          <div className="rounded-xl border border-sky-100 bg-white/95 p-4 shadow-2xs">
+            <div className="text-xs font-bold text-sky-900 sm:text-sm">无效码流水核查兜底</div>
+            <div className="mt-1.5 text-xs leading-5 text-slate-600">
+              同区账号首次兑换若遇官方提示代码无效，请保留完整报错画面与账号地区截图联系客服，核实上游凭证后即刻处理。
+            </div>
+          </div>
         </div>
       </section>
 

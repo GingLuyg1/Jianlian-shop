@@ -28,6 +28,7 @@ import { submitPaymentForm } from "@/lib/payments/submit-payment-form.mjs";
 
 const AirMobileProductDetails = dynamic(() => import("@/components/products/details/AirMobileProductDetails"));
 const AppleGiftCardProductDetails = dynamic(() => import("@/components/products/details/AppleGiftCardProductDetails"));
+const BrandGiftCardProductDetails = dynamic(() => import("@/components/products/details/BrandGiftCardProductDetails"));
 const EncMobileProductDetails = dynamic(() => import("@/components/products/details/EncMobileProductDetails"));
 const GiffgaffSimProductDetails = dynamic(() => import("@/components/products/details/GiffgaffSimProductDetails"));
 const HahaSimProductDetails = dynamic(() => import("@/components/products/details/HahaSimProductDetails"));
@@ -40,6 +41,7 @@ const TMobileProductDetails = dynamic(() => import("@/components/products/detail
 const UltraMobileProductDetails = dynamic(() => import("@/components/products/details/UltraMobileProductDetails"));
 const VodafoneSimProductDetails = dynamic(() => import("@/components/products/details/VodafoneSimProductDetails"));
 import { isAppleGiftCardProduct } from "@/components/products/details/AppleGiftCardProductDetails";
+import { resolveGiftCardBrand } from "@/components/products/details/gift-card-brand-catalog";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { getPublicStockDisplay } from "@/lib/products/delivery-and-stock";
 import { usePublicSettings } from "@/components/settings/SettingsProvider";
@@ -721,6 +723,8 @@ export default function ProductDetailPage() {
                 <RakutenMobileProductDetails product={product} />
               ) : isAppleGiftCardProduct(product) ? (
                 <AppleGiftCardProductDetails product={product} skus={skus} />
+              ) : resolveGiftCardBrand(product) ? (
+                <BrandGiftCardProductDetails product={product} skus={skus} />
               ) : (
                 <>
                   <Card>
