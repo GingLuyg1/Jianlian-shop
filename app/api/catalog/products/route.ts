@@ -232,6 +232,30 @@ async function loadSkus(supabase: ReturnType<typeof getSupabaseServerClient>, pr
   if (productIds.length === 0) return [];
 
   try {
+    // When loading a large catalog slice (e.g. "全部商品" or "数字 / 社媒账号"),
+    // paginating product_skus in 1000-row pages takes ~4 queries instead of 25-30 .in() queries.
+    if (productIds.length > IN_QUERY_CHUNK_SIZE * 4) {
+      const idSet = new Set(productIds);
+      const matched: SkuRow[] = [];
+      for (let offset = 0; offset < 20000; offset += PRODUCT_PAGE_CHUNK) {
+        const { data, error } = await supabase
+          .from("product_skus")
+          .select("id,product_id,sku_code,sku_title,price,original_price,stock,status,delivery_type,image_url,sort_order")
+          .in("status", SKU_STATUSES)
+          .order("id", { ascending: true })
+          .range(offset, offset + PRODUCT_PAGE_CHUNK - 1);
+        if (error) break;
+        const batch = (data ?? []) as SkuRow[];
+        for (const row of batch) {
+          if (row.product_id && idSet.has(row.product_id)) {
+            matched.push(row);
+          }
+        }
+        if (batch.length < PRODUCT_PAGE_CHUNK) break;
+      }
+      return matched;
+    }
+
     const chunks: string[][] = [];
     for (let i = 0; i < productIds.length; i += IN_QUERY_CHUNK_SIZE) {
       chunks.push(productIds.slice(i, i + IN_QUERY_CHUNK_SIZE));
@@ -265,7 +289,41 @@ async function loadPublicProductMetadata(productIds: string[]) {
   const service = getSupabaseServiceRoleClient();
   if (!service) return output;
 
+  const consumeRows = (rows: Array<{ id?: unknown; metadata?: unknown }>, idSet?: Set<string>) => {
+    for (const row of rows) {
+      const pid = typeof row.id === "string" ? row.id : "";
+      if (!pid || (idSet && !idSet.has(pid))) continue;
+      const mode = extractDeliveryModeFromMetadata(row.metadata);
+      const metaObj =
+        row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+          ? (row.metadata as Record<string, unknown>)
+          : null;
+      const rawSub = typeof metaObj?.subcategory === "string" ? metaObj.subcategory.trim() : "";
+      const subcategory = rawSub || null;
+      if (mode || subcategory) {
+        output.set(pid, { deliveryMode: mode ?? null, subcategory });
+      }
+    }
+  };
+
   try {
+    if (productIds.length > IN_QUERY_CHUNK_SIZE * 4) {
+      const idSet = new Set(productIds);
+      for (let offset = 0; offset < MAX_INTERNAL_PRODUCTS; offset += PRODUCT_PAGE_CHUNK) {
+        const { data, error } = await service
+          .from("products")
+          .select("id,metadata")
+          .in("status", PRODUCT_STATUSES)
+          .order("id", { ascending: true })
+          .range(offset, offset + PRODUCT_PAGE_CHUNK - 1);
+        if (error) break;
+        const batch = (data ?? []) as Array<{ id?: unknown; metadata?: unknown }>;
+        consumeRows(batch, idSet);
+        if (batch.length < PRODUCT_PAGE_CHUNK) break;
+      }
+      return output;
+    }
+
     const chunks: string[][] = [];
     for (let i = 0; i < productIds.length; i += IN_QUERY_CHUNK_SIZE) {
       chunks.push(productIds.slice(i, i + IN_QUERY_CHUNK_SIZE));
@@ -276,20 +334,7 @@ async function loadPublicProductMetadata(productIds: string[]) {
           .from("products")
           .select("id,metadata")
           .in("id", chunk);
-        for (const row of data ?? []) {
-          const pid = typeof row.id === "string" ? row.id : "";
-          if (!pid) continue;
-          const mode = extractDeliveryModeFromMetadata(row.metadata);
-          const metaObj =
-            row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-              ? (row.metadata as Record<string, unknown>)
-              : null;
-          const rawSub = typeof metaObj?.subcategory === "string" ? metaObj.subcategory.trim() : "";
-          const subcategory = rawSub || null;
-          if (mode || subcategory) {
-            output.set(pid, { deliveryMode: mode ?? null, subcategory });
-          }
-        }
+        consumeRows((data ?? []) as Array<{ id?: unknown; metadata?: unknown }>);
       })
     );
   } catch {
@@ -448,6 +493,49 @@ function resolveProductCategoryIds(categories: CategoryRow[], primaryCategoryId:
   return Array.from(ids);
 }
 
+const SEARCH_ALIAS_GROUPS: string[][] = [
+  ["美区", "美国", "us", "usa"],
+  ["英区", "英国", "uk", "gb"],
+  ["日区", "日本", "jp", "japan"],
+  ["土区", "土耳其", "tr", "turkey"],
+  ["港区", "香港", "hk"],
+  ["台区", "台湾", "tw"],
+  ["印区", "印度", "in", "india"],
+  ["韩区", "韩国", "kr", "korea"],
+  ["加区", "加拿大", "ca", "canada"],
+  ["澳区", "澳大利亚", "澳洲", "au", "australia"],
+  ["欧区", "欧洲", "eu", "europe"],
+  ["德区", "德国", "de", "germany"],
+  ["法区", "法国", "fr", "france"],
+  ["埃及", "eg", "egypt"],
+  ["奈飞", "网飞", "netflix"],
+  ["苹果", "apple", "itunes", "app store"],
+  ["谷歌", "google", "google play"],
+  ["索尼", "psn", "playstation"],
+  ["任天堂", "nintendo", "eshop", "switch"],
+  ["战网", "暴雪", "blizzard"],
+  ["亚马逊", "amazon"],
+  ["爱彼迎", "airbnb"],
+  ["我的世界", "minecraft"],
+  ["gpt", "chatgpt", "openai"],
+  ["tg", "telegram", "电报"],
+  ["推特", "twitter", "x-twitter"],
+  ["脸书", "fb", "facebook"],
+  ["油管", "yt", "youtube"],
+  ["ins", "ig", "instagram"],
+  ["话费", "充值卡", "sim 卡服务", "pin"],
+];
+
+function expandSearchToken(token: string): string[] {
+  const candidates = new Set<string>([token]);
+  for (const group of SEARCH_ALIAS_GROUPS) {
+    if (group.includes(token)) {
+      for (const alias of group) candidates.add(alias);
+    }
+  }
+  return Array.from(candidates);
+}
+
 function matchSearch(product: ProductView, skus: SkuRow[], keyword: string) {
   if (!keyword) return true;
 
@@ -462,7 +550,18 @@ function matchSearch(product: ProductView, skus: SkuRow[], keyword: string) {
     .join(" ")
     .toLowerCase();
 
-  return haystack.includes(keyword.toLowerCase());
+  const normalized = keyword.toLowerCase().trim();
+  if (haystack.includes(normalized)) return true;
+
+  const tokens = normalized
+    .split(/[\s,，、/+|]+/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) return true;
+
+  return tokens.every((token) =>
+    expandSearchToken(token).some((variant) => haystack.includes(variant))
+  );
 }
 
 type CatalogSortMode = "recommended" | "sales" | "stock";

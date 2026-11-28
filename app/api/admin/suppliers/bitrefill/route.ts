@@ -32,8 +32,8 @@ function getDailyUsdtCnyRate(): number {
   if (dailyRateCache && dailyRateCache.dateKey === dateKey) {
     return dailyRateCache.rate;
   }
-  const raw = Number(process.env.CNY_USDT_FIXED_RATE ?? 7.2);
-  const rate = Number.isFinite(raw) && raw > 0 ? raw : 7.2;
+  const raw = Number(process.env.BITREFILL_USD_CNY_RATE ?? process.env.CNY_USDT_FIXED_RATE ?? 7.0);
+  const rate = Number.isFinite(raw) && raw > 0 ? raw : 7.0;
   dailyRateCache = { dateKey, rate };
   return rate;
 }

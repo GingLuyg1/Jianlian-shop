@@ -92,7 +92,10 @@ export function rememberProductCardPreview(product: Product, now = Date.now()) {
     {
       id: product.id,
       slug: product.slug || product.id,
-      category_id: null,
+      category_id:
+        typeof product.metadata?.categoryId === "string" && product.metadata.categoryId.trim()
+          ? product.metadata.categoryId.trim()
+          : null,
       name: product.name,
       short_description: product.description || null,
       description: product.detail || product.description || null,

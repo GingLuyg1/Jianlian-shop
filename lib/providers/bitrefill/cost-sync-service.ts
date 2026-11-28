@@ -6,7 +6,7 @@ import {
   createBitrefillLiveClient,
   resolveBitrefillPackageUsdCost,
 } from "./live-client.mjs";
-import { loadCurrentRechargeDailyRate } from "@/lib/payments/recharge-rate-service";
+import { loadLatestRechargeDailyRate } from "@/lib/payments/recharge-rate-service";
 
 const ALERT_RECIPIENT =
   process.env.SUPPLIER_BALANCE_ALERT_EMAIL ||
@@ -250,14 +250,14 @@ export async function syncBitrefillCostsAndRates(
   const mode = options.mode === "apply" ? "apply" : "dry_run";
   const updateRetailPrice = Boolean(options.updateRetailPrice);
   const capBufferPercent = clampNumber(options.capBufferPercent, 5, 0, 30);
-  const markupPercent = clampNumber(options.markupPercent, 13, 0, 100);
+  const markupPercent = clampNumber(options.markupPercent, 10, 0, 100);
   const maxPriceDriftPercent = clampNumber(options.maxPriceDriftPercent, 15, 1, 50);
   const notifyOnAnomaly = options.notifyOnAnomaly !== false;
 
-  let usdCnyRate = Number(env.BITREFILL_USD_CNY_RATE ?? env.CNY_USDT_FIXED_RATE ?? 7.2);
+  let usdCnyRate = Number(env.BITREFILL_USD_CNY_RATE ?? env.CNY_USDT_FIXED_RATE ?? 7.0);
   let rateSource = "env_fallback";
   try {
-    const dailyRate = await loadCurrentRechargeDailyRate(service);
+    const dailyRate = await loadLatestRechargeDailyRate(service);
     const parsedMarket = Number(dailyRate?.market_rate ?? 0);
     if (Number.isFinite(parsedMarket) && parsedMarket > 0) {
       usdCnyRate = parsedMarket;
@@ -266,15 +266,30 @@ export async function syncBitrefillCostsAndRates(
   } catch {
     // Keep env fallback when daily rate table is unavailable
   }
-  if (!Number.isFinite(usdCnyRate) || usdCnyRate <= 0) usdCnyRate = 7.2;
+  if (!Number.isFinite(usdCnyRate) || usdCnyRate <= 0) usdCnyRate = 7.0;
 
-  const { data: skus, error: skuError } = await service
-    .from("product_skus")
-    .select("id,product_id,sku_title,sku_code,price,status,metadata")
-    .eq("status", "active")
-    .contains("metadata", { supplier: "bitrefill" })
-    .limit(1000);
-  if (skuError) throw new Error(skuError.message || JSON.stringify(skuError));
+  const skus: Array<{
+    id: string;
+    product_id: string;
+    sku_title: string | null;
+    sku_code: string | null;
+    price: number | string | null;
+    status: string | null;
+    metadata: Record<string, unknown> | null;
+  }> = [];
+  for (let offset = 0; offset < 10000; offset += 1000) {
+    const { data: batch, error: skuError } = await service
+      .from("product_skus")
+      .select("id,product_id,sku_title,sku_code,price,status,metadata")
+      .eq("status", "active")
+      .contains("metadata", { supplier: "bitrefill" })
+      .order("id", { ascending: true })
+      .range(offset, offset + 999);
+    if (skuError) throw new Error(skuError.message || JSON.stringify(skuError));
+    const rows = (batch ?? []) as typeof skus;
+    skus.push(...rows);
+    if (rows.length < 1000) break;
+  }
 
   const bitrefillSkus = (skus ?? []).filter((row) => {
     const meta = row.metadata as Record<string, unknown> | null;

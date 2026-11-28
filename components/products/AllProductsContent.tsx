@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { ArrowUpDown, Check, ChevronDown, ChevronLeft, ChevronRight, Search, X } from "lucide-react";
 
 import PublicLayout from "@/components/layout/PublicLayout";
 import LiquidGlassCheckoutModal from "@/components/checkout/LiquidGlassCheckoutModal";
+import OptionLoadingSpinner from "@/components/ui/OptionLoadingSpinner";
 import { rememberProductCardPreview } from "@/lib/catalog/public-product-preview";
 import { loadPublicRechargeChannels } from "@/lib/catalog/public-recharge-channels";
 import { fetchCurrentLegalDocuments } from "@/lib/legal/client-legal-cache";
@@ -26,7 +27,7 @@ import {
   mapPublicProductToProduct,
   type PublicCategory,
 } from "@/lib/supabase/public-catalog";
-import type { Product } from "@/lib/types";
+import type { Product, ProductCategory } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -81,6 +82,50 @@ function isGiftCardProductRow(product: Product) {
   );
 }
 
+function inferProductCategoryFromRow(row: { category_path?: string | null; slug?: string | null; name?: string | null }): ProductCategory {
+  const text = `${row.category_path ?? ""} ${row.slug ?? ""} ${row.name ?? ""}`.toLowerCase();
+  if (/礼品卡|充值卡|gift-?card|recharge-?card|bitrefill-.*(apple|google-play|steam|netflix|playstation|psn|xbox|nintendo|amazon|airbnb|minecraft|blizzard|twitch)/i.test(text)) {
+    return "gift-cards";
+  }
+  if (/ai\s*会员|chatgpt|claude|gemini|grok|cursor|midjourney/i.test(text)) {
+    return "ai-membership";
+  }
+  if (/国际\s*sim|sim\s*卡服务|实体卡|电话卡|话费充值|giffgaff|one-?nz|haha-?sim|rakuten-?mobile|t-?mobile|vodafone|orange|movistar|ultra-?mobile|air-?mobile|lucky2|enc-?mobile|lebara|lyca|simple-?mobile|red-?pocket|verizon|atandt|at&t/i.test(text)) {
+    return "sim-cards";
+  }
+  return "digital-accounts";
+}
+
+function buildPaginationItems(currentPage: number, totalPages: number): Array<number | "ellipsis"> {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, idx) => idx + 1);
+  }
+  const pages = new Set<number>([1, totalPages, currentPage]);
+  if (currentPage > 1) pages.add(currentPage - 1);
+  if (currentPage < totalPages) pages.add(currentPage + 1);
+  if (currentPage <= 3) {
+    pages.add(2);
+    pages.add(3);
+    pages.add(4);
+  }
+  if (currentPage >= totalPages - 2) {
+    pages.add(totalPages - 1);
+    pages.add(totalPages - 2);
+    pages.add(totalPages - 3);
+  }
+  const sorted = Array.from(pages)
+    .filter((p) => p >= 1 && p <= totalPages)
+    .sort((a, b) => a - b);
+  const output: Array<number | "ellipsis"> = [];
+  for (let i = 0; i < sorted.length; i += 1) {
+    if (i > 0 && sorted[i] - sorted[i - 1] > 1) {
+      output.push("ellipsis");
+    }
+    output.push(sorted[i]);
+  }
+  return output;
+}
+
 export default function AllProductsContent() {
   const router = useRouter();
   const { settings } = usePublicSettings();
@@ -99,10 +144,13 @@ export default function AllProductsContent() {
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [showOverlayLoader, setShowOverlayLoader] = useState(false);
+  const [loadedRenderKey, setLoadedRenderKey] = useState("");
   const [error, setError] = useState("");
   const [retryNonce, setRetryNonce] = useState(0);
 
   const requestIdRef = useRef(0);
+  const appliedSearchRef = useRef("");
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const sortDropdownRef = useRef<HTMLDivElement | null>(null);
   const tabTrackRef = useRef<HTMLDivElement | null>(null);
@@ -182,20 +230,32 @@ export default function AllProductsContent() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const next = draftSearch.trim();
-      setAppliedSearch((prev) => {
-        if (prev !== next) setPage(1);
-        return next;
-      });
+      if (appliedSearchRef.current !== next) {
+        appliedSearchRef.current = next;
+        setAppliedSearch(next);
+        setPage(1);
+      }
     }, 240);
     return () => window.clearTimeout(timer);
   }, [draftSearch]);
 
   const listRenderKey = `${primaryCategoryId || "all"}-${sortMode}-${inStockOnly ? "1" : "0"}-${appliedSearch}-${page}`;
+  const isSwitchingView = loading && loadedRenderKey !== listRenderKey;
+
+  useEffect(() => {
+    if (!isSwitchingView) {
+      setShowOverlayLoader(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setShowOverlayLoader(true), 120);
+    return () => window.clearTimeout(timer);
+  }, [isSwitchingView]);
 
   useEffect(() => {
     let mounted = true;
     const reqId = requestIdRef.current + 1;
     requestIdRef.current = reqId;
+    const currentKey = listRenderKey;
 
     const query = {
       primaryCategoryId: primaryCategoryId || undefined,
@@ -210,11 +270,12 @@ export default function AllProductsContent() {
     if (cached) {
       setProducts(
         cached.products.map((row) =>
-          mapPublicProductToProduct(row, "digital-accounts", row.category_path || "全部商品")
+          mapPublicProductToProduct(row, inferProductCategoryFromRow(row), row.category_path || "全部商品")
         )
       );
       setTotal(cached.total);
       setTotalPages(cached.totalPages);
+      setLoadedRenderKey(currentKey);
       setLoading(false);
       setError("");
     } else {
@@ -227,11 +288,15 @@ export default function AllProductsContent() {
         if (!mounted || reqId !== requestIdRef.current) return;
         setProducts(
           result.products.map((row) =>
-            mapPublicProductToProduct(row, "digital-accounts", row.category_path || "全部商品")
+            mapPublicProductToProduct(row, inferProductCategoryFromRow(row), row.category_path || "全部商品")
           )
         );
         setTotal(result.total);
         setTotalPages(result.totalPages);
+        if (result.page && result.page !== page) {
+          setPage(result.page);
+        }
+        setLoadedRenderKey(currentKey);
         setError("");
       })
       .catch((loadError) => {
@@ -239,6 +304,7 @@ export default function AllProductsContent() {
         setProducts([]);
         setTotal(0);
         setTotalPages(1);
+        setLoadedRenderKey(currentKey);
         setError(getErrorText(loadError, "商品读取失败，请稍后重试。"));
       })
       .finally(() => {
@@ -250,7 +316,7 @@ export default function AllProductsContent() {
     return () => {
       mounted = false;
     };
-  }, [primaryCategoryId, sortMode, inStockOnly, appliedSearch, page, retryNonce]);
+  }, [primaryCategoryId, sortMode, inStockOnly, appliedSearch, page, retryNonce, listRenderKey]);
 
   const [quickCheckoutProduct, setQuickCheckoutProduct] = useState<string | null>(() => {
     if (typeof window === "undefined") return null;
@@ -367,14 +433,33 @@ export default function AllProductsContent() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="relative w-full sm:w-72">
+                <div className="relative w-full sm:w-80">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7d6355]" />
                   <Input
                     value={draftSearch}
                     onChange={(event) => setDraftSearch(event.target.value)}
-                    placeholder="搜索全站商品、国家、平台或规格..."
-                    className="h-9 rounded-xl border-[#ead9cc] bg-[#fffaf6] pl-9 text-sm text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25 sm:h-10"
+                    placeholder={
+                      selectedPrimaryCategory
+                        ? `在「${formatPrimaryLabel(selectedPrimaryCategory.name)}」中搜索（支持多词空格）...`
+                        : "搜索全站商品、国家、平台或规格（支持多词空格）..."
+                    }
+                    className="h-9 rounded-xl border-[#ead9cc] bg-[#fffaf6] pl-9 pr-8 text-sm text-[#6f5a4d] placeholder:text-[#8a6f60] focus-visible:ring-primary/25 sm:h-10"
                   />
+                  {draftSearch ? (
+                    <button
+                      type="button"
+                      aria-label="清空搜索关键词"
+                      onClick={() => {
+                        setDraftSearch("");
+                        appliedSearchRef.current = "";
+                        setAppliedSearch("");
+                        setPage(1);
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-[#9a7d6c] transition hover:bg-orange-100/70 hover:text-[#c85e22]"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  ) : null}
                 </div>
 
                 <label className="flex h-9 cursor-pointer select-none items-center gap-1.5 rounded-xl border border-[#ead9cc] bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-orange-300 hover:bg-orange-50/40 sm:h-10">
@@ -545,55 +630,75 @@ export default function AllProductsContent() {
               </button>
             </div>
           ) : loading && products.length === 0 ? (
-            <div className="mt-4 grid flex-1 grid-cols-1 content-start gap-2.5 overflow-hidden xl:grid-cols-2">
-              {Array.from({ length: 12 }).map((_, idx) => (
-                <div
-                  key={idx}
-                  className="catalog-placeholder flex h-[74px] items-center gap-3 rounded-2xl border border-orange-100/70 px-4"
-                  style={{ animationDelay: `${idx * 45}ms` }}
-                >
-                  <div className="h-11 w-11 shrink-0 rounded-xl bg-orange-100/60" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 w-2/3 rounded bg-orange-100/65" />
-                    <div className="h-3 w-1/2 rounded bg-orange-50/90" />
-                  </div>
-                  <div className="h-5 w-16 rounded bg-orange-100/65" />
-                </div>
-              ))}
+            <div className="flex min-h-[320px] flex-1 items-center justify-center">
+              <div className="flex flex-col items-center gap-3 rounded-2xl border border-orange-100/90 bg-white/95 px-8 py-6 shadow-[0_14px_34px_-18px_rgba(169,103,52,0.28)]">
+                <OptionLoadingSpinner active size="lg" />
+                <span className="text-xs font-medium text-slate-500">正在加载商品列表...</span>
+              </div>
             </div>
           ) : products.length === 0 ? (
             <div className="flex min-h-[260px] flex-1 items-center justify-center rounded-2xl bg-white p-8 text-center">
               <div className="space-y-2">
                 <p className="text-base font-bold text-primary">暂无符合条件的商品</p>
                 <p className="text-xs text-slate-500">
-                  {appliedSearch ? `没有找到与“${appliedSearch}”相关的商品。` : "请切换分类或取消筛选条件后查看。"}
+                  {appliedSearch
+                    ? selectedPrimaryCategory
+                      ? `在「${formatPrimaryLabel(selectedPrimaryCategory.name)}」中未找到与“${appliedSearch}”相关的商品。`
+                      : `没有找到与“${appliedSearch}”相关的商品。`
+                    : "请切换分类或取消筛选条件后查看。"}
                 </p>
-                {(appliedSearch || inStockOnly || primaryCategoryId) ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-2 rounded-xl border-orange-200 text-xs font-bold text-primary"
-                    onClick={() => {
-                      setDraftSearch("");
-                      setAppliedSearch("");
-                      setInStockOnly(false);
-                      setPrimaryCategoryId("");
-                      setSortMode("recommended");
-                      setPage(1);
-                    }}
-                  >
-                    重置筛选
-                  </Button>
-                ) : null}
+                <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+                  {appliedSearch && primaryCategoryId ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="rounded-xl bg-[#df7334] text-xs font-bold text-white hover:bg-[#c85e22]"
+                      onClick={() => {
+                        setPrimaryCategoryId("");
+                        setPage(1);
+                      }}
+                    >
+                      在「全部商品」中搜索“{appliedSearch}”
+                    </Button>
+                  ) : null}
+                  {(appliedSearch || inStockOnly || primaryCategoryId) ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl border-orange-200 text-xs font-bold text-primary"
+                      onClick={() => {
+                        setDraftSearch("");
+                        appliedSearchRef.current = "";
+                        setAppliedSearch("");
+                        setInStockOnly(false);
+                        setPrimaryCategoryId("");
+                        setSortMode("recommended");
+                        setPage(1);
+                      }}
+                    >
+                      重置筛选
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             </div>
           ) : (
+            <div className="relative mt-3.5 flex min-h-0 flex-1 flex-col">
+              {showOverlayLoader ? (
+                <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-2xl bg-white/70 backdrop-blur-[2px] transition-opacity duration-200">
+                  <div className="flex flex-col items-center gap-2.5 rounded-2xl border border-orange-100/90 bg-white/95 px-7 py-5 shadow-[0_14px_34px_-18px_rgba(169,103,52,0.28)]">
+                    <OptionLoadingSpinner active size="lg" />
+                    <span className="text-xs font-medium text-slate-500">正在加载商品...</span>
+                  </div>
+                </div>
+              ) : null}
             <div
-              key={listRenderKey}
+              key={loadedRenderKey || listRenderKey}
               ref={scrollRef}
               className={cn(
-                "page-turn-enter mt-3.5 grid min-h-0 flex-1 grid-cols-1 content-start gap-2.5 overflow-y-auto pr-1 sidebar-scroll scroll-fade-y xl:grid-cols-2",
+                "page-turn-enter grid min-h-0 flex-1 grid-cols-1 content-start gap-2.5 overflow-y-auto pr-1 sidebar-scroll scroll-fade-y xl:grid-cols-2",
+                showOverlayLoader && "opacity-45 transition-opacity duration-150",
                 isMobile && "!overflow-visible !pr-0"
               )}
             >
@@ -711,15 +816,19 @@ export default function AllProductsContent() {
                 );
               })}
             </div>
+            </div>
           )}
 
           {/* 底部分页 */}
           {totalPages > 1 ? (
-            <div className="mt-3 flex shrink-0 items-center justify-between border-t border-orange-100/80 pt-3 text-xs text-slate-500">
-              <span>
-                第 <strong className="text-slate-800">{page}</strong> / {totalPages} 页（共 {total} 个商品）
+            <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-orange-100/80 pt-3 text-xs text-slate-500">
+              <span className="inline-flex items-center gap-2">
+                <span>
+                  第 <strong className="text-slate-800">{page}</strong> / {totalPages} 页（共 {total} 个商品）
+                </span>
+                {loading ? <OptionLoadingSpinner active size="sm" /> : null}
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <Button
                   type="button"
                   variant="outline"
@@ -731,6 +840,30 @@ export default function AllProductsContent() {
                   <ChevronLeft className="mr-0.5 h-3.5 w-3.5" />
                   上一页
                 </Button>
+                <div className="hidden items-center gap-1 sm:flex">
+                  {buildPaginationItems(page, totalPages).map((item, idx) =>
+                    item === "ellipsis" ? (
+                      <span key={`el-${idx}`} className="px-1 text-slate-400">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        disabled={loading || item === page}
+                        onClick={() => handlePageChange(item)}
+                        className={cn(
+                          "h-8 min-w-[32px] rounded-lg px-2 text-xs font-semibold transition-all duration-150",
+                          item === page
+                            ? "bg-[#df7334] text-white shadow-xs"
+                            : "border border-orange-200/70 bg-white text-slate-600 hover:border-orange-300 hover:bg-orange-50/70 hover:text-[#c85e22]"
+                        )}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+                </div>
                 <Button
                   type="button"
                   variant="outline"

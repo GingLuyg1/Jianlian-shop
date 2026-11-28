@@ -52,20 +52,20 @@ export async function loadLatestRechargeDailyRate(
 
 /**
  * 订单 USDT 支付动态汇率换算：
- * 先直接截断小数点第三位及以后（保留两位小数，不进位），再按第二位小数四舍五入至一位小数。
- * 例如：6.655542 -> 6.65 -> 6.7；6.66 -> 6.66 -> 6.7；7.15 -> 7.15 -> 7.2；6.64 -> 6.64 -> 6.6。
+ * 不做四舍五入，直接截断到小数点后一位再 +0.1（即默认截断 + 0.1）。
+ * 例如：6.649 -> 截断 6.6 + 0.1 = 6.7；6.655542 -> 6.7；6.66 -> 6.7；7.15 -> 7.2；6.60 -> 6.7。
  */
 export function deriveOrderUsdtRateFromMarket(marketRate: string | number): string | null {
   const raw = String(marketRate ?? "").trim();
   const match = raw.match(/^(\d+)(?:\.(\d+))?$/);
   if (!match) return null;
   const whole = BigInt(match[1]);
-  const frac2 = (match[2] ?? "").padEnd(2, "0").slice(0, 2);
-  const hundredths = whole * BigInt(100) + BigInt(frac2);
-  if (hundredths <= BigInt(0)) return null;
-  const roundedTenths = (hundredths + BigInt(5)) / BigInt(10);
-  const intPart = roundedTenths / BigInt(10);
-  const decPart = roundedTenths % BigInt(10);
+  const firstDecStr = (match[2] ?? "").slice(0, 1) || "0";
+  const baseTenths = whole * BigInt(10) + BigInt(firstDecStr);
+  if (whole === BigInt(0) && !/[1-9]/.test(match[2] ?? "")) return null;
+  const adjustedTenths = baseTenths + BigInt(1);
+  const intPart = adjustedTenths / BigInt(10);
+  const decPart = adjustedTenths % BigInt(10);
   return `${intPart.toString()}.${decPart.toString()}`;
 }
 

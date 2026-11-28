@@ -151,7 +151,7 @@ export default function AdminSuppliersWorkspace() {
   const [products, setProducts] = useState<SupplierProduct[]>([]);
   const [upstreamTotal, setUpstreamTotal] = useState<number | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [usdtCnyRate, setUsdtCnyRate] = useState<number>(7.2);
+  const [usdtCnyRate, setUsdtCnyRate] = useState<number>(7.0);
   const [productsLoading, setProductsLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [productsLoaded, setProductsLoaded] = useState(false);
@@ -199,7 +199,7 @@ export default function AdminSuppliersWorkspace() {
           mode,
           updateRetailPrice,
           capBufferPercent: 5,
-          markupPercent: 13,
+          markupPercent: 10,
           maxPriceDriftPercent: 15,
           notifyOnAnomaly: true,
         }),
@@ -681,7 +681,7 @@ export default function AdminSuppliersWorkspace() {
                       一键联动调价 (±15%熔断)
                     </Button>
                     <span className="inline-flex items-center rounded-lg border border-orange-200/80 bg-orange-50/70 px-2.5 py-1 text-[11px] font-medium text-orange-800">
-                      USD 计价 · 1 USD ≈ ¥{usdtCnyRate.toFixed(2)}（每周一 09:00 自动双向联动 +13% / 异常熔断告警）
+                      USD 计价 · 1 USD ≈ ¥{usdtCnyRate.toFixed(2)}（每周一 09:00 自动双向联动 +10% / 异常熔断告警）
                     </span>
                   </>
                 ) : null}
@@ -1034,13 +1034,13 @@ export default function AdminSuppliersWorkspace() {
         title={confirmSyncAction === "apply_reprice" ? "确认执行 Bitrefill 售价双向联动调价" : "确认一键同步 Bitrefill 风控上限"}
         description={
           confirmSyncAction === "apply_reprice"
-            ? "将按 Bitrefill 最新美元成本 × 当日汇率 × (1 + 13%) 双向联动调整所有已绑定 SKU 前台售价（上涨跟着上浮、下降跟着下调），并同步更新商品起售价与风控上限。"
+            ? "将按 Bitrefill 最新美元成本 × 当日汇率 × (1 + 10%) 双向联动调整所有已绑定 SKU 前台售价（上涨跟着上浮、下降跟着下调），并同步更新商品起售价与风控上限。"
             : "将按 Bitrefill 最新实时成本与汇率更新所有已绑定 SKU 的风控上限（含 5% 波动缓冲）与成本价，不会修改前台零售价。"
         }
         summaryLines={
           confirmSyncAction === "apply_reprice"
             ? [
-                { label: "加价规则", value: "实时成本 +13%" },
+                { label: "加价规则", value: "实时成本 +10%" },
                 { label: "单次变动熔断", value: "超过 ±15% 自动跳过并邮件告警" },
                 { label: "通知方式", value: "调价完成后自动发送变更简报邮件" },
               ]
