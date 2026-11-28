@@ -77,6 +77,14 @@ test("sidebar keeps all 12 items unclipped with overflow-hidden indicator frame,
     assert.match(src, /max-w-\[1540px\]/, `${name} must use canonical 1540px max content width`);
     assert.doesNotMatch(src, /max-w-\[1640px\]/, `${name} must not drift to 1640px`);
   }
+
+  const faqPage = file("app/faq/page.tsx");
+  const tutorialsPage = file("app/tutorials/page.tsx");
+  const tutorialsCss = file("components/account/TutorialsGlass.module.css");
+  assert.match(faqPage, /max-w-\[1600px\]/);
+  assert.match(faqPage, /HoverMarqueeText/);
+  assert.match(tutorialsCss, /max-width:1600px/);
+  assert.match(tutorialsPage, /HoverMarqueeText/);
 });
 
 test("SIM card service category hides sales counts across storefront lists and checkout", () => {

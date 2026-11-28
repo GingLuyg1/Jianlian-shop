@@ -40,6 +40,7 @@ import PublicLayout from "@/components/layout/PublicLayout";
 import { publicMainPanelHeightClassName } from "@/components/layout/public-content";
 import { useMobileStorefront } from "@/hooks/use-mobile-storefront";
 import { Button } from "@/components/ui/button";
+import HoverMarqueeText from "@/components/ui/HoverMarqueeText";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -66,6 +67,7 @@ export default function FAQPage() {
   const { isMobile } = useMobileStorefront();
   const [tickets, setTickets] = useState<TicketItem[]>([]);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [hoveredTicketId, setHoveredTicketId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [activeTabFilter, setActiveTabFilter] = useState<"all" | "unread" | "processing" | "completed">("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -442,7 +444,7 @@ export default function FAQPage() {
       <div
         data-testid="faq-glass-page"
         className={cn(
-          "mx-auto flex w-full min-w-0 max-w-[1640px] flex-col gap-3.5 overflow-visible md:min-h-0 md:overflow-hidden",
+          "mx-auto flex w-full min-w-0 max-w-[1600px] flex-col gap-3.5 overflow-visible md:min-h-0 md:overflow-hidden",
           publicMainPanelHeightClassName,
           isMobile && "!h-auto !min-h-0 !overflow-visible"
         )}
@@ -661,6 +663,8 @@ export default function FAQPage() {
                     return (
                       <div
                         key={ticket.id}
+                        onMouseEnter={() => setHoveredTicketId(ticket.id)}
+                        onMouseLeave={() => setHoveredTicketId((curr) => (curr === ticket.id ? null : curr))}
                         onClick={() => {
                           setSelectedTicketId(ticket.id);
                           setIsCreating(false);
@@ -679,14 +683,18 @@ export default function FAQPage() {
                           </span>
                         )}
 
-                        <div className="mb-1 flex items-start justify-between gap-1.5">
+                        <div className="mb-1 flex min-w-0 items-start justify-between gap-1.5">
                           <h3
                             className={cn(
-                              "text-xs font-bold leading-snug line-clamp-1 transition-colors",
+                              "min-w-0 flex-1 text-xs font-bold leading-snug transition-colors",
                               isSelected ? "text-orange-950 font-black" : "text-slate-800 group-hover:text-orange-600"
                             )}
                           >
-                            {ticket.title}
+                            <HoverMarqueeText
+                              text={ticket.title}
+                              hovered={hoveredTicketId === ticket.id}
+                              autoScroll={isSelected || isMobile}
+                            />
                           </h3>
                         </div>
 
