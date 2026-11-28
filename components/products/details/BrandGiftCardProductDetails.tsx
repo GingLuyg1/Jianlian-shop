@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { openPublicSupport } from "@/lib/support/open-public-support";
+import HoverMarqueeText from "@/components/ui/HoverMarqueeText";
 import {
   BRAND_PROFILES,
   extractGiftCardDenominationText,
@@ -131,9 +132,11 @@ export default function BrandGiftCardProductDetails({
               </div>
               <div className="rounded-xl border border-white/15 bg-white/[0.08] px-3.5 py-2.5 backdrop-blur-sm">
                 <div className="text-[11px] text-white/65">可选面额 / 规格</div>
-                <div className="mt-0.5 truncate text-xs font-bold text-white sm:text-sm" title={denominationText}>
-                  {denominationText}
-                </div>
+                <HoverMarqueeText
+                  text={denominationText}
+                  autoScroll
+                  className="mt-0.5 text-xs font-bold text-white sm:text-sm"
+                />
               </div>
             </div>
           </div>
@@ -398,17 +401,10 @@ export default function BrandGiftCardProductDetails({
             <button
               type="button"
               onClick={openPublicSupport}
-              className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white transition hover:bg-white/20 sm:text-sm"
+              className="inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-primary/90 sm:text-sm"
             >
               联系在线客服
             </button>
-            <Link
-              href="/products/gift-cards"
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-primary/90 sm:text-sm"
-            >
-              <span>全部礼品卡</span>
-              <ArrowRight className="h-4 w-4" />
-            </Link>
           </div>
         </div>
       </div>

@@ -1018,17 +1018,10 @@ export default function AppleGiftCardProductDetails({
           <button
             type="button"
             onClick={openPublicSupport}
-            className="inline-flex items-center justify-center rounded-xl border border-orange-200 bg-white px-4 py-2 text-xs font-semibold text-orange-800 shadow-xs transition hover:bg-orange-50 sm:text-sm"
+            className="inline-flex items-center justify-center rounded-xl bg-orange-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-orange-700 sm:text-sm"
           >
             联系在线客服
           </button>
-          <Link
-            href="/products/gift-cards"
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-orange-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-orange-700 sm:text-sm"
-          >
-            <span>浏览全部国家礼品卡</span>
-            <ArrowRight className="h-4 w-4" />
-          </Link>
         </div>
       </div>
     </div>

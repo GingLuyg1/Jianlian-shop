@@ -367,7 +367,7 @@ export default function AllProductsContent() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="relative w-full sm:w-64">
+                <div className="relative w-full sm:w-72">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7d6355]" />
                   <Input
                     value={draftSearch}
@@ -671,7 +671,12 @@ export default function AllProductsContent() {
                             />
                           </div>
                           {cleanDesc ? (
-                            <p className="mt-1 truncate text-xs text-slate-500">{cleanDesc}</p>
+                            <HoverMarqueeText
+                              text={cleanDesc}
+                              hovered={hoveredProductId === product.id}
+                              autoScroll={isMobile}
+                              className="mt-1 text-xs text-slate-500"
+                            />
                           ) : null}
                         </div>
                       </div>

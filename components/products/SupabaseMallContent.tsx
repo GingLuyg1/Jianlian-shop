@@ -1909,9 +1909,12 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, hideS
               <HoverMarqueeText text={product.name} autoScroll enabled={isMobile} />
             </div>
             {product.description ? (
-              <div className="mt-0.5 line-clamp-1 text-[11px] leading-tight text-slate-500">
-                {product.description}
-              </div>
+              <HoverMarqueeText
+                text={product.description}
+                autoScroll
+                enabled={isMobile}
+                className="mt-0.5 text-[11px] leading-tight text-slate-500"
+              />
             ) : null}
           </div>
         </div>
@@ -1963,9 +1966,12 @@ function ProductRowCompact({ currencySymbol, product, category, showStock, hideS
             <HoverMarqueeText text={product.name} hovered={hovered} enabled={!isMobile} />
           </div>
           {product.description ? (
-            <div className="mt-0.5 line-clamp-1 text-xs text-muted-foreground sm:mt-1">
-              {product.description}
-            </div>
+            <HoverMarqueeText
+              text={product.description}
+              hovered={hovered}
+              enabled={!isMobile}
+              className="mt-0.5 text-xs text-muted-foreground sm:mt-1"
+            />
           ) : null}
           {showStock ? (
             <div className="mt-1 flex items-center gap-1.5 text-[11px] font-medium md:hidden">
