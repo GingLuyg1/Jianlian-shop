@@ -1792,7 +1792,12 @@ function PaymentMethodSelect({
   disabled?: boolean;
 }) {
   const router = useRouter();
+  const [hoveredMethod, setHoveredMethod] = useState<PaymentMethodCode | null>(null);
   const selectedMeta = getPaymentMethodDisplayMeta(selected, availableBalance);
+
+  useEffect(() => {
+    if (!open) setHoveredMethod(null);
+  }, [open]);
 
   const isMethodAvailable = (code: PaymentMethodCode) => {
     if (code === "balance") return !isGuestUser;
@@ -1872,65 +1877,102 @@ function PaymentMethodSelect({
         )}
       >
         <div className="overflow-hidden">
-          <div className="rounded-xl border border-[#ead9cc]/90 bg-[#fffdfb] p-2 shadow-sm">
-            {!isGuestUser ? (
-              <button
-                type="button"
-                role="option"
-                aria-selected={selected === "balance"}
-                tabIndex={open ? 0 : -1}
-                onClick={() => {
-                  onSelect("balance");
-                  onOpenChange(false);
-                }}
-                className={cn(
-                  "mb-2 flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left transition-all duration-150",
-                  selected === "balance"
-                    ? "border-primary/50 bg-orange-50/80 shadow-xs ring-1 ring-primary/15"
-                    : "border-slate-200/80 bg-white hover:border-primary/30 hover:bg-orange-50/35"
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  <PaymentMethodIcon method="balance" />
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-1 text-xs font-semibold text-slate-900">
-                      <span>余额支付</span>
-                      <span className="font-medium text-emerald-600">（无手续费）</span>
+          <div
+            onMouseLeave={() => setHoveredMethod(null)}
+            className="rounded-xl border border-[#ead9cc]/90 bg-[#fffdfb] p-2 shadow-sm"
+          >
+            {!isGuestUser ? (() => {
+              const balanceActive = selected === "balance";
+              const balancePreselected = hoveredMethod === "balance" && !balanceActive;
+              return (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={balanceActive}
+                  data-preselected={balancePreselected ? "true" : undefined}
+                  tabIndex={open ? 0 : -1}
+                  onMouseEnter={() => setHoveredMethod("balance")}
+                  onFocus={() => setHoveredMethod("balance")}
+                  onBlur={() => setHoveredMethod((curr) => (curr === "balance" ? null : curr))}
+                  onClick={() => {
+                    onSelect("balance");
+                    onOpenChange(false);
+                  }}
+                  className={cn(
+                    "group mb-2 flex w-full items-center justify-between gap-2 rounded-xl border px-2.5 py-2 text-left transition-all duration-200 ease-out active:scale-[0.99]",
+                    balanceActive
+                      ? "border-primary bg-orange-50/90 shadow-xs ring-1 ring-primary/20"
+                      : balancePreselected
+                        ? "-translate-y-[1px] border-primary/70 bg-gradient-to-r from-orange-50/95 via-orange-50/75 to-amber-50/55 shadow-[0_6px_16px_-10px_rgba(234,88,12,0.45)] ring-2 ring-primary/20"
+                        : "border-slate-200/80 bg-white hover:border-primary/60 hover:bg-orange-50/60"
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className={cn("transition-transform duration-200", balancePreselected && "scale-105")}>
+                      <PaymentMethodIcon method="balance" />
                     </span>
-                    <span className="mt-0.5 block text-[11px] text-slate-500">
-                      {availableBalance !== null
-                        ? `当前可用 ¥${availableBalance.toFixed(2)}${balanceInsufficient ? " · 余额不足" : ""}`
-                        : "点击核对账户余额"}
+                    <span className="min-w-0">
+                      <span className="flex items-center gap-1 text-xs font-semibold">
+                        <span className={cn("transition-colors", (balanceActive || balancePreselected) ? "text-primary" : "text-slate-900")}>
+                          余额支付
+                        </span>
+                        <span className="font-medium text-emerald-600">（无手续费）</span>
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-slate-500">
+                        {availableBalance !== null
+                          ? `当前可用 ¥${availableBalance.toFixed(2)}${balanceInsufficient ? " · 余额不足" : ""}`
+                          : "点击核对账户余额"}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <span
-                  role="link"
-                  tabIndex={open ? 0 : -1}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onOpenChange(false);
-                    router.push(rechargeHref || "/products/account-recharge");
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      onOpenChange(false);
-                      router.push(rechargeHref || "/products/account-recharge");
-                    }
-                  }}
-                  className="shrink-0 cursor-pointer rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-primary transition hover:border-orange-300 hover:bg-orange-100"
-                >
-                  去充值
-                </span>
-              </button>
-            ) : null}
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span
+                      role="link"
+                      tabIndex={open ? 0 : -1}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onOpenChange(false);
+                        router.push(rechargeHref || "/products/account-recharge");
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onOpenChange(false);
+                          router.push(rechargeHref || "/products/account-recharge");
+                        }
+                      }}
+                      className="shrink-0 cursor-pointer rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-[11px] font-semibold text-primary transition hover:border-orange-300 hover:bg-orange-100"
+                    >
+                      去充值
+                    </span>
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-all duration-200",
+                        balanceActive
+                          ? "border-primary bg-primary text-white shadow-2xs"
+                          : balancePreselected
+                            ? "scale-105 border-primary/80 bg-white ring-2 ring-primary/15"
+                            : "border-slate-300/80 bg-white/80"
+                      )}
+                    >
+                      {balanceActive ? (
+                        <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                      ) : balancePreselected ? (
+                        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      ) : null}
+                    </span>
+                  </span>
+                </button>
+              );
+            })() : null}
 
             <div data-testid="checkout-payment-cards" className="grid grid-cols-2 gap-2">
               {THIRD_PARTY_CARD_METHODS.map((card) => {
                 const active = selected === card.code;
                 const unavailable = !isMethodAvailable(card.code);
+                const preselected = !unavailable && hoveredMethod === card.code && !active;
                 return (
                   <button
                     key={card.code}
@@ -1939,31 +1981,62 @@ function PaymentMethodSelect({
                     role="option"
                     aria-selected={active}
                     aria-disabled={unavailable}
+                    data-preselected={preselected ? "true" : undefined}
                     disabled={unavailable}
                     tabIndex={open && !unavailable ? 0 : -1}
+                    onMouseEnter={() => {
+                      if (!unavailable) setHoveredMethod(card.code);
+                    }}
+                    onFocus={() => {
+                      if (!unavailable) setHoveredMethod(card.code);
+                    }}
+                    onBlur={() => setHoveredMethod((curr) => (curr === card.code ? null : curr))}
                     onClick={() => {
                       if (unavailable) return;
                       onSelect(card.code);
                       onOpenChange(false);
                     }}
                     className={cn(
-                      "group relative flex flex-col justify-between rounded-xl border px-2.5 py-2 text-left transition-all duration-150",
+                      "group relative flex flex-col justify-between rounded-xl border px-2.5 py-2 text-left transition-all duration-200 ease-out active:scale-[0.985]",
                       active
-                        ? "border-primary bg-orange-50/85 shadow-xs ring-1 ring-primary/20"
-                        : "border-slate-200/85 bg-white hover:border-primary/35 hover:bg-orange-50/35",
-                      unavailable && "cursor-not-allowed border-slate-200/60 bg-slate-50/70 opacity-60 hover:border-slate-200/60 hover:bg-slate-50/70"
+                        ? "border-primary bg-orange-50/90 shadow-xs ring-1 ring-primary/20"
+                        : preselected
+                          ? "-translate-y-[1px] border-primary/70 bg-gradient-to-br from-orange-50/95 via-orange-50/75 to-amber-50/55 shadow-[0_6px_16px_-10px_rgba(234,88,12,0.45)] ring-2 ring-primary/20"
+                          : "border-slate-200/85 bg-white hover:border-primary/60 hover:bg-orange-50/60",
+                      unavailable && "cursor-not-allowed border-slate-200/60 bg-slate-50/70 opacity-60 hover:translate-y-0 hover:border-slate-200/60 hover:bg-slate-50/70 hover:shadow-none hover:ring-0"
                     )}
                   >
                     <div className="flex items-center justify-between gap-1.5">
                       <span className="flex min-w-0 items-center gap-1.5">
-                        <PaymentMethodIcon method={card.code} />
-                        <span className={cn("truncate text-xs font-semibold", active ? "text-primary" : "text-slate-900")}>
+                        <span className={cn("transition-transform duration-200", preselected && "scale-105")}>
+                          <PaymentMethodIcon method={card.code} />
+                        </span>
+                        <span
+                          className={cn(
+                            "truncate text-xs font-semibold transition-colors",
+                            (active || preselected) ? "text-primary" : "text-slate-900"
+                          )}
+                        >
                           {card.shortLabel}
                         </span>
                       </span>
-                      {active ? (
-                        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-white">
-                          <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                      {!unavailable ? (
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-all duration-200",
+                            active
+                              ? "border-primary bg-primary text-white shadow-2xs"
+                              : preselected
+                                ? "scale-105 border-primary/80 bg-white ring-2 ring-primary/15"
+                                : "border-slate-300/75 bg-white/80"
+                          )}
+                        >
+                          {active ? (
+                            <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                          ) : preselected ? (
+                            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                          ) : null}
                         </span>
                       ) : null}
                     </div>
@@ -1975,7 +2048,9 @@ function PaymentMethodSelect({
                             ? "text-amber-700"
                             : card.isFree
                               ? "text-emerald-600"
-                              : "text-slate-500"
+                              : preselected
+                                ? "text-orange-700/80"
+                                : "text-slate-500"
                         )}
                       >
                         {unavailable ? "暂未开放" : card.feeTag}
@@ -2154,7 +2229,7 @@ function ProductDetailCard({
   }, [product.id, loading, isMobile, isModal]);
 
   return (
-    <Card data-testid="checkout-product-detail" className={cn("relative h-auto min-h-0 overflow-hidden lg:h-full", isModal && "!border-0 !bg-transparent !shadow-none !rounded-none")}>
+    <Card data-testid="checkout-product-detail" className={cn("relative h-auto min-h-0 overflow-hidden lg:h-full", isModal && "!border-0 !bg-transparent !shadow-none !rounded-[18px]")}>
       {!isModal ? (
         <button
           type="button"
@@ -2178,9 +2253,9 @@ function ProductDetailCard({
           aria-hidden="true"
           data-testid="checkout-detail-scroll-fade-top"
           className={cn(
-            "pointer-events-none absolute inset-x-0 top-0 z-20 hidden h-10 transition-opacity duration-300 ease-out lg:block",
+            "pointer-events-none absolute inset-x-0 top-0 z-20 hidden h-10 rounded-t-[18px] transition-opacity duration-300 ease-out lg:block",
             isModal
-              ? "bg-gradient-to-b from-[#fffcf8]/75 via-[#fffcf8]/35 to-transparent"
+              ? "bg-transparent"
               : "bg-gradient-to-b from-[#fffdfa] via-[#fffdfa]/85 to-transparent",
             scrollEdges.top ? "opacity-100" : "opacity-0"
           )}
@@ -2341,9 +2416,9 @@ function ProductDetailCard({
           aria-hidden="true"
           data-testid="checkout-detail-scroll-fade-bottom"
           className={cn(
-            "pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden h-12 transition-opacity duration-300 ease-out lg:block",
+            "pointer-events-none absolute inset-x-0 bottom-0 z-20 hidden h-12 rounded-b-[18px] transition-opacity duration-300 ease-out lg:block",
             isModal
-              ? "bg-gradient-to-t from-[#fffcf8]/75 via-[#fffcf8]/38 to-transparent"
+              ? "bg-transparent"
               : "bg-gradient-to-t from-[#fffdfa] via-[#fffdfa]/88 to-transparent",
             scrollEdges.bottom ? "opacity-100" : "opacity-0"
           )}

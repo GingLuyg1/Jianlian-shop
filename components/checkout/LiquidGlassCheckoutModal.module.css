@@ -64,12 +64,12 @@
   --scroll-fade-size: 22px;
 }
 
-/* Cancel outer Product Detail card box frame inside Liquid Glass modal so top & bottom edges match shell padding */
+/* Cancel outer Product Detail card box frame inside Liquid Glass modal while keeping concentric rounded clipping */
 .body :global([data-testid="checkout-product-detail"]) {
   border: none !important;
   background: transparent !important;
   box-shadow: none !important;
-  border-radius: 0 !important;
+  border-radius: 18px !important;
 }
 
 /* Cancel redundant outer white wrapper <section> borders shown inside detail content,

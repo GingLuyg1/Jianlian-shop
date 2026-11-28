@@ -269,8 +269,10 @@ test("checkout guards topup/PIN products from SIM detail mismatch, protects dark
   assert.match(modalCss, /section:not\(\[class\*="text-white"\]\):not\(\[class\*="bg-gradient-"\]\)/);
   assert.match(modalCss, /--scroll-fade-size:\s*22px/);
   assert.match(modalCss, /padding:\s*16px;/);
+  assert.match(modalCss, /border-radius:\s*18px\s*!important/);
   assert.match(checkout, /data-testid="checkout-detail-scroll-fade-top"/);
   assert.match(checkout, /data-testid="checkout-detail-scroll-fade-bottom"/);
+  assert.match(checkout, /data-preselected=/);
   assert.match(checkout, /detail-scroll-fade/);
   assert.match(globalsCss, /\.detail-scroll-fade/);
   assert.match(globalsCss, /@keyframes product-artwork-pop/);
